@@ -1,4 +1,4 @@
-package main
+package platform
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ type Paths struct {
 	BackendLog     string
 }
 
-func loadPaths() (Paths, error) {
+func LoadPaths() (Paths, error) {
 	appDest := firstNonEmpty(os.Getenv("FNPROXY_APPDEST"), os.Getenv("TRIM_APPDEST"))
 	etcDir := firstNonEmpty(os.Getenv("FNPROXY_ETC"), os.Getenv("TRIM_PKGETC"))
 	varDir := firstNonEmpty(os.Getenv("FNPROXY_VAR"), os.Getenv("TRIM_PKGVAR"))
@@ -89,10 +89,10 @@ func loadPaths() (Paths, error) {
 		NginxTempDir:   filepath.Join(tmpDir, "nginx"),
 		BackendLog:     filepath.Join(logDir, "fnproxy-server.log"),
 	}
-	return paths, paths.ensure()
+	return paths, paths.Ensure()
 }
 
-func (p Paths) ensure() error {
+func (p Paths) Ensure() error {
 	if p.AppDest == "" || p.EtcDir == "" || p.VarDir == "" || p.TmpDir == "" {
 		return errors.New("运行目录未正确配置")
 	}

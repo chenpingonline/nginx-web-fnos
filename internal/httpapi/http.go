@@ -1,7 +1,6 @@
-package main
+package httpapi
 
 import (
-	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,26 +13,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	appservice "github.com/chenpingonline/fn-nginx-web/internal/service"
 )
 
 const gatewayPrefix = "/app/nginx-web"
 
 type API struct {
-	service *AppService
+	service *appservice.AppService
 	web     fs.FS
 	devMode bool
 }
 
-func newAPI(service *AppService, embedded embed.FS) (*API, error) {
-	web, err := fs.Sub(embedded, "web")
-	if err != nil {
-		return nil, err
-	}
+func New(service *appservice.AppService, web fs.FS) *API {
 	return &API{
 		service: service,
 		web:     web,
 		devMode: os.Getenv("FNPROXY_DEV_ALLOW") == "1",
-	}, nil
+	}
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +48,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cleanPath = "/"
 	}
 	if cleanPath == "/healthz" {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": AppVersion})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": domain.AppVersion})
 		return
 	}
 	if strings.HasPrefix(cleanPath, "/api/") || cleanPath == "/api" {
@@ -115,7 +113,7 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 	case apiPath == "/api/rules" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().Rules)
 	case apiPath == "/api/rules" && r.Method == http.MethodPost:
-		var input ProxyRule
+		var input domain.ProxyRule
 		if !decodeJSON(w, r, &input) {
 			return
 		}
@@ -126,7 +124,7 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 	case apiPath == "/api/certificates" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().Certificates)
 	case apiPath == "/api/certificates" && r.Method == http.MethodPost:
-		var input CertificateInput
+		var input appservice.CertificateInput
 		if !decodeJSON(w, r, &input) {
 			return
 		}
@@ -137,15 +135,11 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		err := a.service.DeleteCertificate(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	case apiPath == "/api/settings" && r.Method == http.MethodPut:
-		var settings Settings
+		var settings domain.Settings
 		if !decodeJSON(w, r, &settings) {
 			return
 		}
-		err := a.service.store.Update(func(state *State) error {
-			state.Settings = settings
-			state.Dirty = true
-			return nil
-		})
+		err := a.service.UpdateSettings(settings)
 		writeResult(w, http.StatusOK, a.service.State().Settings, err)
 	case apiPath == "/api/apply" && r.Method == http.MethodPost:
 		var input struct {
@@ -199,7 +193,7 @@ func (a *API) handleRule(w http.ResponseWriter, r *http.Request, id string) {
 	}
 	switch r.Method {
 	case http.MethodPut:
-		var input ProxyRule
+		var input domain.ProxyRule
 		if !decodeJSON(w, r, &input) {
 			return
 		}

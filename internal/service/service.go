@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"crypto/sha256"
@@ -15,7 +15,24 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	nginxmanager "github.com/chenpingonline/fn-nginx-web/internal/nginx"
+	"github.com/chenpingonline/fn-nginx-web/internal/platform"
+	storepkg "github.com/chenpingonline/fn-nginx-web/internal/store"
 )
+
+type Paths = platform.Paths
+type Store = storepkg.Store
+type NginxManager = nginxmanager.Manager
+type State = domain.State
+type Settings = domain.Settings
+type ProxyRule = domain.ProxyRule
+type CertificateMeta = domain.CertificateMeta
+type Revision = domain.Revision
+type NginxStatus = domain.NginxStatus
+type ApplyResult = domain.ApplyResult
 
 type AppService struct {
 	paths Paths
@@ -49,15 +66,15 @@ type ConfigSnapshot struct {
 	Files  map[string]string `json:"files"`
 }
 
-func newAppService(paths Paths) (*AppService, error) {
-	store, err := newStore(paths.StateFile)
+func New(paths Paths) (*AppService, error) {
+	store, err := storepkg.New(paths.StateFile)
 	if err != nil {
 		return nil, fmt.Errorf("加载应用数据失败: %w", err)
 	}
 	return &AppService{
 		paths: paths,
 		store: store,
-		nginx: newNginxManager(paths),
+		nginx: nginxmanager.New(paths),
 	}, nil
 }
 
@@ -71,12 +88,12 @@ func (s *AppService) Prepare() (ApplyResult, error) {
 func (s *AppService) Overview() Overview {
 	state := s.store.Snapshot()
 	return Overview{
-		AppName:          AppName,
-		AppVersion:       AppVersion,
-		NginxVersion:     NginxVersion,
+		AppName:          domain.AppName,
+		AppVersion:       domain.AppVersion,
+		NginxVersion:     domain.NginxVersion,
 		Nginx:            s.nginx.Status(state),
 		RuleCount:        len(state.Rules),
-		EnabledCount:     enabledRuleCount(state),
+		EnabledCount:     domain.EnabledRuleCount(state),
 		CertificateCount: len(state.Certificates),
 		Dirty:            state.Dirty,
 		LastAppliedAt:    state.LastAppliedAt,
@@ -89,12 +106,24 @@ func (s *AppService) State() State {
 	return s.store.Snapshot()
 }
 
+func (s *AppService) UpdateSettings(settings Settings) error {
+	return s.store.Update(func(state *State) error {
+		state.Settings = settings
+		state.Dirty = true
+		return nil
+	})
+}
+
+func (s *AppService) CheckNginxBinary() error {
+	return s.nginx.CheckBinary()
+}
+
 func (s *AppService) CreateRule(input ProxyRule) (ProxyRule, error) {
 	now := time.Now().UTC()
-	input.ID = randomID()
+	input.ID = domain.RandomID()
 	input.CreatedAt = now
 	input.UpdatedAt = now
-	normalizeRule(&input, s.store.Snapshot().Settings)
+	domain.NormalizeRule(&input, s.store.Snapshot().Settings)
 	if err := s.store.Update(func(state *State) error {
 		state.Rules = append(state.Rules, input)
 		state.Dirty = true
@@ -106,7 +135,7 @@ func (s *AppService) CreateRule(input ProxyRule) (ProxyRule, error) {
 }
 
 func (s *AppService) UpdateRule(id string, input ProxyRule) (ProxyRule, error) {
-	if !idPattern.MatchString(id) {
+	if !domain.ValidID(id) {
 		return ProxyRule{}, errors.New("规则 ID 不合法")
 	}
 	var updated ProxyRule
@@ -118,7 +147,7 @@ func (s *AppService) UpdateRule(id string, input ProxyRule) (ProxyRule, error) {
 			input.ID = id
 			input.CreatedAt = state.Rules[index].CreatedAt
 			input.UpdatedAt = time.Now().UTC()
-			normalizeRule(&input, state.Settings)
+			domain.NormalizeRule(&input, state.Settings)
 			state.Rules[index] = input
 			state.Dirty = true
 			updated = input
@@ -130,7 +159,7 @@ func (s *AppService) UpdateRule(id string, input ProxyRule) (ProxyRule, error) {
 }
 
 func (s *AppService) DeleteRule(id string) error {
-	if !idPattern.MatchString(id) {
+	if !domain.ValidID(id) {
 		return errors.New("规则 ID 不合法")
 	}
 	return s.store.Update(func(state *State) error {
@@ -195,7 +224,7 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 	}
 
 	meta := CertificateMeta{
-		ID:           randomID(),
+		ID:           domain.RandomID(),
 		Name:         input.Name,
 		Subject:      cert.Subject.String(),
 		DNSNames:     append([]string(nil), cert.DNSNames...),
@@ -218,10 +247,10 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 	if err := os.Chmod(tempDir, 0o700); err != nil {
 		return CertificateMeta{}, err
 	}
-	if err := writeFileAtomic(filepath.Join(tempDir, "fullchain.pem"), append([]byte(input.Certificate), '\n'), 0o600); err != nil {
+	if err := fileutil.WriteFileAtomic(filepath.Join(tempDir, "fullchain.pem"), append([]byte(input.Certificate), '\n'), 0o600); err != nil {
 		return CertificateMeta{}, err
 	}
-	if err := writeFileAtomic(filepath.Join(tempDir, "privkey.pem"), append([]byte(input.PrivateKey), '\n'), 0o600); err != nil {
+	if err := fileutil.WriteFileAtomic(filepath.Join(tempDir, "privkey.pem"), append([]byte(input.PrivateKey), '\n'), 0o600); err != nil {
 		return CertificateMeta{}, err
 	}
 	if err := os.Rename(tempDir, finalDir); err != nil {
@@ -239,7 +268,7 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 }
 
 func (s *AppService) DeleteCertificate(id string) error {
-	if !idPattern.MatchString(id) {
+	if !domain.ValidID(id) {
 		return errors.New("证书 ID 不合法")
 	}
 	state := s.store.Snapshot()
@@ -334,18 +363,18 @@ func (s *AppService) NginxTest() (ApplyResult, error) {
 
 func (s *AppService) saveRevision(state State, summary string) error {
 	revision := Revision{
-		ID:           time.Now().UTC().Format("20060102T150405Z") + "-" + randomID()[:8],
+		ID:           time.Now().UTC().Format("20060102T150405Z") + "-" + domain.RandomID()[:8],
 		CreatedAt:    time.Now().UTC(),
 		Summary:      strings.TrimSpace(summary),
 		RuleCount:    len(state.Rules),
-		EnabledCount: enabledRuleCount(state),
-		State:        cloneState(state),
+		EnabledCount: domain.EnabledRuleCount(state),
+		State:        domain.CloneState(state),
 	}
 	data, err := json.MarshalIndent(revision, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := writeFileAtomic(filepath.Join(s.paths.RevisionDir, revision.ID+".json"), append(data, '\n'), 0o600); err != nil {
+	if err := fileutil.WriteFileAtomic(filepath.Join(s.paths.RevisionDir, revision.ID+".json"), append(data, '\n'), 0o600); err != nil {
 		return err
 	}
 	return s.pruneRevisions(state.Settings.RevisionLimit)
@@ -393,7 +422,7 @@ func (s *AppService) RestoreRevision(id string) (State, error) {
 		return State{}, err
 	}
 	current := s.store.Snapshot()
-	next := cloneState(revision.State)
+	next := domain.CloneState(revision.State)
 	// Imported certificate material is global and secret; restoring an old
 	// revision must never silently delete certificates added later.
 	next.Certificates = current.Certificates
@@ -444,7 +473,7 @@ func (s *AppService) Logs(kind string, limit int) ([]string, error) {
 	default:
 		return nil, errors.New("日志类型必须是 access、error 或 backend")
 	}
-	return tailLines(path, limit)
+	return fileutil.TailLines(path, limit)
 }
 
 func (s *AppService) Config() (ConfigSnapshot, error) {

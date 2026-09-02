@@ -1,4 +1,4 @@
-package main
+package domain
 
 import (
 	"strings"
@@ -28,21 +28,21 @@ func testRule(id, name, domain string, port int) ProxyRule {
 }
 
 func TestValidateStateRejectsDuplicateDomain(t *testing.T) {
-	state := defaultState()
+	state := DefaultState()
 	state.Rules = []ProxyRule{
 		testRule("0123456789ab", "A", "demo.example.com", 19080),
 		testRule("abcdef012345", "B", "demo.example.com", 19080),
 	}
-	if err := validateState(state); err == nil || !strings.Contains(err.Error(), "重复") {
+	if err := ValidateState(state); err == nil || !strings.Contains(err.Error(), "重复") {
 		t.Fatalf("expected duplicate-domain error, got %v", err)
 	}
 }
 
 func TestValidateStateRejectsPrivilegedPort(t *testing.T) {
-	state := defaultState()
+	state := DefaultState()
 	rule := testRule("0123456789ab", "A", "demo.example.com", 443)
 	state.Rules = []ProxyRule{rule}
-	if err := validateState(state); err == nil || !strings.Contains(err.Error(), "非特权端口") {
+	if err := ValidateState(state); err == nil || !strings.Contains(err.Error(), "非特权端口") {
 		t.Fatalf("expected privileged-port error, got %v", err)
 	}
 }
@@ -54,7 +54,7 @@ func TestNormalizeRule(t *testing.T) {
 		UpstreamHost:   "[::1]",
 		UpstreamScheme: "HTTP",
 	}
-	normalizeRule(&rule, defaultState().Settings)
+	NormalizeRule(&rule, DefaultState().Settings)
 	if rule.Name != "Demo" || rule.UpstreamScheme != "http" || rule.UpstreamHost != "::1" {
 		t.Fatalf("unexpected normalized rule: %#v", rule)
 	}

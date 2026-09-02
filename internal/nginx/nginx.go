@@ -1,4 +1,4 @@
-package main
+package nginx
 
 import (
 	"context"
@@ -15,18 +15,30 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	"github.com/chenpingonline/fn-nginx-web/internal/platform"
 )
 
-type NginxManager struct {
+type Paths = platform.Paths
+type State = domain.State
+type NginxStatus = domain.NginxStatus
+type ApplyResult = domain.ApplyResult
+type ProxyRule = domain.ProxyRule
+type CertificateMeta = domain.CertificateMeta
+type Settings = domain.Settings
+
+type Manager struct {
 	paths Paths
 	mu    sync.Mutex
 }
 
-func newNginxManager(paths Paths) *NginxManager {
-	return &NginxManager{paths: paths}
+func New(paths Paths) *Manager {
+	return &Manager{paths: paths}
 }
 
-func (m *NginxManager) CheckBinary() error {
+func (m *Manager) CheckBinary() error {
 	info, err := os.Stat(m.paths.NginxBin)
 	if err != nil {
 		return fmt.Errorf("找不到应用自带的 Nginx: %w", err)
@@ -38,13 +50,13 @@ func (m *NginxManager) CheckBinary() error {
 	if err != nil {
 		return err
 	}
-	if version != NginxVersion {
-		return fmt.Errorf("Nginx 版本不匹配，期望 %s，实际 %s", NginxVersion, version)
+	if version != domain.NginxVersion {
+		return fmt.Errorf("Nginx 版本不匹配，期望 %s，实际 %s", domain.NginxVersion, version)
 	}
 	return nil
 }
 
-func (m *NginxManager) Version() (string, error) {
+func (m *Manager) Version() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	output, err := m.runCommand(ctx, "-v")
@@ -59,15 +71,15 @@ func (m *NginxManager) Version() (string, error) {
 	return "", fmt.Errorf("无法识别 Nginx 版本: %s", text)
 }
 
-func (m *NginxManager) Status(state State) NginxStatus {
+func (m *Manager) Status(state State) NginxStatus {
 	pid, running := m.runningPID()
 	version, _ := m.Version()
-	lines, _ := tailLines(m.paths.NginxErrorLog, 80)
+	lines, _ := fileutil.TailLines(m.paths.NginxErrorLog, 80)
 	return NginxStatus{
 		Running:    running,
 		PID:        pid,
 		Version:    version,
-		Ports:      activePorts(state),
+		Ports:      domain.ActivePorts(state),
 		ConfigPath: m.paths.NginxMaster,
 		LastError:  lastNginxError(lines),
 	}
@@ -84,12 +96,12 @@ func lastNginxError(lines []string) string {
 	return ""
 }
 
-func (m *NginxManager) IsRunning() bool {
+func (m *Manager) IsRunning() bool {
 	_, running := m.runningPID()
 	return running
 }
 
-func (m *NginxManager) runningPID() (int, bool) {
+func (m *Manager) runningPID() (int, bool) {
 	data, err := os.ReadFile(m.paths.NginxPID)
 	if err != nil {
 		return 0, false
@@ -111,25 +123,25 @@ func (m *NginxManager) runningPID() (int, bool) {
 	return pid, true
 }
 
-func (m *NginxManager) TestCurrent() (string, error) {
+func (m *Manager) TestCurrent() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.testConfigUnlocked(m.paths.NginxMaster)
 }
 
-func (m *NginxManager) Start() (ApplyResult, error) {
+func (m *Manager) Start() (ApplyResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.startUnlocked()
 }
 
-func (m *NginxManager) Reload() (ApplyResult, error) {
+func (m *Manager) Reload() (ApplyResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.reloadUnlocked()
 }
 
-func (m *NginxManager) Stop() (ApplyResult, error) {
+func (m *Manager) Stop() (ApplyResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	pid, running := m.runningPID()
@@ -157,23 +169,23 @@ func (m *NginxManager) Stop() (ApplyResult, error) {
 	return ApplyResult{Action: "stop", Message: "Nginx 已停止"}, nil
 }
 
-func (m *NginxManager) Prepare(state State) (ApplyResult, error) {
+func (m *Manager) Prepare(state State) (ApplyResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.installStateUnlocked(state, false)
 }
 
-func (m *NginxManager) Apply(state State) (ApplyResult, error) {
+func (m *Manager) Apply(state State) (ApplyResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.installStateUnlocked(state, true)
 }
 
-func (m *NginxManager) installStateUnlocked(state State, activate bool) (ApplyResult, error) {
-	if err := validateState(state); err != nil {
+func (m *Manager) installStateUnlocked(state State, activate bool) (ApplyResult, error) {
+	if err := domain.ValidateState(state); err != nil {
 		return ApplyResult{}, err
 	}
-	if err := m.paths.ensure(); err != nil {
+	if err := m.paths.Ensure(); err != nil {
 		return ApplyResult{}, err
 	}
 	if err := m.CheckBinary(); err != nil {
@@ -196,11 +208,11 @@ func (m *NginxManager) installStateUnlocked(state State, activate bool) (ApplyRe
 		return ApplyResult{}, err
 	}
 	candidateMasterPath := filepath.Join(candidateRoot, "nginx.conf")
-	if err := writeFileAtomic(candidateMasterPath, []byte(candidateMaster), 0o640); err != nil {
+	if err := fileutil.WriteFileAtomic(candidateMasterPath, []byte(candidateMaster), 0o640); err != nil {
 		return ApplyResult{}, err
 	}
 	for name, content := range candidateFiles {
-		if err := writeFileAtomic(filepath.Join(candidateConfD, name), []byte(content), 0o640); err != nil {
+		if err := fileutil.WriteFileAtomic(filepath.Join(candidateConfD, name), []byte(content), 0o640); err != nil {
 			return ApplyResult{}, err
 		}
 	}
@@ -214,19 +226,19 @@ func (m *NginxManager) installStateUnlocked(state State, activate bool) (ApplyRe
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	newConfD := filepath.Join(m.paths.NginxConfigDir, ".conf.d-new-"+randomID())
-	oldConfD := filepath.Join(m.paths.NginxConfigDir, ".conf.d-old-"+randomID())
+	newConfD := filepath.Join(m.paths.NginxConfigDir, ".conf.d-new-"+domain.RandomID())
+	oldConfD := filepath.Join(m.paths.NginxConfigDir, ".conf.d-old-"+domain.RandomID())
 	if err := os.MkdirAll(newConfD, 0o750); err != nil {
 		return ApplyResult{}, err
 	}
 	defer os.RemoveAll(newConfD)
 	for name, content := range persistentFiles {
-		if err := writeFileAtomic(filepath.Join(newConfD, name), []byte(content), 0o640); err != nil {
+		if err := fileutil.WriteFileAtomic(filepath.Join(newConfD, name), []byte(content), 0o640); err != nil {
 			return ApplyResult{}, err
 		}
 	}
-	newMaster := filepath.Join(m.paths.NginxConfigDir, ".nginx.conf-new-"+randomID())
-	if err := writeFileAtomic(newMaster, []byte(persistentMaster), 0o640); err != nil {
+	newMaster := filepath.Join(m.paths.NginxConfigDir, ".nginx.conf-new-"+domain.RandomID())
+	if err := fileutil.WriteFileAtomic(newMaster, []byte(persistentMaster), 0o640); err != nil {
 		return ApplyResult{}, err
 	}
 	defer os.Remove(newMaster)
@@ -253,7 +265,7 @@ func (m *NginxManager) installStateUnlocked(state State, activate bool) (ApplyRe
 			_ = os.MkdirAll(m.paths.NginxConfD, 0o750)
 		}
 		if hadOldMaster {
-			_ = writeFileAtomic(m.paths.NginxMaster, oldMaster, 0o640)
+			_ = fileutil.WriteFileAtomic(m.paths.NginxMaster, oldMaster, 0o640)
 		} else {
 			_ = os.Remove(m.paths.NginxMaster)
 		}
@@ -301,7 +313,7 @@ func (m *NginxManager) installStateUnlocked(state State, activate bool) (ApplyRe
 	return result, nil
 }
 
-func (m *NginxManager) startUnlocked() (ApplyResult, error) {
+func (m *Manager) startUnlocked() (ApplyResult, error) {
 	if _, running := m.runningPID(); running {
 		return ApplyResult{Action: "start", Message: "Nginx 已在运行"}, nil
 	}
@@ -321,18 +333,18 @@ func (m *NginxManager) startUnlocked() (ApplyResult, error) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	lines, _ := tailLines(m.paths.NginxErrorLog, 30)
+	lines, _ := fileutil.TailLines(m.paths.NginxErrorLog, 30)
 	return ApplyResult{}, fmt.Errorf("Nginx 启动后未检测到主进程: %s", strings.Join(lines, "\n"))
 }
 
-func (m *NginxManager) reloadUnlocked() (ApplyResult, error) {
+func (m *Manager) reloadUnlocked() (ApplyResult, error) {
 	if _, running := m.runningPID(); !running {
 		return m.startUnlocked()
 	}
 	if output, err := m.testConfigUnlocked(m.paths.NginxMaster); err != nil {
 		return ApplyResult{}, fmt.Errorf("重载前配置校验失败: %w\n%s", err, output)
 	}
-	offset := fileSize(m.paths.NginxErrorLog)
+	offset := fileutil.FileSize(m.paths.NginxErrorLog)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	output, err := m.runCommand(ctx, "-p", ensureTrailingSlash(m.paths.NginxPrefix), "-c", m.paths.NginxMaster, "-s", "reload")
@@ -343,7 +355,7 @@ func (m *NginxManager) reloadUnlocked() (ApplyResult, error) {
 	if _, running := m.runningPID(); !running {
 		return ApplyResult{}, errors.New("重载后 Nginx 主进程已退出")
 	}
-	newLog := readFileSegment(m.paths.NginxErrorLog, offset)
+	newLog := fileutil.ReadFileSegment(m.paths.NginxErrorLog, offset)
 	lower := strings.ToLower(newLog)
 	if strings.Contains(lower, "[emerg]") || strings.Contains(lower, "still could not bind") {
 		return ApplyResult{}, fmt.Errorf("Nginx 拒绝了新配置: %s", strings.TrimSpace(newLog))
@@ -351,7 +363,7 @@ func (m *NginxManager) reloadUnlocked() (ApplyResult, error) {
 	return ApplyResult{Action: "reload", Message: "Nginx 已平滑重载", Output: strings.TrimSpace(string(output))}, nil
 }
 
-func (m *NginxManager) testConfigUnlocked(configPath string) (string, error) {
+func (m *Manager) testConfigUnlocked(configPath string) (string, error) {
 	if _, err := os.Stat(configPath); err != nil {
 		return "", err
 	}
@@ -361,7 +373,7 @@ func (m *NginxManager) testConfigUnlocked(configPath string) (string, error) {
 	return strings.TrimSpace(string(output)), err
 }
 
-func (m *NginxManager) runCommand(ctx context.Context, args ...string) ([]byte, error) {
+func (m *Manager) runCommand(ctx context.Context, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, m.paths.NginxBin, args...)
 	cmd.Dir = m.paths.NginxPrefix
 	libraryPath := filepath.Join(m.paths.AppDest, "lib")
@@ -372,8 +384,8 @@ func (m *NginxManager) runCommand(ctx context.Context, args ...string) ([]byte, 
 	return cmd.CombinedOutput()
 }
 
-func (m *NginxManager) render(state State, confDPath string) (string, map[string]string, error) {
-	if err := validateState(state); err != nil {
+func (m *Manager) render(state State, confDPath string) (string, map[string]string, error) {
+	if err := domain.ValidateState(state); err != nil {
 		return "", nil, err
 	}
 	certs := make(map[string]CertificateMeta, len(state.Certificates))
@@ -492,7 +504,7 @@ http {
 	return master, files, nil
 }
 
-func (m *NginxManager) renderDefaultServer(item struct {
+func (m *Manager) renderDefaultServer(item struct {
 	port  int
 	tls   bool
 	rules []ProxyRule
@@ -524,7 +536,7 @@ func (m *NginxManager) renderDefaultServer(item struct {
 	return builder.String(), nil
 }
 
-func (m *NginxManager) renderRuleServer(rule ProxyRule, certs map[string]CertificateMeta) (string, error) {
+func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateMeta) (string, error) {
 	var builder strings.Builder
 	catchAll := len(rule.Domains) == 1 && rule.Domains[0] == "*"
 	builder.WriteString("server {\n")
@@ -616,7 +628,7 @@ func (m *NginxManager) renderRuleServer(rule ProxyRule, certs map[string]Certifi
 	return builder.String(), nil
 }
 
-func (m *NginxManager) certificateFiles(id string) (string, string) {
+func (m *Manager) certificateFiles(id string) (string, string) {
 	base := filepath.Join(m.paths.CertificateDir, id)
 	return filepath.Join(base, "fullchain.pem"), filepath.Join(base, "privkey.pem")
 }

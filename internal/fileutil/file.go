@@ -1,26 +1,15 @@
-package main
+package fileutil
 
 import (
 	"bufio"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-func randomID() string {
-	buf := make([]byte, 8)
-	if _, err := rand.Read(buf); err != nil {
-		panic(fmt.Sprintf("generate random id: %v", err))
-	}
-	return hex.EncodeToString(buf)
-}
-
-func copyFile(src, dst string, mode os.FileMode) error {
+func CopyFile(src, dst string, mode os.FileMode) error {
 	input, err := os.Open(src)
 	if err != nil {
 		return err
@@ -41,7 +30,35 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return closeErr
 }
 
-func tailLines(path string, limit int) ([]string, error) {
+func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+func TailLines(path string, limit int) ([]string, error) {
 	if limit < 1 {
 		limit = 1
 	}
@@ -72,7 +89,7 @@ func tailLines(path string, limit int) ([]string, error) {
 	return lines, scanner.Err()
 }
 
-func readFileSegment(path string, offset int64) string {
+func ReadFileSegment(path string, offset int64) string {
 	file, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -85,7 +102,7 @@ func readFileSegment(path string, offset int64) string {
 	return string(data)
 }
 
-func fileSize(path string) int64 {
+func FileSize(path string) int64 {
 	info, err := os.Stat(path)
 	if err != nil {
 		return 0
@@ -93,7 +110,7 @@ func fileSize(path string) int64 {
 	return info.Size()
 }
 
-func lastNonEmptyLine(lines []string) string {
+func LastNonEmptyLine(lines []string) string {
 	for i := len(lines) - 1; i >= 0; i-- {
 		if strings.TrimSpace(lines[i]) != "" {
 			return lines[i]

@@ -1,10 +1,13 @@
-package main
+package nginx
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/chenpingonline/fn-nginx-web/internal/domain"
 )
 
 func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
@@ -30,7 +33,7 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 		NginxErrorLog:  filepath.Join(root, "var", "logs", "nginx-error.log"),
 		NginxTempDir:   filepath.Join(root, "tmp", "nginx"),
 	}
-	if err := paths.ensure(); err != nil {
+	if err := paths.Ensure(); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(paths.MimeTypes), 0o755); err != nil {
@@ -39,13 +42,19 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 	if err := os.WriteFile(paths.MimeTypes, []byte("types { text/plain txt; }\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	state := defaultState()
+	state := domain.DefaultState()
 	state.Settings.DefaultHTTPPort = 19080
-	rule := testRule("0123456789ab", "Demo", "proxy.example.com", 19080)
+	rule := domain.ProxyRule{
+		ID: "0123456789ab", Name: "Demo", Enabled: true, ListenPort: 19080,
+		Domains: []string{"proxy.example.com"}, UpstreamScheme: "http",
+		UpstreamHost: "127.0.0.1", UpstreamPort: 8080, PreserveHost: true, WebSocket: true,
+		ConnectTimeoutSeconds: 10, ReadTimeoutSeconds: 60, SendTimeoutSeconds: 60,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
 	rule.UpstreamHost = "::1"
-	state.Rules = []ProxyRule{rule}
+	state.Rules = []domain.ProxyRule{rule}
 
-	manager := newNginxManager(paths)
+	manager := New(paths)
 	master, files, err := manager.render(state, paths.NginxConfD)
 	if err != nil {
 		t.Fatal(err)

@@ -22,7 +22,7 @@ jobs:
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y file binutils curl python3 openssl
       - name: Prepare scripts
-        run: chmod +x scripts/*.sh tests/*.sh fnos/cmd/*
+        run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
       - name: Unit tests
         run: go test ./...
       - name: Build x86 FPK
@@ -52,7 +52,7 @@ jobs:
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y file binutils curl python3
       - name: Prepare scripts
-        run: chmod +x scripts/*.sh tests/*.sh fnos/cmd/*
+        run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
       - name: Build ARM64 FPK
         run: ./scripts/build.sh arm64
       - uses: actions/upload-artifact@v4

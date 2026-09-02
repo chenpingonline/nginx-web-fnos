@@ -1,6 +1,6 @@
 # nginx-web
 
-nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理应用。
+nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理应用，FPK 模板集中保存在 `packaging/fnos/`。
 
 它自带独立的 Nginx Open Source 1.30.4，不读取、不修改、也不会重启飞牛系统 Nginx；不依赖 Docker，管理后台通过 fnOS 统一网关和 Unix Socket 提供。
 
@@ -37,6 +37,23 @@ NAS 服务 / Docker 服务 / 局域网设备
 ```
 
 默认无规则时，独立 Nginx 监听 `9080` 并返回 404。首版只允许 `1024–65535` 端口，因此不需要 root 权限。
+
+## 源码结构
+
+```text
+cmd/nginx-web/       命令入口
+internal/app/        服务生命周期与诊断
+internal/domain/     配置模型和校验规则
+internal/httpapi/    HTTP API 与管理权限
+internal/nginx/      Nginx 配置生成和进程管理
+internal/platform/   fnOS 与开发环境路径
+internal/service/    应用业务逻辑
+internal/store/      状态持久化
+packaging/fnos/      fnOS FPK 模板
+scripts/             构建、验证和发布脚本
+third_party/nginx/   Nginx 来源与摘要记录
+web/                 嵌入式管理页面
+```
 
 ## 与系统 Nginx 的隔离
 

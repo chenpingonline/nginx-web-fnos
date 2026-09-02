@@ -18,9 +18,9 @@ PY
 )
 
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/upstream"
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/fnproxy-server" "$ROOT"
+(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/fnproxy-server" ./cmd/nginx-web)
 "$ROOT/scripts/fetch-nginx.sh" x86 "$TEST/app/bin/nginx" >/dev/null
-cp "$ROOT/fnos/app/etc/mime.types" "$TEST/app/etc/mime.types"
+cp "$ROOT/third_party/nginx/mime.types" "$TEST/app/etc/mime.types"
 chmod 755 "$TEST/app/bin/"*
 
 export FNPROXY_APPDEST="$TEST/app"

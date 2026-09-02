@@ -1,4 +1,4 @@
-package main
+package domain
 
 import (
 	"encoding/json"
@@ -96,7 +96,7 @@ type ApplyResult struct {
 	Output  string `json:"output,omitempty"`
 }
 
-func defaultState() State {
+func DefaultState() State {
 	now := time.Now().UTC()
 	return State{
 		SchemaVersion: SchemaVersion,
@@ -112,7 +112,7 @@ func defaultState() State {
 	}
 }
 
-func cloneState(in State) State {
+func CloneState(in State) State {
 	data, _ := json.Marshal(in)
 	var out State
 	_ = json.Unmarshal(data, &out)
@@ -120,11 +120,10 @@ func cloneState(in State) State {
 }
 
 var (
-	idPattern        = regexp.MustCompile(`^[a-f0-9]{12,64}$`)
 	hostLabelPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$`)
 )
 
-func normalizeRule(rule *ProxyRule, settings Settings) {
+func NormalizeRule(rule *ProxyRule, settings Settings) {
 	rule.Name = strings.TrimSpace(rule.Name)
 	rule.UpstreamScheme = strings.ToLower(strings.TrimSpace(rule.UpstreamScheme))
 	rule.UpstreamHost = strings.TrimSpace(strings.Trim(rule.UpstreamHost, "[]"))
@@ -174,7 +173,7 @@ func normalizeRule(rule *ProxyRule, settings Settings) {
 	}
 }
 
-func validateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
+func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
 	if !idPattern.MatchString(rule.ID) {
 		return errors.New("规则 ID 格式不正确")
 	}
@@ -234,7 +233,7 @@ func validateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
 	return nil
 }
 
-func validateState(state State) error {
+func ValidateState(state State) error {
 	if state.Settings.DefaultHTTPPort < 1024 || state.Settings.DefaultHTTPPort > 65535 {
 		return errors.New("默认 HTTP 端口不合法")
 	}
@@ -269,7 +268,7 @@ func validateState(state State) error {
 			return errors.New("存在重复的规则 ID")
 		}
 		ids[rule.ID] = struct{}{}
-		if err := validateRule(rule, certs); err != nil {
+		if err := ValidateRule(rule, certs); err != nil {
 			return fmt.Errorf("规则 %q: %w", rule.Name, err)
 		}
 		if !rule.Enabled {
@@ -325,7 +324,7 @@ func validateHostName(value string, allowWildcard bool) error {
 	return nil
 }
 
-func enabledRuleCount(state State) int {
+func EnabledRuleCount(state State) int {
 	count := 0
 	for _, rule := range state.Rules {
 		if rule.Enabled {
@@ -335,7 +334,7 @@ func enabledRuleCount(state State) int {
 	return count
 }
 
-func activePorts(state State) []int {
+func ActivePorts(state State) []int {
 	set := make(map[int]struct{})
 	for _, rule := range state.Rules {
 		if rule.Enabled {
