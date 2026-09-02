@@ -302,13 +302,13 @@
           ${field("默认 HTTP 端口", `<input class="input" name="default_http_port" type="number" min="1024" max="65535" required value="${settings.default_http_port}">`, "没有启用规则时，Nginx 会在该端口返回 404。")}
           ${field("默认 HTTPS 端口", `<input class="input" name="default_https_port" type="number" min="1024" max="65535" required value="${settings.default_https_port}">`, "创建 HTTPS 规则时使用的默认值。")}
           ${field("配置历史保留数量", `<input class="input" name="revision_limit" type="number" min="1" max="100" required value="${settings.revision_limit}">`, "范围 1–100，超过后自动删除最旧版本。")}
-          <div class="full notice warning">nginx-web 0.1.0 不申请 root 权限，因此不能直接监听 80/443。需要标准公网端口时，请在路由器上将公网 80/443 映射到这里配置的高位端口。</div>
+          <div class="full notice warning">nginx-web 0.1.1 不申请 root 权限，因此不能直接监听 80/443。需要标准公网端口时，请在路由器上将公网 80/443 映射到这里配置的高位端口。</div>
           <div class="full modal-footer" style="padding-left:0;padding-right:0;padding-bottom:0"><button class="button primary" type="submit">保存设置</button></div>
         </form></div>
       </article>
       <article class="card section-gap"><header class="card-header"><div><h2>安全边界</h2><p>首版固定策略</p></div></header><div class="card-body"><dl class="detail-list">
         ${detail("系统 Nginx", "不读取、不修改、不重启")}
-        ${detail("运行用户", "fnproxy 专用 package 用户")}
+        ${detail("运行用户", "nginx-web 专用 package 用户")}
         ${detail("Docker", "不依赖，不挂载 docker.sock")}
         ${detail("管理入口", "fnOS 统一网关 + Unix Socket")}
         ${detail("原始配置", "只读展示，不允许网页任意编辑")}

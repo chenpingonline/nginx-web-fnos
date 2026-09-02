@@ -87,7 +87,7 @@ func LoadPaths() (Paths, error) {
 		NginxAccessLog: filepath.Join(logDir, "nginx-access.log"),
 		NginxErrorLog:  filepath.Join(logDir, "nginx-error.log"),
 		NginxTempDir:   filepath.Join(tmpDir, "nginx"),
-		BackendLog:     filepath.Join(logDir, "fnproxy-server.log"),
+		BackendLog:     filepath.Join(logDir, "nginx-web-server.log"),
 	}
 	return paths, paths.Ensure()
 }

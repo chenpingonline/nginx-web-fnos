@@ -1,12 +1,12 @@
 #!/bin/bash
 set -u
 
-BIN="${TRIM_APPDEST}/bin/fnproxy-server"
+BIN="${TRIM_APPDEST}/bin/nginx-web-server"
 SOCKET="${TRIM_APPDEST}/app.sock"
 RUN_DIR="${TRIM_PKGVAR}/run"
 LOG_DIR="${TRIM_PKGVAR}/logs"
-PID_FILE="${RUN_DIR}/fnproxy-server.pid"
-BACKEND_LOG="${LOG_DIR}/fnproxy-server.log"
+PID_FILE="${RUN_DIR}/nginx-web-server.pid"
+BACKEND_LOG="${LOG_DIR}/nginx-web-server.log"
 
 mkdir -p "$RUN_DIR" "$LOG_DIR"
 

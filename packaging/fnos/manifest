@@ -1,5 +1,5 @@
 appname                    = nginx-web
-version                    = 0.1.0
+version                    = 0.1.1
 display_name               = nginx-web
 desc                       = fnOS 原生 Nginx 反向代理可视化管理工具。独立运行，不修改飞牛系统 Nginx。
 maintainer                 = chenping
@@ -13,4 +13,4 @@ disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 打包名和软件显示名统一更新为 nginx-web。
+changelog                  = 统一管理进程、运行用户、PID 与日志文件命名。

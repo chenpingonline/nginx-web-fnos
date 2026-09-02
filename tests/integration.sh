@@ -18,7 +18,7 @@ PY
 )
 
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/upstream"
-(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/fnproxy-server" ./cmd/nginx-web)
+(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/nginx-web-server" ./cmd/nginx-web)
 "$ROOT/scripts/fetch-nginx.sh" x86 "$TEST/app/bin/nginx" >/dev/null
 cp "$ROOT/third_party/nginx/mime.types" "$TEST/app/etc/mime.types"
 chmod 755 "$TEST/app/bin/"*
@@ -31,7 +31,7 @@ export FNPROXY_SOCKET="$TEST/app/app.sock"
 export FNPROXY_DEV_ALLOW=1
 
 cleanup() {
-  "$TEST/app/bin/fnproxy-server" nginx-stop >/dev/null 2>&1 || true
+  "$TEST/app/bin/nginx-web-server" nginx-stop >/dev/null 2>&1 || true
   [[ -f "$TEST/backend.pid" ]] && kill "$(cat "$TEST/backend.pid")" 2>/dev/null || true
   [[ -f "$TEST/upstream.pid" ]] && kill "$(cat "$TEST/upstream.pid")" 2>/dev/null || true
   if [[ "$KEEP_TEST_ROOT" != "1" ]]; then rm -rf "$TEST"; else echo "保留测试目录：$TEST"; fi
@@ -49,13 +49,13 @@ cat > "$TEST/var/fnproxy.json" <<JSON
 }
 JSON
 
-"$TEST/app/bin/fnproxy-server" init > "$TEST/init.json"
-"$TEST/app/bin/fnproxy-server" serve > "$TEST/var/logs/fnproxy-server.log" 2>&1 & echo $! > "$TEST/backend.pid"
+"$TEST/app/bin/nginx-web-server" init > "$TEST/init.json"
+"$TEST/app/bin/nginx-web-server" serve > "$TEST/var/logs/nginx-web-server.log" 2>&1 & echo $! > "$TEST/backend.pid"
 for _ in $(seq 1 80); do [[ -S "$TEST/app/app.sock" ]] && break; sleep .1; done
 [[ -S "$TEST/app/app.sock" ]]
 
 curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/api/overview > "$TEST/overview.json"
-"$TEST/app/bin/fnproxy-server" nginx-start > "$TEST/start.json"
+"$TEST/app/bin/nginx-web-server" nginx-start > "$TEST/start.json"
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$DEFAULT_PORT/")" == "404" ]]
 
 echo 'FNPROXY_INTEGRATION_OK' > "$TEST/upstream/index.html"
@@ -99,7 +99,7 @@ curl -fsS --unix-socket "$TEST/app/app.sock" -H 'Content-Type: application/json'
 
 [[ "$(curl -fsS -H 'Host: proxy.test' "http://127.0.0.1:$HTTP_PORT/")" == "FNPROXY_INTEGRATION_OK" ]]
 [[ "$(curl -kfsS --resolve "secure.test:$HTTPS_PORT:127.0.0.1" "https://secure.test:$HTTPS_PORT/")" == "FNPROXY_INTEGRATION_OK" ]]
-"$TEST/app/bin/fnproxy-server" nginx-test > "$TEST/nginx-test.json"
+"$TEST/app/bin/nginx-web-server" nginx-test > "$TEST/nginx-test.json"
 curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/api/config > "$TEST/config.json"
 curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/api/revisions > "$TEST/revisions.json"
 python3 - "$TEST" <<'PY'

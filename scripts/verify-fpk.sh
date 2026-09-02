@@ -14,10 +14,10 @@ case "$PLATFORM" in
 esac
 [[ -f "$WORK/NGINX_BINARY_SHA256SUMS.txt" ]] || { echo 'FPK 缺少 NGINX_BINARY_SHA256SUMS.txt' >&2; exit 1; }
 mkdir -p "$WORK/app"; tar -xzf "$WORK/app.tgz" -C "$WORK/app"
-for f in bin/fnproxy-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
-file "$WORK/app/bin/fnproxy-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
+for f in bin/nginx-web-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
+file "$WORK/app/bin/nginx-web-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
 file "$WORK/app/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构错误' >&2; exit 1; }
-grep -aFq 'nginx-web 0.1.0' "$WORK/app/bin/fnproxy-server" || { echo '管理程序版本字符串不正确' >&2; exit 1; }
+grep -aFq 'nginx-web 0.1.1' "$WORK/app/bin/nginx-web-server" || { echo '管理程序版本字符串不正确' >&2; exit 1; }
 grep -aFq 'nginx version: nginx/1.30.4' "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
 EXPECTED_SHA="$(awk 'NR == 1 {print $1}' "$WORK/NGINX_BINARY_SHA256SUMS.txt")"
 if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
@@ -27,9 +27,11 @@ grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-modu
 python3 - "$WORK" <<'PY'
 import json, pathlib, sys
 root=pathlib.Path(sys.argv[1])
-json.loads((root/'config/privilege').read_text())
+privilege=json.loads((root/'config/privilege').read_text())
 json.loads((root/'config/resource').read_text())
 json.loads((root/'app/ui/config').read_text())
+if privilege.get('username') != 'nginx-web': raise SystemExit('运行用户名不正确')
+if privilege.get('groupname') != 'nginx-web': raise SystemExit('运行组名不正确')
 manifest=(root/'manifest').read_text()
 for key in ('appname','version','display_name','platform','checksum'):
     if not any(line.split('=',1)[0].strip()==key for line in manifest.splitlines() if '=' in line): raise SystemExit(f'manifest 缺少 {key}')

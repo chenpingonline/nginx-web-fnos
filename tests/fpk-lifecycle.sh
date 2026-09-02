@@ -14,6 +14,8 @@ trap cleanup EXIT
 mkdir -p "$TEST/pkg" "$TEST/app" "$TEST/etc" "$TEST/var" "$TEST/tmp"
 tar -xzf "$FPK" -C "$TEST/pkg"
 tar -xzf "$TEST/pkg/app.tgz" -C "$TEST/app"
+[[ -x "$TEST/app/bin/nginx-web-server" ]]
+[[ ! -e "$TEST/app/bin/fnproxy-server" ]]
 PORT="$(python3 - <<'PY'
 import socket
 s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()
@@ -39,6 +41,8 @@ export TRIM_TEMP_LOGFILE="$TEST/fnos-error.log"
 "$TEST/pkg/cmd/install_callback"
 "$TEST/pkg/cmd/main" start
 "$TEST/pkg/cmd/main" status
+[[ -s "$TEST/var/run/nginx-web-server.pid" ]]
+[[ -f "$TEST/var/logs/nginx-web-server.log" ]]
 [[ -S "$TEST/app/app.sock" ]]
 grep -q 'nginx-web' < <(curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/)
 curl -fsS --unix-socket "$TEST/app/app.sock" -H 'X-Trim-Isadmin: true' http://localhost/api/overview | grep -q 'nginx_version'

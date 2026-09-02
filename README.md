@@ -15,7 +15,7 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 配置历史与恢复为草稿
 - Nginx 访问日志、错误日志和管理服务日志
 - fnOS 管理员 Header 校验与变更请求标识
-- 普通 `fnproxy` package 用户运行
+- 普通 `nginx-web` package 用户运行
 - x86_64 与 ARM64 原生 FPK，不依赖 Docker
 
 ## 架构
@@ -125,8 +125,8 @@ make build-all
 输出：
 
 ```text
-dist/nginx-web-0.1.0-x86.fpk
-dist/nginx-web-0.1.0-arm64.fpk
+dist/nginx-web-0.1.1-x86.fpk
+dist/nginx-web-0.1.1-arm64.fpk
 ```
 
 ## 测试

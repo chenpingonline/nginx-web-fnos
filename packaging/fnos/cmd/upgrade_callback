@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-BIN="${TRIM_APPDEST}/bin/fnproxy-server"
+BIN="${TRIM_APPDEST}/bin/nginx-web-server"
 LOG="${TRIM_PKGVAR}/logs/upgrade.log"
 mkdir -p "${TRIM_PKGVAR}/logs"
 

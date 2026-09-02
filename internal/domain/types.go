@@ -13,7 +13,7 @@ import (
 
 const (
 	AppName       = "nginx-web"
-	AppVersion    = "0.1.0"
+	AppVersion    = "0.1.1"
 	NginxVersion  = "1.30.4"
 	SchemaVersion = 1
 )

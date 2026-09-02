@@ -21,6 +21,9 @@ func TestLoadPathsUsesExplicitEnvironment(t *testing.T) {
 	if paths.SocketPath != filepath.Join(root, "socket", "app.sock") {
 		t.Fatalf("unexpected socket path: %s", paths.SocketPath)
 	}
+	if paths.BackendLog != filepath.Join(root, "var", "logs", "nginx-web-server.log") {
+		t.Fatalf("unexpected backend log path: %s", paths.BackendLog)
+	}
 	for _, dir := range []string{paths.EtcDir, paths.VarDir, paths.TmpDir, paths.CertificateDir, paths.NginxConfD} {
 		info, statErr := os.Stat(dir)
 		if statErr != nil || !info.IsDir() {
