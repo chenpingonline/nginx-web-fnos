@@ -52,12 +52,9 @@ case "$ARCH" in
     ;;
   arm|arm64|aarch64)
     ARCH="arm64"; CACHE="$ROOT/.cache/nginx/$ARCH"; mkdir -p "$CACHE"
-    BIN="$CACHE/nginx"
-    BIN_SHA="3c7d9e6776b1bbeb1e125a6e25a98578de7d0dff2b0939c5b3b9d590efb9ee8e"
-    URL="https://jirutka.github.io/nginx-binaries/nginx-${VERSION}-aarch64-linux"
+    BIN="$CACHE/nginx-official"
     if [[ -n "${NGINX_BINARY:-}" ]]; then cp "$NGINX_BINARY" "$BIN";
-    elif [[ ! -f "$BIN" ]]; then download "$URL" "$BIN"; fi
-    verify_sha256 "$BIN" "$BIN_SHA"
+    elif [[ ! -f "$BIN" ]]; then "$ROOT/scripts/build-nginx.sh" arm64 "$BIN" >/dev/null; fi
     ;;
   *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
 esac

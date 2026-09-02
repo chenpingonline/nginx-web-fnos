@@ -1,4 +1,4 @@
-name: Build Fn-Nginx FPK
+name: Build nginx-web FPK
 
 on:
   push:
@@ -30,18 +30,21 @@ jobs:
       - name: Integration test
         run: ./tests/integration.sh
       - name: Lifecycle test
-        run: ./tests/fpk-lifecycle.sh dist/Fn-Nginx-0.1.0-x86.fpk
+        run: ./tests/fpk-lifecycle.sh dist/nginx-web-0.1.0-x86.fpk
       - uses: actions/upload-artifact@v4
         with:
-          name: Fn-Nginx-x86
+          name: nginx-web-x86
           path: |
-            dist/Fn-Nginx-0.1.0-x86.fpk
-            dist/Fn-Nginx-0.1.0-x86.fpk.sha256
+            dist/nginx-web-0.1.0-x86.fpk
+            dist/nginx-web-0.1.0-x86.fpk.sha256
 
   arm64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
@@ -54,7 +57,7 @@ jobs:
         run: ./scripts/build.sh arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: Fn-Nginx-arm64
+          name: nginx-web-arm64
           path: |
-            dist/Fn-Nginx-0.1.0-arm64.fpk
-            dist/Fn-Nginx-0.1.0-arm64.fpk.sha256
+            dist/nginx-web-0.1.0-arm64.fpk
+            dist/nginx-web-0.1.0-arm64.fpk.sha256

@@ -1,13 +1,13 @@
 {
   ".url": {
-    "fnproxy.main": {
-      "title": "Fn-Nginx",
+    "nginx-web.main": {
+      "title": "nginx-web",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "",
-      "gatewayPrefix": "/app/fnproxy",
+      "gatewayPrefix": "/app/nginx-web",
       "gatewaySocket": "app.sock",
-      "url": "/app/fnproxy/",
+      "url": "/app/nginx-web/",
       "allUsers": false
     }
   }

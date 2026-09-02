@@ -6,12 +6,12 @@ LOG="${TRIM_PKGVAR}/logs/upgrade.log"
 mkdir -p "${TRIM_PKGVAR}/logs"
 
 if [ ! -x "$BIN" ]; then
-  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "Fn-Nginx 管理程序不存在或无法执行：$BIN" > "$TRIM_TEMP_LOGFILE"
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "nginx-web 管理程序不存在或无法执行：$BIN" > "$TRIM_TEMP_LOGFILE"
   exit 1
 fi
 
 if ! "$BIN" init >> "$LOG" 2>&1; then
-  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "Fn-Nginx 升级初始化失败，请查看 $LOG" > "$TRIM_TEMP_LOGFILE"
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "nginx-web 升级初始化失败，请查看 $LOG" > "$TRIM_TEMP_LOGFILE"
   exit 1
 fi
 exit 0

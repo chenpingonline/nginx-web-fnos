@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const gatewayPrefix = "/app/fnproxy"
+const gatewayPrefix = "/app/nginx-web"
 
 type API struct {
 	service *AppService

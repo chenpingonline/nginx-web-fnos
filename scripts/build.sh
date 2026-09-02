@@ -10,9 +10,19 @@ case "$ARCH" in
   arm|arm64|aarch64) ARCH="arm64"; GOARCH="arm64"; PLATFORM="arm"; FILE_PATTERN='ARM aarch64|ARM64|aarch64'; OUTPUT_ARCH="arm64" ;;
   *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
 esac
-WORK="$ROOT/.build/$ARCH"; STAGE="$WORK/fpk"; APP_STAGE="$WORK/app"; FPK_NAME="Fn-Nginx-${VERSION}-${OUTPUT_ARCH}.fpk"
+WORK="$ROOT/.build/$ARCH"; STAGE="$WORK/fpk"; APP_STAGE="$WORK/app"; FPK_NAME="nginx-web-${VERSION}-${OUTPUT_ARCH}.fpk"
 for cmd in go tar file python3; do command -v "$cmd" >/dev/null 2>&1 || { echo "缺少 $cmd" >&2; exit 1; }; done
 rm -rf "$WORK"; mkdir -p "$DIST" "$STAGE" "$APP_STAGE/bin"
+
+create_archive() {
+  local source_dir="$1" output_file="$2"
+  if tar --version 2>/dev/null | grep -q 'GNU tar'; then
+    tar --sort=name --mtime='UTC 2026-09-02 00:00:00' --owner=0 --group=0 --numeric-owner -czf "$output_file" -C "$source_dir" .
+    return
+  fi
+  find "$source_dir" -exec touch -h -t 202609020000.00 {} +
+  (cd "$source_dir" && find . -print | LC_ALL=C sort | tar --no-recursion --uid 0 --gid 0 --uname root --gname root --no-acls --no-fflags --no-xattrs --no-mac-metadata -czf "$output_file" -T -)
+}
 
 echo '[1/7] 运行 Go 测试'; (cd "$ROOT" && go test ./...)
 echo "[2/7] 构建 Linux $GOARCH 管理服务"
@@ -25,7 +35,7 @@ file "$APP_STAGE/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构�
 grep -aFq 'nginx version: nginx/1.30.4' "$APP_STAGE/bin/nginx" || { echo '无法确认 Nginx 1.30.4 版本字符串' >&2; exit 1; }
 echo '[4/7] 组装 app.tgz'
 cp -a "$ROOT/fnos/app/etc" "$ROOT/fnos/app/ui" "$APP_STAGE/"
-tar --sort=name --mtime='UTC 2026-09-02 00:00:00' --owner=0 --group=0 --numeric-owner -czf "$STAGE/app.tgz" -C "$APP_STAGE" .
+create_archive "$APP_STAGE" "$STAGE/app.tgz"
 if command -v md5sum >/dev/null 2>&1; then APP_MD5="$(md5sum "$STAGE/app.tgz" | awk '{print $1}')"; else APP_MD5="$(md5 -q "$STAGE/app.tgz")"; fi
 echo '[5/7] 组装 FPK 元数据'
 cp -a "$ROOT/fnos/cmd" "$ROOT/fnos/config" "$ROOT/fnos/wizard" "$STAGE/"
@@ -36,7 +46,7 @@ else cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA
 sed -E "s/^platform[[:space:]]*=.*/platform                   = ${PLATFORM}/" "$ROOT/fnos/manifest" | grep -v '^[[:space:]]*checksum[[:space:]]*=' > "$STAGE/manifest"
 printf 'checksum                   = %s\n' "$APP_MD5" >> "$STAGE/manifest"; chmod 755 "$STAGE/cmd/"*
 echo "[6/7] 创建 $FPK_NAME"
-tar --sort=name --mtime='UTC 2026-09-02 00:00:00' --owner=0 --group=0 --numeric-owner -czf "$DIST/$FPK_NAME" -C "$STAGE" .
+create_archive "$STAGE" "$DIST/$FPK_NAME"
 echo '[7/7] 验证 FPK'; "$ROOT/scripts/verify-fpk.sh" "$DIST/$FPK_NAME"
 if command -v sha256sum >/dev/null 2>&1; then sha256sum "$DIST/$FPK_NAME" > "$DIST/${FPK_NAME}.sha256"; else shasum -a 256 "$DIST/$FPK_NAME" > "$DIST/${FPK_NAME}.sha256"; fi
 echo "完成：$DIST/$FPK_NAME"

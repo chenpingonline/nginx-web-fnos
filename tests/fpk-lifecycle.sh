@@ -40,7 +40,7 @@ export TRIM_TEMP_LOGFILE="$TEST/fnos-error.log"
 "$TEST/pkg/cmd/main" start
 "$TEST/pkg/cmd/main" status
 [[ -S "$TEST/app/app.sock" ]]
-grep -q 'Fn-Nginx' < <(curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/)
+grep -q 'nginx-web' < <(curl -fsS --unix-socket "$TEST/app/app.sock" http://localhost/)
 curl -fsS --unix-socket "$TEST/app/app.sock" -H 'X-Trim-Isadmin: true' http://localhost/api/overview | grep -q 'nginx_version'
 [[ "$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")" == "404" ]]
 "$TEST/pkg/cmd/main" stop

@@ -1,1 +1,1 @@
-3c7d9e6776b1bbeb1e125a6e25a98578de7d0dff2b0939c5b3b9d590efb9ee8e  nginx-1.30.4-aarch64-linux
+4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b  nginx-1.30.4.tar.gz

@@ -9,17 +9,22 @@ if command -v md5sum >/dev/null 2>&1; then ACTUAL_MD5="$(md5sum "$WORK/app.tgz" 
 PLATFORM="$(awk -F= '$1 ~ /^[[:space:]]*platform[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2}' "$WORK/manifest")"
 case "$PLATFORM" in
   x86) FILE_PATTERN='x86-64|x86_64'; NGINX_SHA='90b9e538d29a481f071a53877cb9f957b0a5fd38416fea84d5c89eba78e60cb4' ;;
-  arm) FILE_PATTERN='ARM aarch64|ARM64|aarch64'; NGINX_SHA='3c7d9e6776b1bbeb1e125a6e25a98578de7d0dff2b0939c5b3b9d590efb9ee8e' ;;
+  arm) FILE_PATTERN='ARM aarch64|ARM64|aarch64'; NGINX_SHA='' ;;
   *) echo "manifest platform 无效：$PLATFORM" >&2; exit 1 ;;
 esac
 mkdir -p "$WORK/app"; tar -xzf "$WORK/app.tgz" -C "$WORK/app"
 for f in bin/fnproxy-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
 file "$WORK/app/bin/fnproxy-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
 file "$WORK/app/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构错误' >&2; exit 1; }
-grep -aFq 'Fn-Nginx 0.1.0' "$WORK/app/bin/fnproxy-server" || { echo '管理程序版本字符串不正确' >&2; exit 1; }
+grep -aFq 'nginx-web 0.1.0' "$WORK/app/bin/fnproxy-server" || { echo '管理程序版本字符串不正确' >&2; exit 1; }
 grep -aFq 'nginx version: nginx/1.30.4' "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
-if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
-[[ "$ACTUAL_SHA" == "$NGINX_SHA" ]] || { echo 'Nginx 摘要不匹配' >&2; exit 1; }
+if [[ -n "$NGINX_SHA" ]]; then
+  if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
+  [[ "$ACTUAL_SHA" == "$NGINX_SHA" ]] || { echo 'Nginx 摘要不匹配' >&2; exit 1; }
+else
+  file "$WORK/app/bin/nginx" | grep -Fq 'statically linked' || { echo 'ARM64 Nginx 不是静态链接' >&2; exit 1; }
+  grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-module|set-misc-nginx-module' "$WORK/app/bin/nginx" && { echo 'ARM64 Nginx 含非官方第三方模块' >&2; exit 1; }
+fi
 python3 - "$WORK" <<'PY'
 import json, pathlib, sys
 root=pathlib.Path(sys.argv[1])
@@ -29,6 +34,9 @@ json.loads((root/'app/ui/config').read_text())
 manifest=(root/'manifest').read_text()
 for key in ('appname','version','display_name','platform','checksum'):
     if not any(line.split('=',1)[0].strip()==key for line in manifest.splitlines() if '=' in line): raise SystemExit(f'manifest 缺少 {key}')
+values={line.split('=',1)[0].strip():line.split('=',1)[1].strip() for line in manifest.splitlines() if '=' in line}
+if values.get('appname') != 'nginx-web': raise SystemExit('manifest appname 不正确')
+if values.get('display_name') != 'nginx-web': raise SystemExit('manifest display_name 不正确')
 PY
 bash -n "$WORK/cmd/"*
 echo "FPK 验证通过：$(basename "$FPK")"

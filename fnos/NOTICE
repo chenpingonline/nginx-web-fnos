@@ -1,4 +1,4 @@
-Fn-Nginx bundles an independently running NGINX Open Source binary.
+nginx-web bundles an independently running NGINX Open Source binary.
 
 NGINX version: 1.30.4 (stable)
 
@@ -9,9 +9,9 @@ x86_64 package provenance:
 - Bundled NGINX SHA-256: 90b9e538d29a481f071a53877cb9f957b0a5fd38416fea84d5c89eba78e60cb4
 
 ARM64 package provenance:
-- Source archive: official nginx release-1.30.4 source.
-- Binary build: jirutka/nginx-binaries, Linux AArch64 static build.
-- Bundled NGINX SHA-256: 3c7d9e6776b1bbeb1e125a6e25a98578de7d0dff2b0939c5b3b9d590efb9ee8e
-- Exact source inputs are recorded in third_party/nginx/arm64/SOURCES.txt.
+- Source archive: https://nginx.org/download/nginx-1.30.4.tar.gz
+- Official source SHA-256: 4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b
+- Binary build: compiled by this project for Linux AArch64 in an Alpine container.
+- No third-party NGINX modules are added.
 
-Fn-Nginx does not modify, load, stop, or reload the fnOS system NGINX instance.
+nginx-web does not modify, load, stop, or reload the fnOS system NGINX instance.

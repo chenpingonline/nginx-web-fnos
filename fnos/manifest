@@ -1,6 +1,6 @@
-appname                    = fnproxy
+appname                    = nginx-web
 version                    = 0.1.0
-display_name               = Fn-Nginx
+display_name               = nginx-web
 desc                       = fnOS 原生 Nginx 反向代理可视化管理工具。独立运行，不修改飞牛系统 Nginx。
 maintainer                 = chenping
 maintainer_url             = https://github.com/chenpingonline/nginx-fpk
@@ -12,5 +12,5 @@ checkport                  = false
 disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
-desktop_applaunchname      = fnproxy.main
-changelog                  = 软件名称更新为 Fn-Nginx；FPK 产物名称同步调整，保留内部应用 ID 以兼容既有数据。
+desktop_applaunchname      = nginx-web.main
+changelog                  = 打包名和软件显示名统一更新为 nginx-web。

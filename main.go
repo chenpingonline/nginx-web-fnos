@@ -57,7 +57,7 @@ func main() {
 	case "doctor":
 		fatalIf(runDoctor(paths, service))
 	case "version", "--version", "-v":
-		fmt.Printf("Fn-Nginx %s (Nginx %s)\n", AppVersion, NginxVersion)
+		fmt.Printf("nginx-web %s (Nginx %s)\n", AppVersion, NginxVersion)
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", command)
 		fmt.Fprintln(os.Stderr, "可用命令: serve, init, nginx-start, nginx-stop, nginx-reload, nginx-test, doctor, version")
@@ -99,7 +99,7 @@ func serve(paths Paths, service *AppService) error {
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		log.Printf("Fn-Nginx %s 管理服务已监听 %s", AppVersion, paths.SocketPath)
+		log.Printf("nginx-web %s 管理服务已监听 %s", AppVersion, paths.SocketPath)
 		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErrors <- err
 		}

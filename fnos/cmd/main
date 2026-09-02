@@ -38,7 +38,7 @@ start_backend() {
   fi
   rm -f "$PID_FILE" "$SOCKET"
   if [ ! -x "$BIN" ]; then
-    set_error "Fn-Nginx 管理程序不存在或无法执行：$BIN"
+    set_error "nginx-web 管理程序不存在或无法执行：$BIN"
     return 1
   fi
   FNPROXY_SOCKET="$SOCKET" nohup "$BIN" serve >> "$BACKEND_LOG" 2>&1 &
@@ -58,14 +58,14 @@ start_backend() {
   done
   kill -TERM "$pid" 2>/dev/null || true
   rm -f "$PID_FILE" "$SOCKET"
-  set_error "Fn-Nginx 管理服务启动失败，请查看 $BACKEND_LOG"
+  set_error "nginx-web 管理服务启动失败，请查看 $BACKEND_LOG"
   return 1
 }
 
 start_nginx() {
   if ! "$BIN" nginx-start >> "$BACKEND_LOG" 2>&1; then
     # 保留管理页面，用户仍可进入并修复端口或配置问题。
-    set_error "独立 Nginx 启动失败；Fn-Nginx 管理页面仍可使用"
+    set_error "独立 Nginx 启动失败；nginx-web 管理页面仍可使用"
   fi
   return 0
 }

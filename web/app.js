@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const gateway = location.pathname.startsWith("/app/fnproxy") ? "/app/fnproxy" : "";
+  const gateway = location.pathname.startsWith("/app/nginx-web") ? "/app/nginx-web" : "";
   const apiRoot = `${gateway}/api`;
   const pageInfo = {
     dashboard: ["总览", "查看代理服务与配置状态"],
@@ -9,7 +9,7 @@
     certificates: ["HTTPS 证书", "导入并管理手动 TLS 证书"],
     logs: ["运行日志", "查看 Nginx 与管理服务日志"],
     revisions: ["配置历史", "恢复或清理已应用的配置版本"],
-    config: ["Nginx 配置", "查看 Fn-Nginx 实际生成的配置文件"],
+    config: ["Nginx 配置", "查看 nginx-web 实际生成的配置文件"],
     settings: ["设置", "调整默认端口与历史保留策略"]
   };
 
@@ -162,7 +162,7 @@
             <div class="card-body"><dl class="detail-list">
               ${detail("核心版本", `Nginx ${escapeHTML(o.nginx.version || o.nginx_version)}`)}
               ${detail("配置文件", escapeHTML(o.nginx.config_path))}
-              ${detail("应用版本", `Fn-Nginx ${escapeHTML(o.app_version)}`)}
+              ${detail("应用版本", `nginx-web ${escapeHTML(o.app_version)}`)}
               ${detail("运行方式", "原生 FPK · package 用户")}
             </dl></div>
           </article>
@@ -216,7 +216,7 @@
   function renderCertificates() {
     const certificates = model.state.certificates || [];
     els.content.innerHTML = `
-      <div class="toolbar"><div class="notice">Fn-Nginx 只保存 PEM 文件，不会把私钥返回到浏览器。证书目录权限为 0700，私钥文件权限为 0600。</div><span class="spacer"></span><button class="button primary" data-action="add-certificate">＋ 导入证书</button></div>
+      <div class="toolbar"><div class="notice">nginx-web 只保存 PEM 文件，不会把私钥返回到浏览器。证书目录权限为 0700，私钥文件权限为 0600。</div><span class="spacer"></span><button class="button primary" data-action="add-certificate">＋ 导入证书</button></div>
       <article class="card">
         ${certificates.length ? `<div class="table-wrap"><table class="table">
           <thead><tr><th>名称</th><th>域名 / 主体</th><th>有效期</th><th>指纹</th><th></th></tr></thead>
@@ -237,7 +237,7 @@
   }
 
   async function renderLogs() {
-    els.content.innerHTML = `<article class="card"><header class="card-header"><div><h2>实时日志</h2><p>最多读取最近 2000 行，不会把整个大日志载入浏览器</p></div><span class="spacer"></span><div class="log-toolbar"><select id="log-type" class="select"><option value="error">Nginx 错误日志</option><option value="access">Nginx 访问日志</option><option value="backend">Fn-Nginx 管理日志</option></select><button class="button ghost small" data-action="refresh-logs">刷新</button></div></header><pre id="log-view" class="log-view">正在读取…</pre></article>`;
+    els.content.innerHTML = `<article class="card"><header class="card-header"><div><h2>实时日志</h2><p>最多读取最近 2000 行，不会把整个大日志载入浏览器</p></div><span class="spacer"></span><div class="log-toolbar"><select id="log-type" class="select"><option value="error">Nginx 错误日志</option><option value="access">Nginx 访问日志</option><option value="backend">nginx-web 管理日志</option></select><button class="button ghost small" data-action="refresh-logs">刷新</button></div></header><pre id="log-view" class="log-view">正在读取…</pre></article>`;
     document.getElementById("log-type").value = model.logType;
     document.getElementById("log-type").addEventListener("change", async event => {
       model.logType = event.target.value;
@@ -302,7 +302,7 @@
           ${field("默认 HTTP 端口", `<input class="input" name="default_http_port" type="number" min="1024" max="65535" required value="${settings.default_http_port}">`, "没有启用规则时，Nginx 会在该端口返回 404。")}
           ${field("默认 HTTPS 端口", `<input class="input" name="default_https_port" type="number" min="1024" max="65535" required value="${settings.default_https_port}">`, "创建 HTTPS 规则时使用的默认值。")}
           ${field("配置历史保留数量", `<input class="input" name="revision_limit" type="number" min="1" max="100" required value="${settings.revision_limit}">`, "范围 1–100，超过后自动删除最旧版本。")}
-          <div class="full notice warning">Fn-Nginx 0.1.0 不申请 root 权限，因此不能直接监听 80/443。需要标准公网端口时，请在路由器上将公网 80/443 映射到这里配置的高位端口。</div>
+          <div class="full notice warning">nginx-web 0.1.0 不申请 root 权限，因此不能直接监听 80/443。需要标准公网端口时，请在路由器上将公网 80/443 映射到这里配置的高位端口。</div>
           <div class="full modal-footer" style="padding-left:0;padding-right:0;padding-bottom:0"><button class="button primary" type="submit">保存设置</button></div>
         </form></div>
       </article>
@@ -417,7 +417,7 @@
       <form id="certificate-form" class="form-grid">
         ${field("证书名称", `<input class="input" name="name" maxlength="80" placeholder="例如：example.com">`, "留空时自动使用证书 CN 或第一个域名。", "full")}
         ${field("完整证书链（PEM）", `<textarea class="textarea" name="certificate" required rows="10" spellcheck="false" placeholder="-----BEGIN CERTIFICATE-----"></textarea>`, "建议包含站点证书及中间证书。", "full")}
-        ${field("私钥（PEM）", `<textarea class="textarea" name="private_key" required rows="8" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>`, "私钥只发送给本机 Fn-Nginx，并以 0600 权限保存。", "full")}
+        ${field("私钥（PEM）", `<textarea class="textarea" name="private_key" required rows="8" spellcheck="false" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>`, "私钥只发送给本机 nginx-web，并以 0600 权限保存。", "full")}
         <footer class="modal-footer full"><button type="button" class="button ghost" data-action="close-modal">取消</button><button type="submit" class="button primary">导入证书</button></footer>
       </form>`);
     document.getElementById("certificate-form").addEventListener("submit", async event => {
@@ -480,7 +480,7 @@
         break;
       }
       case "nginx-start": await runNginxAction("start"); break;
-      case "nginx-stop": if (await confirmAction("停止独立 Nginx", "停止后所有由 Fn-Nginx 提供的代理入口都会暂时不可访问，但不会影响飞牛系统服务。")) await runNginxAction("stop"); break;
+      case "nginx-stop": if (await confirmAction("停止独立 Nginx", "停止后所有由 nginx-web 提供的代理入口都会暂时不可访问，但不会影响飞牛系统服务。")) await runNginxAction("stop"); break;
       case "nginx-reload": await runNginxAction("reload"); break;
       case "nginx-test": await runNginxAction("test"); break;
       case "open-rules": setPage("rules"); break;
@@ -574,7 +574,7 @@
 
   function renderConnectionError(error) {
     els.sidebarStatus.innerHTML = `<span class="status-dot offline"></span><span>连接管理服务失败</span>`;
-    els.content.innerHTML = `<article class="card empty-state"><div class="empty-icon">!</div><h3>无法读取 Fn-Nginx 状态</h3><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">重新连接</button></article>`;
+    els.content.innerHTML = `<article class="card empty-state"><div class="empty-icon">!</div><h3>无法读取 nginx-web 状态</h3><p>${escapeHTML(error.message)}</p><button class="button primary" data-action="retry">重新连接</button></article>`;
   }
 
   function metricCard(label, value, foot, icon) {

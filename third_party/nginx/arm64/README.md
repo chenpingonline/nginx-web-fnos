@@ -1,5 +1,6 @@
-# ARM64 Nginx binary
+# ARM64 official NGINX source build
 
 The executable is intentionally not committed. `scripts/fetch-nginx.sh arm64`
-downloads the pinned Nginx 1.30.4 AArch64 static binary and verifies SHA-256.
-`SOURCES.txt` records the exact upstream build inputs.
+downloads the pinned official NGINX 1.30.4 source archive from nginx.org,
+verifies SHA-256, and invokes `scripts/build-nginx.sh` to compile a static Linux
+AArch64 binary without third-party NGINX modules.
