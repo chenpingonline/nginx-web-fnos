@@ -30,7 +30,8 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-The ARM64 static build links musl libc, OpenSSL, PCRE2, zlib and GCC runtime
+The ARM64 and AMD64 static builds link musl libc, OpenSSL, PCRE2, zlib and GCC runtime
 support libraries supplied by the pinned Alpine build environment. Their
 licenses remain applicable; the NGINX source URL and checksum are retained in
-`third_party/nginx/arm64/SOURCES.txt` and copied into ARM64 FPK artifacts.
+the architecture-specific `third_party/nginx/` directories and copied into FPK
+artifacts.

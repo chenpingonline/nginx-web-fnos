@@ -61,7 +61,58 @@ nginx-web 只使用自己的 `TRIM_APPDEST`、`TRIM_PKGETC`、`TRIM_PKGVAR` 和 
 
 ## 构建
 
-要求：Go 1.22+、GNU tar、curl、Python 3、`file` 和 `binutils`。
+### 1. 在 fnOS 上编译 NGINX
+
+FPK 打包不会自动下载或编译 NGINX。请先在对应架构的 fnOS 设备或虚拟机上安装并启动 Docker，然后执行：
+
+```bash
+chmod +x scripts/build-nginx-on-fnos.sh
+./scripts/build-nginx-on-fnos.sh
+```
+
+脚本会自动识别当前主机是 ARM64 还是 AMD64，下载并校验官方 NGINX 1.30.4 源码，然后在 `alpine:3.21` 容器中编译静态二进制。Docker 容器和临时编译目录会在完成后清理，不会向 fnOS 本体安装编译依赖。
+
+默认产物：
+
+| fnOS 架构 | NGINX 二进制 |
+| --- | --- |
+| ARM64 | `nginx-arm64-output/nginx-1.30.4-aarch64-linux` |
+| AMD64 | `nginx-amd64-output/nginx-1.30.4-x86_64-linux` |
+
+如需指定输出目录，可以把目录作为第一个参数：
+
+```bash
+./scripts/build-nginx-on-fnos.sh /path/to/output
+```
+
+每次编译还会生成对应的 `.sha256` 和 `.build-info.txt` 文件，用于核对二进制摘要、源码来源和编译参数。
+
+### 2. 将二进制放入项目
+
+把 fnOS 上生成的二进制取回项目，并按架构放到固定位置：
+
+```text
+ARM64  → third_party/nginx/arm64/nginx
+AMD64  → third_party/nginx/x86_64/nginx
+```
+
+例如 ARM64：
+
+```bash
+cp nginx-1.30.4-aarch64-linux third_party/nginx/arm64/nginx
+```
+
+例如 AMD64：
+
+```bash
+cp nginx-1.30.4-x86_64-linux third_party/nginx/x86_64/nginx
+```
+
+这两个本地二进制已被 `.gitignore` 排除，不会提交到 Git。FPK 打包时会检查 NGINX 的目标架构、静态链接属性和版本。
+
+### 3. 构建 FPK
+
+要求：Go 1.22+、GNU tar、Python 3 和 `file`。
 
 ```bash
 make test
@@ -77,10 +128,6 @@ make build-all
 dist/nginx-web-0.1.0-x86.fpk
 dist/nginx-web-0.1.0-arm64.fpk
 ```
-
-ARM64 构建会从 nginx.org 下载固定版本的官方 NGINX 源码、校验摘要，并在隔离的 ARM64 Alpine 容器中编译静态二进制，不添加第三方 NGINX 模块。x86 构建仍使用经过固定摘要校验的预编译包。来源说明位于 `third_party/nginx/`，也可以通过 `NGINX_BINARY=/path/to/nginx` 提供本地二进制。
-
-需要在 ARM fnOS 设备上单独编译并导出官方 NGINX 二进制时，可以复制并执行 `scripts/build-nginx-arm64-on-fnos.sh`。默认产物输出到当前目录的 `nginx-arm64-output/`。
 
 ## 测试
 
@@ -101,4 +148,4 @@ make release
 
 ## 许可证
 
-nginx-web 源码使用 MIT License。Nginx Open Source 和 ARM64 静态构建所含组件的许可证见 `NGINX_LICENSE`、`NOTICE` 与 `THIRD_PARTY_LICENSES.md`。
+nginx-web 源码使用 MIT License。Nginx Open Source 和 ARM64/AMD64 静态构建所含组件的许可证见 `NGINX_LICENSE`、`NOTICE` 与 `THIRD_PARTY_LICENSES.md`。

@@ -24,6 +24,11 @@ create_archive() {
   (cd "$source_dir" && find . -print | LC_ALL=C sort | tar --no-recursion --uid 0 --gid 0 --uname root --gname root --no-acls --no-fflags --no-xattrs --no-mac-metadata -czf "$output_file" -T -)
 }
 
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}';
+  else shasum -a 256 "$1" | awk '{print $1}'; fi
+}
+
 echo '[1/7] 运行 Go 测试'; (cd "$ROOT" && go test ./...)
 echo "[2/7] 构建 Linux $GOARCH 管理服务"
 (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$APP_STAGE/bin/fnproxy-server" ./cmd/nginx-web)
@@ -32,7 +37,9 @@ echo '[3/7] 准备并校验 Nginx 1.30.4'
 "$ROOT/scripts/fetch-nginx.sh" "$ARCH" "$APP_STAGE/bin/nginx" >/dev/null
 file "$APP_STAGE/bin/fnproxy-server" | grep -Eq "$FILE_PATTERN" || { echo '管理服务架构不正确' >&2; exit 1; }
 file "$APP_STAGE/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构不正确' >&2; exit 1; }
+file "$APP_STAGE/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 必须是静态链接二进制' >&2; exit 1; }
 grep -aFq 'nginx version: nginx/1.30.4' "$APP_STAGE/bin/nginx" || { echo '无法确认 Nginx 1.30.4 版本字符串' >&2; exit 1; }
+NGINX_SHA256="$(sha256_file "$APP_STAGE/bin/nginx")"
 echo '[4/7] 组装 app.tgz'
 mkdir -p "$APP_STAGE/etc"
 cp -a "$ROOT/packaging/fnos/app/ui" "$APP_STAGE/"
@@ -44,7 +51,8 @@ cp -a "$ROOT/packaging/fnos/cmd" "$ROOT/packaging/fnos/config" "$ROOT/packaging/
 cp "$ROOT/packaging/fnos/ICON.PNG" "$ROOT/packaging/fnos/ICON_256.PNG" "$STAGE/"
 cp "$ROOT/LICENSE" "$ROOT/NGINX_LICENSE" "$ROOT/NOTICE" "$ROOT/THIRD_PARTY_LICENSES.md" "$STAGE/"
 if [[ "$ARCH" == arm64 ]]; then cp "$ROOT/third_party/nginx/arm64/SOURCES.txt" "$STAGE/NGINX_ARM64_SOURCES.txt"; cp "$ROOT/third_party/nginx/arm64/SHA256SUMS.txt" "$STAGE/NGINX_ARM64_SHA256SUMS.txt";
-else cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA256SUMS.txt"; fi
+else cp "$ROOT/third_party/nginx/x86_64/SOURCES.txt" "$STAGE/NGINX_X86_64_SOURCES.txt"; cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA256SUMS.txt"; fi
+printf '%s  nginx\n' "$NGINX_SHA256" > "$STAGE/NGINX_BINARY_SHA256SUMS.txt"
 sed -E "s/^platform[[:space:]]*=.*/platform                   = ${PLATFORM}/" "$ROOT/packaging/fnos/manifest" | grep -v '^[[:space:]]*checksum[[:space:]]*=' > "$STAGE/manifest"
 printf 'checksum                   = %s\n' "$APP_MD5" >> "$STAGE/manifest"; chmod 755 "$STAGE/cmd/"*
 echo "[6/7] 创建 $FPK_NAME"

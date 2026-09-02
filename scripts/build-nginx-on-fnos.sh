@@ -6,22 +6,36 @@ NGINX_SOURCE_SHA256="${NGINX_SOURCE_SHA256:-4261dc90e9e47c1c4041276e9aaa3d48ebe2
 NGINX_SOURCE_URL="https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
 BUILD_IMAGE="${NGINX_BUILD_IMAGE:-alpine:3.21}"
 APK_MIRROR="${NGINX_APK_MIRROR:-https://mirrors.aliyun.com/alpine}"
-OUTPUT_DIR="${1:-$PWD/nginx-arm64-output}"
-OUTPUT_NAME="nginx-${NGINX_VERSION}-aarch64-linux"
 
 die() {
   echo "错误：$*" >&2
   exit 1
 }
 
+case "$(uname -m)" in
+  aarch64|arm64)
+    TARGET_ARCH="arm64"
+    PLATFORM="linux/arm64"
+    ARCH_LABEL="ARM64"
+    OUTPUT_ARCH="aarch64"
+    FILE_PATTERN='ARM aarch64|ARM64|aarch64'
+    ;;
+  x86_64|amd64)
+    TARGET_ARCH="amd64"
+    PLATFORM="linux/amd64"
+    ARCH_LABEL="AMD64"
+    OUTPUT_ARCH="x86_64"
+    FILE_PATTERN='x86-64|x86_64'
+    ;;
+  *) die "仅支持 ARM64 和 AMD64 主机，当前架构：$(uname -m)" ;;
+esac
+
+OUTPUT_DIR="${1:-$PWD/nginx-${TARGET_ARCH}-output}"
+OUTPUT_NAME="nginx-${NGINX_VERSION}-${OUTPUT_ARCH}-linux"
+
 for command_name in curl tar sha256sum file; do
   command -v "$command_name" >/dev/null 2>&1 || die "缺少命令 $command_name"
 done
-
-case "$(uname -m)" in
-  aarch64|arm64) ;;
-  *) die "该脚本只能在 ARM64 主机执行，当前架构：$(uname -m)" ;;
-esac
 
 if docker info >/dev/null 2>&1; then
   DOCKER=(docker)
@@ -33,7 +47,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nginx-official-arm64.XXXXXX")"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nginx-official-${TARGET_ARCH}.XXXXXX")"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 SOURCE_ARCHIVE="$WORK_DIR/nginx-${NGINX_VERSION}.tar.gz"
@@ -52,11 +66,11 @@ ACTUAL_SOURCE_SHA256="$(sha256sum "$SOURCE_ARCHIVE" | awk '{print $1}')"
 mkdir -p "$WORK_DIR/src" "$WORK_DIR/out"
 tar -xzf "$SOURCE_ARCHIVE" -C "$WORK_DIR/src"
 
-echo "[3/6] 准备 ARM64 Alpine 编译环境：$BUILD_IMAGE"
-"${DOCKER[@]}" pull --platform linux/arm64 "$BUILD_IMAGE"
+echo "[3/6] 准备 $ARCH_LABEL Alpine 编译环境：$BUILD_IMAGE"
+"${DOCKER[@]}" pull --platform "$PLATFORM" "$BUILD_IMAGE"
 
-echo "[4/6] 编译官方 NGINX ${NGINX_VERSION} ARM64 静态二进制"
-"${DOCKER[@]}" run --rm --platform linux/arm64 \
+echo "[4/6] 编译官方 NGINX ${NGINX_VERSION} $ARCH_LABEL 静态二进制"
+"${DOCKER[@]}" run --rm --platform "$PLATFORM" \
   -e APK_MIRROR="$APK_MIRROR" \
   -e HOST_UID="$(id -u)" \
   -e HOST_GID="$(id -g)" \
@@ -86,11 +100,24 @@ echo "[4/6] 编译官方 NGINX ${NGINX_VERSION} ARM64 静态二进制"
       --with-cc-opt="-Os -static" \
       --with-ld-opt="-static" \
       --with-pcre-jit \
+      --with-threads \
+      --with-file-aio \
       --with-http_ssl_module \
       --with-http_v2_module \
       --with-http_realip_module \
       --with-http_stub_status_module \
-      --with-http_auth_request_module
+      --with-http_auth_request_module \
+      --with-http_addition_module \
+      --with-http_sub_module \
+      --with-http_dav_module \
+      --with-http_gunzip_module \
+      --with-http_gzip_static_module \
+      --with-http_secure_link_module \
+      --with-http_slice_module \
+      --with-stream \
+      --with-stream_ssl_module \
+      --with-stream_ssl_preread_module \
+      --with-stream_realip_module
     make -j"$(getconf _NPROCESSORS_ONLN)"
     strip objs/nginx
     install -m 755 objs/nginx /work/out/nginx
@@ -102,13 +129,13 @@ echo "[5/6] 导出编译产物"
 install -m 755 "$WORK_DIR/out/nginx" "$OUTPUT_DIR/$OUTPUT_NAME"
 {
   cat "$WORK_DIR/out/nginx-build-info.txt"
-  printf '\nsource_url=%s\nsource_sha256=%s\nbuild_image=%s\napk_mirror=%s\n' \
-    "$NGINX_SOURCE_URL" "$NGINX_SOURCE_SHA256" "$BUILD_IMAGE" "$APK_MIRROR"
+  printf '\nsource_url=%s\nsource_sha256=%s\nbuild_image=%s\napk_mirror=%s\nplatform=%s\n' \
+    "$NGINX_SOURCE_URL" "$NGINX_SOURCE_SHA256" "$BUILD_IMAGE" "$APK_MIRROR" "$PLATFORM"
 } > "$OUTPUT_DIR/${OUTPUT_NAME}.build-info.txt"
 (cd "$OUTPUT_DIR" && sha256sum "$OUTPUT_NAME" > "${OUTPUT_NAME}.sha256")
 
-echo "[6/6] 验证 ARM64、静态链接、版本和第三方模块"
-file "$OUTPUT_DIR/$OUTPUT_NAME" | grep -Eq 'ARM aarch64|ARM64|aarch64' || die "产物不是 ARM64"
+echo "[6/6] 验证 $ARCH_LABEL、静态链接、版本和第三方模块"
+file "$OUTPUT_DIR/$OUTPUT_NAME" | grep -Eq "$FILE_PATTERN" || die "产物不是 $ARCH_LABEL"
 file "$OUTPUT_DIR/$OUTPUT_NAME" | grep -Fq 'statically linked' || die "产物不是静态链接"
 grep -aFq "nginx version: nginx/${NGINX_VERSION}" "$OUTPUT_DIR/$OUTPUT_NAME" || die "版本字符串不正确"
 if grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-module|set-misc-nginx-module' "$OUTPUT_DIR/$OUTPUT_NAME"; then

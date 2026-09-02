@@ -8,23 +8,22 @@ if command -v md5sum >/dev/null 2>&1; then ACTUAL_MD5="$(md5sum "$WORK/app.tgz" 
 [[ -n "$EXPECTED_MD5" && "$EXPECTED_MD5" == "$ACTUAL_MD5" ]] || { echo 'app.tgz MD5 不匹配' >&2; exit 1; }
 PLATFORM="$(awk -F= '$1 ~ /^[[:space:]]*platform[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2}' "$WORK/manifest")"
 case "$PLATFORM" in
-  x86) FILE_PATTERN='x86-64|x86_64'; NGINX_SHA='90b9e538d29a481f071a53877cb9f957b0a5fd38416fea84d5c89eba78e60cb4' ;;
-  arm) FILE_PATTERN='ARM aarch64|ARM64|aarch64'; NGINX_SHA='' ;;
+  x86) FILE_PATTERN='x86-64|x86_64' ;;
+  arm) FILE_PATTERN='ARM aarch64|ARM64|aarch64' ;;
   *) echo "manifest platform 无效：$PLATFORM" >&2; exit 1 ;;
 esac
+[[ -f "$WORK/NGINX_BINARY_SHA256SUMS.txt" ]] || { echo 'FPK 缺少 NGINX_BINARY_SHA256SUMS.txt' >&2; exit 1; }
 mkdir -p "$WORK/app"; tar -xzf "$WORK/app.tgz" -C "$WORK/app"
 for f in bin/fnproxy-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
 file "$WORK/app/bin/fnproxy-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
 file "$WORK/app/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构错误' >&2; exit 1; }
 grep -aFq 'nginx-web 0.1.0' "$WORK/app/bin/fnproxy-server" || { echo '管理程序版本字符串不正确' >&2; exit 1; }
 grep -aFq 'nginx version: nginx/1.30.4' "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
-if [[ -n "$NGINX_SHA" ]]; then
-  if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
-  [[ "$ACTUAL_SHA" == "$NGINX_SHA" ]] || { echo 'Nginx 摘要不匹配' >&2; exit 1; }
-else
-  file "$WORK/app/bin/nginx" | grep -Fq 'statically linked' || { echo 'ARM64 Nginx 不是静态链接' >&2; exit 1; }
-  grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-module|set-misc-nginx-module' "$WORK/app/bin/nginx" && { echo 'ARM64 Nginx 含非官方第三方模块' >&2; exit 1; }
-fi
+EXPECTED_SHA="$(awk 'NR == 1 {print $1}' "$WORK/NGINX_BINARY_SHA256SUMS.txt")"
+if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
+[[ -n "$EXPECTED_SHA" && "$ACTUAL_SHA" == "$EXPECTED_SHA" ]] || { echo 'Nginx 摘要不匹配' >&2; exit 1; }
+file "$WORK/app/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 不是静态链接' >&2; exit 1; }
+grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-module|set-misc-nginx-module' "$WORK/app/bin/nginx" && { echo 'Nginx 含非官方第三方模块' >&2; exit 1; }
 python3 - "$WORK" <<'PY'
 import json, pathlib, sys
 root=pathlib.Path(sys.argv[1])

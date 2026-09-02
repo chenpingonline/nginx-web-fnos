@@ -1,0 +1,1 @@
+https://nginx.org/download/nginx-1.30.4.tar.gz 1328314 4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b 1.30.4 nginx-official-source
