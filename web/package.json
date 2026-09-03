@@ -1,0 +1,1 @@
+{"name":"nginx-web-ui","private":true,"version":"0.1.1","type":"module","scripts":{"dev":"vite","typecheck":"vue-tsc --noEmit","build":"vue-tsc --noEmit && vite build","preview":"vite preview"},"dependencies":{"vue":"^3.5.21"},"devDependencies":{"@types/node":"^24.3.0","@vitejs/plugin-vue":"^6.0.1","typescript":"~5.8.3","vite":"^7.1.5","vue-tsc":"^3.0.6"}}

@@ -19,24 +19,29 @@ jobs:
         with:
           go-version: '1.22.x'
           cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y file binutils curl python3 openssl
       - name: Prepare scripts
         run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
       - name: Unit tests
-        run: go test ./...
+        run: npm ci --prefix web && npm run build --prefix web && go test ./...
       - name: Build x86 FPK
         run: ./scripts/build.sh x86
       - name: Integration test
         run: ./tests/integration.sh
       - name: Lifecycle test
-        run: ./tests/fpk-lifecycle.sh dist/nginx-web-0.1.0-x86.fpk
+        run: ./tests/fpk-lifecycle.sh dist/nginx-web-0.1.1-x86.fpk
       - uses: actions/upload-artifact@v4
         with:
           name: nginx-web-x86
           path: |
-            dist/nginx-web-0.1.0-x86.fpk
-            dist/nginx-web-0.1.0-x86.fpk.sha256
+            dist/nginx-web-0.1.1-x86.fpk
+            dist/nginx-web-0.1.1-x86.fpk.sha256
 
   arm64:
     runs-on: ubuntu-latest
@@ -49,15 +54,22 @@ jobs:
         with:
           go-version: '1.22.x'
           cache: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y file binutils curl python3
       - name: Prepare scripts
         run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
+      - name: Build frontend
+        run: npm ci --prefix web && npm run build --prefix web
       - name: Build ARM64 FPK
         run: ./scripts/build.sh arm64
       - uses: actions/upload-artifact@v4
         with:
           name: nginx-web-arm64
           path: |
-            dist/nginx-web-0.1.0-arm64.fpk
-            dist/nginx-web-0.1.0-arm64.fpk.sha256
+            dist/nginx-web-0.1.1-arm64.fpk
+            dist/nginx-web-0.1.1-arm64.fpk.sha256

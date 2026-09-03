@@ -52,7 +52,7 @@ internal/store/      状态持久化
 packaging/fnos/      fnOS FPK 模板
 scripts/             构建、验证和发布脚本
 third_party/nginx/   Nginx 来源与摘要记录
-web/                 嵌入式管理页面
+web/                 Vue 3 + TypeScript + Vite 管理页面
 ```
 
 ## 与系统 Nginx 的隔离
@@ -112,7 +112,23 @@ cp nginx-1.30.4-x86_64-linux third_party/nginx/x86_64/nginx
 
 ### 3. 构建 FPK
 
-要求：Go 1.22+、GNU tar、Python 3 和 `file`。
+要求：Go 1.22+、Node.js 20.19+ 或 22.12+、npm、GNU tar、Python 3 和 `file`。
+
+首次构建先安装前端依赖：
+
+```bash
+make frontend-install
+```
+
+开发管理页面时可以使用：
+
+```bash
+npm --prefix web run dev
+npm --prefix web run typecheck
+npm --prefix web run build
+```
+
+Vite 开发服务器适合检查页面布局；需要调用真实 API 时，应使用 Go 管理服务提供的页面。`scripts/build.sh` 会在每次 FPK 打包前自动执行前端类型检查和生产构建，并将 `web/dist/` 嵌入 `nginx-web-server`。
 
 ```bash
 make test

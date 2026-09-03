@@ -3,6 +3,9 @@
 .build-*/
 .cache/
 dist/
+web/node_modules/
+!web/dist/
+!web/dist/**
 *.fpk
 *.fpk.sha256
 
