@@ -15,22 +15,25 @@ const (
 	AppName       = "nginx-web"
 	AppVersion    = "0.1.1"
 	NginxVersion  = "1.30.4"
-	SchemaVersion = 3
+	SchemaVersion = 4
 )
 
 type Settings struct {
-	DefaultHTTPPort    int             `json:"default_http_port"`
-	DefaultHTTPSPort   int             `json:"default_https_port"`
-	RevisionLimit      int             `json:"revision_limit"`
-	WorkerProcesses    int             `json:"worker_processes"`
-	WorkerConnections  int             `json:"worker_connections"`
-	WorkerRlimitNofile int             `json:"worker_rlimit_nofile"`
-	MultiAccept        bool            `json:"multi_accept"`
-	FileAIO            bool            `json:"file_aio"`
-	RealIP             RealIPSettings  `json:"real_ip"`
-	Gzip               GzipSettings    `json:"gzip"`
-	TLS                TLSSettings     `json:"tls"`
-	Logging            LoggingSettings `json:"logging"`
+	DefaultHTTPPort    int                    `json:"default_http_port"`
+	DefaultHTTPSPort   int                    `json:"default_https_port"`
+	RevisionLimit      int                    `json:"revision_limit"`
+	WorkerProcesses    int                    `json:"worker_processes"`
+	WorkerConnections  int                    `json:"worker_connections"`
+	WorkerRlimitNofile int                    `json:"worker_rlimit_nofile"`
+	MultiAccept        bool                   `json:"multi_accept"`
+	FileAIO            bool                   `json:"file_aio"`
+	ThreadPoolThreads  int                    `json:"thread_pool_threads"`
+	ThreadPoolQueue    int                    `json:"thread_pool_queue"`
+	RealIP             RealIPSettings         `json:"real_ip"`
+	Gzip               GzipSettings           `json:"gzip"`
+	TLS                TLSSettings            `json:"tls"`
+	Logging            LoggingSettings        `json:"logging"`
+	Routing            DynamicRoutingSettings `json:"routing"`
 }
 
 type ProxyRule struct {
@@ -55,6 +58,8 @@ type ProxyRule struct {
 	ClientMaxBodyMB       int               `json:"client_max_body_mb"`
 	UpstreamPoolID        string            `json:"upstream_pool_id,omitempty"`
 	RateLimit             RateLimitSettings `json:"rate_limit"`
+	RootLocation          LocationSettings  `json:"root_location"`
+	Locations             []LocationRule    `json:"locations"`
 	CreatedAt             time.Time         `json:"created_at"`
 	UpdatedAt             time.Time         `json:"updated_at"`
 }
@@ -119,10 +124,12 @@ func DefaultState() State {
 			RevisionLimit:     20,
 			WorkerConnections: 1024,
 			MultiAccept:       true,
+			ThreadPoolQueue:   65536,
 			RealIP:            defaultRealIPSettings(),
 			Gzip:              defaultGzipSettings(),
 			TLS:               defaultTLSSettings(),
 			Logging:           defaultLoggingSettings(),
+			Routing:           DynamicRoutingSettings{Maps: []MapDefinition{}, Geos: []GeoDefinition{}, Splits: []SplitDefinition{}},
 		},
 		Rules:         []ProxyRule{},
 		Certificates:  []CertificateMeta{},
@@ -150,6 +157,17 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 	rule.UpstreamHost = strings.TrimSpace(strings.Trim(rule.UpstreamHost, "[]"))
 	rule.CertificateID = strings.TrimSpace(rule.CertificateID)
 	rule.UpstreamPoolID = strings.TrimSpace(rule.UpstreamPoolID)
+	if rule.Locations == nil {
+		rule.Locations = []LocationRule{}
+	}
+	if rule.RootLocation.BackendType == "" {
+		rule.RootLocation = defaultLocationSettings()
+		rule.RootLocation.UpstreamScheme = rule.UpstreamScheme
+		rule.RootLocation.UpstreamPoolID = rule.UpstreamPoolID
+		rule.RootLocation.UpstreamHost = rule.UpstreamHost
+		rule.RootLocation.UpstreamPort = rule.UpstreamPort
+	}
+	NormalizeHTTPLocations(rule)
 
 	seen := make(map[string]struct{})
 	normalized := make([]string, 0, len(rule.Domains))
@@ -270,10 +288,14 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if err := validateRateLimit(rule.RateLimit); err != nil {
 		return err
 	}
+	if err := ValidateHTTPLocations(rule, poolMap); err != nil {
+		return err
+	}
 	return nil
 }
 
 func ValidateState(state State) error {
+	ApplyStateDefaults(&state)
 	if state.Settings.DefaultHTTPPort < 1024 || state.Settings.DefaultHTTPPort > 65535 {
 		return errors.New("默认 HTTP 端口不合法")
 	}

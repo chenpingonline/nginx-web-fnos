@@ -10,6 +10,16 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 多域名、独立监听端口、默认站点 `*`
 - WebSocket、SSE/流式传输和大文件请求体
 - 上游 HTTP/HTTPS、上游 TLS 校验开关
+- HTTP 上游池、权重/备份/故障恢复、Keepalive 与多种负载均衡算法
+- TCP/UDP 四层代理、TLS 终止、SNI 透传、PROXY Protocol 与 Stream 日志
+- 多 Location 路由、静态网站、跳转与 Rewrite
+- HTTP 缓存、大文件 Slice、缓存清理、Gzip/Gzip Static/Gunzip
+- 请求速率、并发连接与下载限速，HTTP/Stream IP 访问控制
+- Basic Auth、Auth Request、Secure Link、WebDAV 与 Referer 防盗链
+- 请求 Header、响应 `add_header`、Sub Filter、Addition、Mirror 与 SSI
+- FastCGI、gRPC、uWSGI、SCGI、Memcached 与 Stub Status
+- Real IP、Map、Geo、Split Clients 灰度变量、线程池、文件 AIO
+- TLS 协议/加密套件/会话缓存、OCSP Stapling 与客户端证书校验
 - Nginx 配置生成与 `nginx -t` 预检
 - 原子替换、平滑 reload、激活失败自动回滚
 - 配置历史与恢复为草稿
@@ -37,6 +47,14 @@ NAS 服务 / Docker 服务 / 局域网设备
 ```
 
 默认无规则时，独立 Nginx 监听 `9080` 并返回 404。首版只允许 `1024–65535` 端口，因此不需要 root 权限。
+
+页面只保存结构化配置，不接受任意 Nginx 指令。Basic Auth 使用 fnOS 上已有的 htpasswd 文件，页面只记录绝对路径，不保存明文密码。例如可在隔离环境生成后复制到应用可读目录：
+
+```bash
+htpasswd -c /vol1/appdata/nginx-web/.htpasswd admin
+```
+
+响应 Header 使用 Nginx 原生 `add_header`，不等同于未编译的第三方 `headers-more` 模块。
 
 ## 源码结构
 
@@ -159,7 +177,9 @@ make release
 - 不支持 32 位 ARMv7。
 - 不直接监听 80/443，不申请 root 或 `CAP_NET_BIND_SERVICE`。
 - HTTPS 证书目前需要手动导入 PEM，尚未内置 ACME 自动申请和续签。
-- 暂未提供 TCP/UDP Stream、复杂 location、正则 rewrite、缓存和任意原始 Nginx 指令编辑。
+- 不提供任意原始 Nginx 指令编辑，以避免配置注入和应用无法启动。
+- 当前二进制未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查及 Prometheus 模块；页面不会伪装提供这些功能。
+- 客户端 CA 与 Basic Auth 密码文件由用户维护并确保应用运行用户可读。
 - 发布前仍需分别在实体 x86_64、ARM64 fnOS 设备上完成安装验收。
 
 ## 许可证

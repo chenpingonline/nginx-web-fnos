@@ -8,6 +8,8 @@ import type {
   UpstreamPool,
 } from "../types";
 import { formatDate } from "../utils";
+import LocationSettingsEditor from "./LocationSettingsEditor.vue";
+import type { LocationSettings } from "../types";
 const props = defineProps<{
   rule: ProxyRule | null;
   settings: Settings;
@@ -21,6 +23,18 @@ const emit = defineEmits<{
 }>();
 const applyAfter = ref(true);
 const domains = ref("");
+function defaultLocation(): LocationSettings {
+  return {
+    backend_type: "proxy", upstream_scheme: "http", upstream_pool_id: "", upstream_host: "127.0.0.1", upstream_port: 8080,
+    static_path: "/vol1/data/www", static_alias: false, index_files: ["index.html", "index.htm"], autoindex: false, expires: "", try_files: [],
+    return_code: 302, return_target: "", redirect_to_https: false, rewrites: [],
+    cache: { enabled: false, keys_zone_mb: 10, max_size_mb: 1024, inactive_minutes: 60, valid_seconds: 300, slice_kb: 0, use_stale: true, key: "$scheme$request_method$host$request_uri", bypass: [] },
+    allow: [], deny: [], request_headers: [], response_headers: [], basic_auth: false, basic_auth_realm: "Restricted", basic_auth_file: "", auth_request: "",
+    secure_link: { enabled: false, secret: "", argument: "md5" }, dav: { enabled: false, methods: ["PUT", "DELETE", "MKCOL", "COPY", "MOVE"], create_full_put_path: true, min_delete_depth: 0 },
+    sub_filters: [], sub_filter_once: true, sub_filter_types: ["text/html"], addition_before: "", addition_after: "", mirror: "", mirror_request_body: false,
+    ssi: false, valid_referers: [], deny_invalid_referer: false,
+  };
+}
 const form = reactive<ProxyRuleInput>({
   name: "",
   enabled: true,
@@ -49,6 +63,8 @@ const form = reactive<ProxyRuleInput>({
     connections: 0,
     download_kbps: 0,
   },
+  root_location: defaultLocation(),
+  locations: [],
 });
 watch(
   () => props.rule,
@@ -83,6 +99,8 @@ watch(
           connections: 0,
           download_kbps: 0,
         },
+        root_location: defaultLocation(),
+        locations: [],
       },
     );
     form.rate_limit = {
@@ -94,6 +112,12 @@ watch(
       download_kbps: 0,
       ...rule?.rate_limit,
     };
+    form.root_location = rule?.root_location
+      ? JSON.parse(JSON.stringify(rule.root_location))
+      : defaultLocation();
+    form.locations = rule?.locations
+      ? JSON.parse(JSON.stringify(rule.locations))
+      : [];
     domains.value = (rule?.domains ?? []).join("\n");
   },
   { immediate: true },
@@ -112,11 +136,27 @@ function changeTLS() {
   if (!form.tls) form.certificate_id = "";
 }
 function submit() {
+  Object.assign(form.root_location, {
+    upstream_scheme: form.upstream_scheme,
+    upstream_pool_id: form.upstream_pool_id,
+    upstream_host: form.upstream_host,
+    upstream_port: form.upstream_port,
+  });
   emit(
     "save",
     { ...form, domains: domains.value.split(/[\s,]+/).filter(Boolean) },
     applyAfter.value,
   );
+}
+function addLocation() {
+  form.locations.push({
+    id: crypto.randomUUID().replaceAll("-", "").slice(0, 20),
+    name: `路径 ${form.locations.length + 1}`,
+    enabled: true,
+    path: "/api/",
+    match: "prefix",
+    settings: defaultLocation(),
+  });
 }
 </script>
 <template>
@@ -379,6 +419,23 @@ function submit() {
         >
       </div></template
     >
+    <div class="form-section">根路径与高级能力</div>
+    <div class="full location-card">
+      <div class="location-card-title"><strong>根路径 /</strong><span>缓存、静态网站、重写、鉴权与内容处理</span></div>
+      <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" root />
+    </div>
+    <div class="form-section section-actions"><span>自定义 Location</span><button type="button" class="button ghost compact" @click="addLocation">添加路径</button></div>
+    <div v-if="form.locations.length === 0" class="empty-inline full">没有额外路径，所有请求使用根路径设置。</div>
+    <div v-for="(location, index) in form.locations" :key="location.id" class="location-card full">
+      <div class="location-head">
+        <input v-model.trim="location.name" class="input" placeholder="名称" required maxlength="80" />
+        <select v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></select>
+        <input v-model="location.path" class="input" placeholder="/api/" required />
+        <label class="checkbox-row"><input v-model="location.enabled" type="checkbox" />启用</label>
+        <button type="button" class="button danger compact" @click="form.locations.splice(index, 1)">删除</button>
+      </div>
+      <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" />
+    </div>
     <footer class="modal-footer full">
       <button
         type="button"

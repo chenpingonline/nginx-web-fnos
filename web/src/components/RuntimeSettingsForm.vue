@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from "vue";
 import type { Settings } from "../types";
 const props = defineProps<{ settings: Settings; busy: boolean }>();
-const emit = defineEmits<{ save: [value: Settings] }>();
+const emit = defineEmits<{ save: [value: Settings]; clearCache: [] }>();
 const form = reactive<Settings>(structuredClone(props.settings));
 const trusted = ref(""),
   gzipTypes = ref("");
@@ -27,6 +27,15 @@ function submit() {
       types: gzipTypes.value.split(/[\s,]+/).filter(Boolean),
     },
   });
+}
+function addMap() {
+  form.routing.maps.push({ name: "Host 路由", source: "$host", variable: "$backend", hostnames: true, default: "default", entries: [] });
+}
+function addGeo() {
+  form.routing.geos.push({ name: "IP 分组", source: "$remote_addr", variable: "$region", default: "default", entries: [] });
+}
+function addSplit() {
+  form.routing.splits.push({ name: "灰度分流", source: "$request_id", variable: "$variant", entries: [{ key: "10%", value: "canary" }, { key: "*", value: "stable" }] });
 }
 </script>
 <template>
@@ -72,6 +81,27 @@ function submit() {
             required
           />
         </div>
+      </div>
+    </article>
+    <article class="card">
+      <header class="card-header"><div><h2>动态路由变量</h2><p>用 Map、Geo 和 Split Clients 生成可在 Header、重写和上游配置中引用的变量</p></div></header>
+      <div class="card-body settings-stack">
+        <details class="advanced-box"><summary>Map（{{ form.routing.maps.length }}）</summary><div class="form-grid compact-grid">
+          <div v-for="(item, index) in form.routing.maps" :key="`map-${index}`" class="routing-editor full">
+            <input v-model.trim="item.name" class="input" placeholder="名称" /><input v-model.trim="item.source" class="input" placeholder="$host" /><input v-model.trim="item.variable" class="input" placeholder="$backend" /><input v-model="item.default" class="input" placeholder="默认值" />
+            <label class="checkbox-row"><input v-model="item.hostnames" type="checkbox" />域名匹配</label><button type="button" class="button danger compact" @click="form.routing.maps.splice(index, 1)">删除</button>
+            <div v-for="(entry, entryIndex) in item.entries" :key="entryIndex" class="inline-editor routing-entry"><input v-model="entry.key" class="input" placeholder="匹配值" /><input v-model="entry.value" class="input" placeholder="输出值" /><button type="button" class="button danger compact" @click="item.entries.splice(entryIndex, 1)">−</button></div>
+            <button type="button" class="button ghost compact fit" @click="item.entries.push({ key: '', value: '' })">添加条目</button>
+          </div><button type="button" class="button ghost compact fit" @click="addMap">添加 Map</button>
+        </div></details>
+        <details class="advanced-box"><summary>Geo（{{ form.routing.geos.length }}）</summary><div class="form-grid compact-grid">
+          <div v-for="(item, index) in form.routing.geos" :key="`geo-${index}`" class="routing-editor full"><input v-model.trim="item.name" class="input" placeholder="名称" /><input v-model.trim="item.source" class="input" placeholder="$remote_addr" /><input v-model.trim="item.variable" class="input" placeholder="$region" /><input v-model="item.default" class="input" placeholder="默认值" /><button type="button" class="button danger compact" @click="form.routing.geos.splice(index, 1)">删除</button><div v-for="(entry, entryIndex) in item.entries" :key="entryIndex" class="inline-editor routing-entry"><input v-model="entry.key" class="input" placeholder="IP / CIDR" /><input v-model="entry.value" class="input" placeholder="输出值" /><button type="button" class="button danger compact" @click="item.entries.splice(entryIndex, 1)">−</button></div><button type="button" class="button ghost compact fit" @click="item.entries.push({ key: '', value: '' })">添加条目</button></div>
+          <button type="button" class="button ghost compact fit" @click="addGeo">添加 Geo</button>
+        </div></details>
+        <details class="advanced-box"><summary>Split Clients（{{ form.routing.splits.length }}）</summary><div class="form-grid compact-grid">
+          <div v-for="(item, index) in form.routing.splits" :key="`split-${index}`" class="routing-editor full"><input v-model.trim="item.name" class="input" placeholder="名称" /><input v-model.trim="item.source" class="input" placeholder="$request_id" /><input v-model.trim="item.variable" class="input" placeholder="$variant" /><button type="button" class="button danger compact" @click="form.routing.splits.splice(index, 1)">删除</button><div v-for="(entry, entryIndex) in item.entries" :key="entryIndex" class="inline-editor routing-entry"><input v-model="entry.key" class="input" placeholder="10% 或 *" /><input v-model="entry.value" class="input" placeholder="输出值" /><button type="button" class="button danger compact" @click="item.entries.splice(entryIndex, 1)">−</button></div><button type="button" class="button ghost compact fit" @click="item.entries.splice(Math.max(0, item.entries.length - 1), 0, { key: '10%', value: '' })">添加比例</button></div>
+          <button type="button" class="button ghost compact fit" @click="addSplit">添加 Split</button>
+        </div></details>
       </div>
     </article>
     <article class="card">
@@ -124,6 +154,8 @@ function submit() {
             AIO</label
           >
         </div>
+        <div class="field"><label>线程池线程数</label><input v-model.number="form.thread_pool_threads" class="input" type="number" min="0" max="1024" /><span class="field-help">0 表示关闭；启用后文件 I/O 使用线程池。</span></div>
+        <div class="field"><label>线程池队列上限</label><input v-model.number="form.thread_pool_queue" class="input" type="number" min="1" max="1048576" /></div>
       </div>
     </article>
     <article class="card">
@@ -253,6 +285,11 @@ function submit() {
             min="1"
             max="1440"
           />
+          <label class="checkbox-row"><input v-model="form.tls.ocsp_stapling" type="checkbox" />启用 OCSP Stapling</label>
+        </div>
+        <div class="field">
+          <label>客户端证书校验</label><select v-model="form.tls.client_verify" class="select"><option value="off">关闭</option><option value="on">强制</option><option value="optional">可选并校验 CA</option><option value="optional_no_ca">可选且不校验 CA</option></select>
+          <template v-if="form.tls.client_verify !== 'off'"><label>客户端 CA 文件</label><input v-model.trim="form.tls.client_ca_file" class="input" placeholder="/vol1/.../client-ca.pem" required /><label>校验深度</label><input v-model.number="form.tls.client_verify_depth" class="input" type="number" min="1" max="10" /></template>
         </div>
         <div class="field">
           <label>访问日志</label
@@ -297,9 +334,13 @@ function submit() {
             </option>
           </select>
         </div>
+        <div class="field full"><label>自定义访问日志格式（可选）</label><input v-model="form.logging.custom_format" class="input" placeholder='$remote_addr [$time_local] "$request" $status' /><span class="field-help">留空使用内置 fnproxy 格式。</span></div>
+        <div class="field"><label>日志轮转大小（MB）</label><input v-model.number="form.logging.rotate_size_mb" class="input" type="number" min="1" max="10240" /></div>
+        <div class="field"><label>轮转文件保留数</label><input v-model.number="form.logging.rotate_keep" class="input" type="number" min="1" max="100" /></div>
       </div>
     </article>
     <div class="sticky-actions">
+      <button class="button danger-ghost" type="button" :disabled="busy" @click="emit('clearCache')">清理代理缓存</button>
       <button class="button primary" type="submit" :disabled="busy">
         {{ busy ? "处理中…" : "保存全局设置" }}
       </button>

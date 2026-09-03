@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -615,6 +616,56 @@ func (s *AppService) Logs(kind string, limit int) ([]string, error) {
 	return fileutil.TailLines(path, limit)
 }
 
+func (s *AppService) MaintainLogs(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_, _ = s.RotateLogs(false)
+		}
+	}
+}
+
+func (s *AppService) RotateLogs(force bool) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings := s.store.Snapshot().Settings.Logging
+	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog}
+	rotated := false
+	for _, logPath := range paths {
+		info, err := os.Stat(logPath)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return rotated, err
+		}
+		if !force && info.Size() < int64(settings.RotateSizeMB)*1024*1024 {
+			continue
+		}
+		for index := settings.RotateKeep - 1; index >= 1; index-- {
+			oldPath := fmt.Sprintf("%s.%d", logPath, index)
+			newPath := fmt.Sprintf("%s.%d", logPath, index+1)
+			if _, err := os.Stat(oldPath); err == nil {
+				if err := os.Rename(oldPath, newPath); err != nil {
+					return rotated, err
+				}
+			}
+		}
+		if err := os.Rename(logPath, logPath+".1"); err != nil {
+			return rotated, err
+		}
+		rotated = true
+	}
+	if rotated {
+		return true, s.nginx.ReopenLogs()
+	}
+	return false, nil
+}
+
 func (s *AppService) Config() (ConfigSnapshot, error) {
 	master, err := os.ReadFile(s.paths.NginxMaster)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -636,4 +687,27 @@ func (s *AppService) Config() (ConfigSnapshot, error) {
 		files[entry.Name()] = string(data)
 	}
 	return ConfigSnapshot{Master: string(master), Files: files}, nil
+}
+
+func (s *AppService) ClearCache() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	root := filepath.Clean(s.paths.NginxCacheDir)
+	relative, err := filepath.Rel(filepath.Clean(s.paths.VarDir), root)
+	if err != nil || relative == "." || strings.HasPrefix(relative, "..") || root == string(os.PathSeparator) {
+		return errors.New("缓存目录不在应用数据目录内，拒绝清理")
+	}
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return os.MkdirAll(root, 0o750)
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -35,6 +35,9 @@ type Manager struct {
 }
 
 func New(paths Paths) *Manager {
+	if paths.NginxCacheDir == "" {
+		paths.NginxCacheDir = filepath.Join(paths.VarDir, "cache")
+	}
 	return &Manager{paths: paths}
 }
 
@@ -167,6 +170,19 @@ func (m *Manager) Stop() (ApplyResult, error) {
 	}
 	_ = os.Remove(m.paths.NginxPID)
 	return ApplyResult{Action: "stop", Message: "Nginx 已停止"}, nil
+}
+
+func (m *Manager) ReopenLogs() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	pid, running := m.runningPID()
+	if !running {
+		return nil
+	}
+	if err := syscall.Kill(pid, syscall.SIGUSR1); err != nil {
+		return fmt.Errorf("通知 Nginx 重新打开日志失败: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) Prepare(state State) (ApplyResult, error) {
@@ -385,6 +401,7 @@ func (m *Manager) runCommand(ctx context.Context, args ...string) ([]byte, error
 }
 
 func (m *Manager) render(state State, confDPath string) (string, map[string]string, error) {
+	domain.ApplyStateDefaults(&state)
 	if err := domain.ValidateState(state); err != nil {
 		return "", nil, err
 	}
@@ -425,7 +442,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	sort.Ints(ports)
 
 	files := make(map[string]string)
-	if prelude := renderHTTPPrelude(state); prelude != "" {
+	if prelude := renderHTTPPrelude(state, m.paths.NginxCacheDir); prelude != "" {
 		files["001-runtime-and-upstreams.conf"] = prelude
 	}
 	for _, port := range ports {
@@ -484,9 +501,21 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	if state.Settings.Logging.AccessEnabled {
 		accessLog = fmt.Sprintf("access_log %s fnproxy buffer=%dk flush=%ds;", nginxQuote(m.paths.NginxAccessLog), state.Settings.Logging.AccessBufferKB, state.Settings.Logging.AccessFlushSec)
 	}
+	logFormat := `log_format fnproxy '$remote_addr - $remote_user [$time_local] "$request" '
+                       '$status $body_bytes_sent "$http_referer" '
+                       '"$http_user_agent" host="$host" upstream="$upstream_addr" '
+                       'request_time=$request_time upstream_time=$upstream_response_time';`
+	if state.Settings.Logging.CustomFormat != "" {
+		logFormat = "log_format fnproxy " + nginxDirectiveQuote(state.Settings.Logging.CustomFormat) + ";"
+	}
 	aio := "off"
 	if state.Settings.FileAIO {
 		aio = "on"
+	}
+	threadPool := ""
+	if state.Settings.ThreadPoolThreads > 0 {
+		threadPool = fmt.Sprintf("thread_pool fnproxy threads=%d max_queue=%d;", state.Settings.ThreadPoolThreads, state.Settings.ThreadPoolQueue)
+		aio = "threads=fnproxy"
 	}
 	multiAccept := "off"
 	if state.Settings.MultiAccept {
@@ -495,6 +524,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	master := fmt.Sprintf(`daemon on;
 master_process on;
 worker_processes %s;
+%s
 %s
 
 pid %s;
@@ -509,10 +539,7 @@ http {
     include %s;
     default_type application/octet-stream;
 
-    log_format fnproxy '$remote_addr - $remote_user [$time_local] "$request" '
-                       '$status $body_bytes_sent "$http_referer" '
-                       '"$http_user_agent" host="$host" upstream="$upstream_addr" '
-                       'request_time=$request_time upstream_time=$upstream_response_time';
+    %s
 
     %s
 
@@ -535,6 +562,7 @@ http {
     %s
     ssl_session_cache shared:FNPROXY_SSL:%dm;
     ssl_session_timeout %dm;
+    %s
 
 %s
 
@@ -552,7 +580,7 @@ http {
 
     include %s;
 }
-`, workerProcesses, workerRlimit, nginxQuote(m.paths.NginxPID), nginxQuote(m.paths.NginxErrorLog), state.Settings.Logging.ErrorLevel, effectiveWorkerConnections(state.Settings), multiAccept, nginxQuote(m.paths.MimeTypes), accessLog, aio, nginxQuote(filepath.Join(m.paths.NginxTempDir, "body")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "proxy")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "fastcgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "scgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "uwsgi")), strings.Join(state.Settings.TLS.Protocols, " "), renderTLSCiphers(state.Settings.TLS), state.Settings.TLS.SessionCacheMB, state.Settings.TLS.SessionTimeoutMinutes, renderRealIP(state.Settings.RealIP), boolDirective(state.Settings.Gzip.Enabled), state.Settings.Gzip.Level, state.Settings.Gzip.MinLength, strings.Join(state.Settings.Gzip.Types, " "), boolDirective(state.Settings.Gzip.Static), boolDirective(state.Settings.Gzip.Gunzip), nginxQuote(filepath.Join(confDPath, "*.conf")))
+`, workerProcesses, workerRlimit, threadPool, nginxQuote(m.paths.NginxPID), nginxQuote(m.paths.NginxErrorLog), state.Settings.Logging.ErrorLevel, effectiveWorkerConnections(state.Settings), multiAccept, nginxQuote(m.paths.MimeTypes), logFormat, accessLog, aio, nginxQuote(filepath.Join(m.paths.NginxTempDir, "body")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "proxy")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "fastcgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "scgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "uwsgi")), strings.Join(state.Settings.TLS.Protocols, " "), renderTLSCiphers(state.Settings.TLS), state.Settings.TLS.SessionCacheMB, state.Settings.TLS.SessionTimeoutMinutes, renderTLSAdvanced(state.Settings.TLS), renderRealIP(state.Settings.RealIP), boolDirective(state.Settings.Gzip.Enabled), state.Settings.Gzip.Level, state.Settings.Gzip.MinLength, strings.Join(state.Settings.Gzip.Types, " "), boolDirective(state.Settings.Gzip.Static), boolDirective(state.Settings.Gzip.Gunzip), nginxQuote(filepath.Join(confDPath, "*.conf")))
 	if hasStreamConfig(state) {
 		master += fmt.Sprintf(`
 stream {
@@ -741,6 +769,21 @@ func renderTLSCiphers(settings domain.TLSSettings) string {
 	return fmt.Sprintf("ssl_ciphers %s;", nginxQuote(settings.Ciphers))
 }
 
+func renderTLSAdvanced(settings domain.TLSSettings) string {
+	var lines []string
+	if settings.OCSPStapling {
+		lines = append(lines, "ssl_stapling on;", "ssl_stapling_verify on;")
+	}
+	if settings.ClientVerify != "off" {
+		lines = append(lines,
+			"ssl_client_certificate "+nginxQuote(settings.ClientCAFile)+";",
+			"ssl_verify_client "+settings.ClientVerify+";",
+			fmt.Sprintf("ssl_verify_depth %d;", settings.ClientVerifyDepth),
+		)
+	}
+	return strings.Join(lines, "\n    ")
+}
+
 func renderRealIP(settings domain.RealIPSettings) string {
 	if !settings.Enabled {
 		return ""
@@ -753,8 +796,38 @@ func renderRealIP(settings domain.RealIPSettings) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderHTTPPrelude(state State) string {
+func renderHTTPPrelude(state State, cacheRoot string) string {
 	var builder strings.Builder
+	for _, item := range state.Settings.Routing.Maps {
+		fmt.Fprintf(&builder, "map %s %s {\n", item.Source, item.Variable)
+		if item.Hostnames {
+			builder.WriteString("    hostnames;\n")
+		}
+		fmt.Fprintf(&builder, "    default %s;\n", nginxDirectiveQuote(item.Default))
+		for _, entry := range item.Entries {
+			fmt.Fprintf(&builder, "    %s %s;\n", nginxDirectiveQuote(entry.Key), nginxDirectiveQuote(entry.Value))
+		}
+		builder.WriteString("}\n\n")
+	}
+	for _, item := range state.Settings.Routing.Geos {
+		source := ""
+		if item.Source != "" {
+			source = item.Source + " "
+		}
+		fmt.Fprintf(&builder, "geo %s%s {\n", source, item.Variable)
+		fmt.Fprintf(&builder, "    default %s;\n", nginxDirectiveQuote(item.Default))
+		for _, entry := range item.Entries {
+			fmt.Fprintf(&builder, "    %s %s;\n", entry.Key, nginxDirectiveQuote(entry.Value))
+		}
+		builder.WriteString("}\n\n")
+	}
+	for _, item := range state.Settings.Routing.Splits {
+		fmt.Fprintf(&builder, "split_clients %s %s {\n", nginxDirectiveQuote(item.Source), item.Variable)
+		for _, entry := range item.Entries {
+			fmt.Fprintf(&builder, "    %s %s;\n", entry.Key, nginxDirectiveQuote(entry.Value))
+		}
+		builder.WriteString("}\n\n")
+	}
 	for _, pool := range state.UpstreamPools {
 		if pool.Protocol != "http" {
 			continue
@@ -790,10 +863,31 @@ func renderHTTPPrelude(state State) string {
 		builder.WriteString("}\n\n")
 	}
 	for _, rule := range state.Rules {
-		if rule.Enabled && rule.RateLimit.Enabled {
+		if !rule.Enabled {
+			continue
+		}
+		if rule.RateLimit.Enabled {
 			fmt.Fprintf(&builder, "limit_req_zone $binary_remote_addr zone=fnproxy_req_%s:1m rate=%dr/s;\n", rule.ID, rule.RateLimit.RequestsPerSecond)
 			if rule.RateLimit.Connections > 0 {
 				fmt.Fprintf(&builder, "limit_conn_zone $binary_remote_addr zone=fnproxy_conn_%s:1m;\n", rule.ID)
+			}
+		}
+		cacheItems := []struct {
+			id    string
+			cache domain.CacheSettings
+		}{{rule.ID, rule.RootLocation.Cache}}
+		for _, location := range rule.Locations {
+			if !location.Enabled {
+				continue
+			}
+			cacheItems = append(cacheItems, struct {
+				id    string
+				cache domain.CacheSettings
+			}{rule.ID + "_" + location.ID, location.Settings.Cache})
+		}
+		for _, item := range cacheItems {
+			if item.cache.Enabled {
+				fmt.Fprintf(&builder, "proxy_cache_path %s levels=1:2 keys_zone=fnproxy_cache_%s:%dm max_size=%dm inactive=%dm use_temp_path=off;\n", nginxQuote(filepath.Join(cacheRoot, item.id)), item.id, item.cache.KeysZoneMB, item.cache.MaxSizeMB, item.cache.InactiveMinutes)
 			}
 		}
 	}
@@ -872,16 +966,205 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 		fmt.Fprintf(&builder, "    client_max_body_size %dm;\n", rule.ClientMaxBodyMB)
 	}
 
-	upstreamHost := rule.UpstreamHost
-	if net.ParseIP(upstreamHost) != nil && strings.Contains(upstreamHost, ":") {
-		upstreamHost = "[" + upstreamHost + "]"
+	if rule.RootLocation.RedirectToHTTPS && !rule.TLS {
+		builder.WriteString("    return 308 https://$host$request_uri;\n")
+		builder.WriteString("}\n")
+		return builder.String(), nil
 	}
-	fmt.Fprintf(&builder, "\n    location / {\n")
-	if rule.UpstreamPoolID != "" {
-		fmt.Fprintf(&builder, "        proxy_pass %s://fnproxy_up_%s;\n", rule.UpstreamScheme, rule.UpstreamPoolID)
-	} else {
-		fmt.Fprintf(&builder, "        proxy_pass %s://%s:%d;\n", rule.UpstreamScheme, upstreamHost, rule.UpstreamPort)
+
+	if err := m.renderHTTPLocation(&builder, rule, "/", "prefix", rule.RootLocation, rule.ID); err != nil {
+		return "", err
 	}
+	for _, location := range rule.Locations {
+		if !location.Enabled {
+			continue
+		}
+		if err := m.renderHTTPLocation(&builder, rule, location.Path, location.Match, location.Settings, rule.ID+"_"+location.ID); err != nil {
+			return "", err
+		}
+	}
+	builder.WriteString("}\n")
+	return builder.String(), nil
+}
+
+func (m *Manager) renderHTTPLocation(builder *strings.Builder, rule ProxyRule, path, match string, settings domain.LocationSettings, cacheID string) error {
+	prefix := ""
+	switch match {
+	case "exact":
+		prefix = "= "
+	case "regex":
+		prefix = "~ "
+	}
+	fmt.Fprintf(builder, "\n    location %s%s {\n", prefix, nginxDirectiveQuote(path))
+	for _, rewrite := range settings.Rewrites {
+		fmt.Fprintf(builder, "        rewrite %s %s %s;\n", nginxDirectiveQuote(rewrite.Pattern), nginxDirectiveQuote(rewrite.Replacement), rewrite.Flag)
+	}
+	for _, address := range settings.Allow {
+		fmt.Fprintf(builder, "        allow %s;\n", address)
+	}
+	for _, address := range settings.Deny {
+		fmt.Fprintf(builder, "        deny %s;\n", address)
+	}
+	if settings.BasicAuth {
+		fmt.Fprintf(builder, "        auth_basic %s;\n", nginxQuote(settings.BasicAuthRealm))
+		fmt.Fprintf(builder, "        auth_basic_user_file %s;\n", nginxQuote(settings.BasicAuthFile))
+	}
+	if settings.AuthRequest != "" {
+		fmt.Fprintf(builder, "        auth_request %s;\n", nginxDirectiveQuote(settings.AuthRequest))
+	}
+	if settings.SecureLink.Enabled {
+		fmt.Fprintf(builder, "        secure_link $arg_%s,$arg_expires;\n", settings.SecureLink.Argument)
+		fmt.Fprintf(builder, "        secure_link_md5 \"$secure_link_expires$uri %s\";\n", escapeNginxQuoted(settings.SecureLink.Secret))
+		builder.WriteString("        if ($secure_link = \"\") { return 403; }\n")
+		builder.WriteString("        if ($secure_link = \"0\") { return 410; }\n")
+	}
+	if settings.DAV.Enabled {
+		fmt.Fprintf(builder, "        dav_methods %s;\n", strings.Join(settings.DAV.Methods, " "))
+		if settings.DAV.CreateFullPutPath {
+			builder.WriteString("        create_full_put_path on;\n")
+		}
+		fmt.Fprintf(builder, "        min_delete_depth %d;\n", settings.DAV.MinDeleteDepth)
+	}
+	for _, filter := range settings.SubFilters {
+		fmt.Fprintf(builder, "        sub_filter %s %s;\n", nginxQuote(filter.Search), nginxQuote(filter.Replacement))
+	}
+	if len(settings.SubFilters) > 0 {
+		fmt.Fprintf(builder, "        sub_filter_once %s;\n", onOff(settings.SubFilterOnce))
+		extraTypes := make([]string, 0, len(settings.SubFilterTypes))
+		for _, mimeType := range settings.SubFilterTypes {
+			if mimeType != "text/html" {
+				extraTypes = append(extraTypes, mimeType)
+			}
+		}
+		if len(extraTypes) > 0 {
+			fmt.Fprintf(builder, "        sub_filter_types %s;\n", strings.Join(extraTypes, " "))
+		}
+	}
+	if settings.AdditionBefore != "" {
+		fmt.Fprintf(builder, "        add_before_body %s;\n", nginxDirectiveQuote(settings.AdditionBefore))
+	}
+	if settings.AdditionAfter != "" {
+		fmt.Fprintf(builder, "        add_after_body %s;\n", nginxDirectiveQuote(settings.AdditionAfter))
+	}
+	if settings.Mirror != "" {
+		fmt.Fprintf(builder, "        mirror %s;\n", nginxDirectiveQuote(settings.Mirror))
+		fmt.Fprintf(builder, "        mirror_request_body %s;\n", onOff(settings.MirrorRequestBody))
+	}
+	if settings.SSI {
+		builder.WriteString("        ssi on;\n")
+	}
+	if len(settings.ValidReferers) > 0 {
+		fmt.Fprintf(builder, "        valid_referers %s;\n", strings.Join(settings.ValidReferers, " "))
+		if settings.DenyInvalidReferer {
+			builder.WriteString("        if ($invalid_referer) { return 403; }\n")
+		}
+	}
+	for _, header := range settings.ResponseHeaders {
+		always := ""
+		if header.Always {
+			always = " always"
+		}
+		fmt.Fprintf(builder, "        add_header %s %s%s;\n", header.Name, nginxDirectiveQuote(header.Value), always)
+	}
+
+	switch settings.BackendType {
+	case "static":
+		directive := "root"
+		if settings.StaticAlias {
+			directive = "alias"
+		}
+		fmt.Fprintf(builder, "        %s %s;\n", directive, nginxQuote(settings.StaticPath))
+		if len(settings.IndexFiles) > 0 {
+			fmt.Fprintf(builder, "        index %s;\n", strings.Join(settings.IndexFiles, " "))
+		}
+		if settings.AutoIndex {
+			builder.WriteString("        autoindex on;\n")
+		}
+		if settings.Expires != "" {
+			fmt.Fprintf(builder, "        expires %s;\n", settings.Expires)
+		}
+		if len(settings.TryFiles) > 0 {
+			quoted := make([]string, 0, len(settings.TryFiles))
+			for _, value := range settings.TryFiles {
+				quoted = append(quoted, nginxDirectiveQuote(value))
+			}
+			fmt.Fprintf(builder, "        try_files %s;\n", strings.Join(quoted, " "))
+		}
+	case "return":
+		if settings.ReturnTarget == "" {
+			fmt.Fprintf(builder, "        return %d;\n", settings.ReturnCode)
+		} else {
+			fmt.Fprintf(builder, "        return %d %s;\n", settings.ReturnCode, nginxDirectiveQuote(settings.ReturnTarget))
+		}
+	case "grpc":
+		grpcScheme := "grpc"
+		if settings.UpstreamScheme == "https" {
+			grpcScheme = "grpcs"
+		}
+		fmt.Fprintf(builder, "        grpc_pass %s;\n", renderHTTPBackend(settings, grpcScheme))
+	case "fastcgi":
+		fmt.Fprintf(builder, "        fastcgi_pass %s;\n", renderHTTPBackend(settings, ""))
+		builder.WriteString("        fastcgi_param QUERY_STRING $query_string;\n")
+		builder.WriteString("        fastcgi_param REQUEST_METHOD $request_method;\n")
+		builder.WriteString("        fastcgi_param CONTENT_TYPE $content_type;\n")
+		builder.WriteString("        fastcgi_param CONTENT_LENGTH $content_length;\n")
+		builder.WriteString("        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n")
+		builder.WriteString("        fastcgi_param REQUEST_URI $request_uri;\n")
+		builder.WriteString("        fastcgi_param SERVER_PROTOCOL $server_protocol;\n")
+		builder.WriteString("        fastcgi_param REMOTE_ADDR $remote_addr;\n")
+		builder.WriteString("        fastcgi_param SERVER_NAME $server_name;\n")
+	case "uwsgi":
+		fmt.Fprintf(builder, "        uwsgi_pass %s;\n", renderHTTPBackend(settings, ""))
+		builder.WriteString("        uwsgi_param QUERY_STRING $query_string;\n")
+		builder.WriteString("        uwsgi_param REQUEST_METHOD $request_method;\n")
+		builder.WriteString("        uwsgi_param CONTENT_TYPE $content_type;\n")
+		builder.WriteString("        uwsgi_param CONTENT_LENGTH $content_length;\n")
+		builder.WriteString("        uwsgi_param REQUEST_URI $request_uri;\n")
+		builder.WriteString("        uwsgi_param SERVER_PROTOCOL $server_protocol;\n")
+		builder.WriteString("        uwsgi_param REMOTE_ADDR $remote_addr;\n")
+		builder.WriteString("        uwsgi_param SERVER_NAME $server_name;\n")
+	case "scgi":
+		fmt.Fprintf(builder, "        scgi_pass %s;\n", renderHTTPBackend(settings, ""))
+		builder.WriteString("        scgi_param CONTENT_LENGTH $content_length;\n")
+		builder.WriteString("        scgi_param SCGI 1;\n")
+		builder.WriteString("        scgi_param REQUEST_METHOD $request_method;\n")
+		builder.WriteString("        scgi_param REQUEST_URI $request_uri;\n")
+		builder.WriteString("        scgi_param QUERY_STRING $query_string;\n")
+		builder.WriteString("        scgi_param SERVER_PROTOCOL $server_protocol;\n")
+		builder.WriteString("        scgi_param REMOTE_ADDR $remote_addr;\n")
+	case "memcached":
+		builder.WriteString("        memcached_key $uri;\n")
+		fmt.Fprintf(builder, "        memcached_pass %s;\n", renderHTTPBackend(settings, ""))
+	case "status":
+		builder.WriteString("        stub_status;\n")
+	default:
+		fmt.Fprintf(builder, "        proxy_pass %s;\n", renderHTTPBackend(settings, settings.UpstreamScheme))
+		m.renderProxySettings(builder, rule, settings, cacheID)
+	}
+	builder.WriteString("    }\n")
+	return nil
+}
+
+func renderHTTPBackend(settings domain.LocationSettings, scheme string) string {
+	if settings.UpstreamPoolID != "" {
+		backend := "fnproxy_up_" + settings.UpstreamPoolID
+		if scheme != "" {
+			return scheme + "://" + backend
+		}
+		return backend
+	}
+	host := settings.UpstreamHost
+	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	backend := fmt.Sprintf("%s:%d", host, settings.UpstreamPort)
+	if scheme != "" {
+		return scheme + "://" + backend
+	}
+	return backend
+}
+
+func (m *Manager) renderProxySettings(builder *strings.Builder, rule ProxyRule, settings domain.LocationSettings, cacheID string) {
 	builder.WriteString("        proxy_http_version 1.1;\n")
 	if rule.PreserveHost {
 		builder.WriteString("        proxy_set_header Host $host;\n")
@@ -899,9 +1182,12 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 	} else {
 		builder.WriteString("        proxy_set_header Connection \"\";\n")
 	}
-	fmt.Fprintf(&builder, "        proxy_connect_timeout %ds;\n", rule.ConnectTimeoutSeconds)
-	fmt.Fprintf(&builder, "        proxy_read_timeout %ds;\n", rule.ReadTimeoutSeconds)
-	fmt.Fprintf(&builder, "        proxy_send_timeout %ds;\n", rule.SendTimeoutSeconds)
+	for _, header := range settings.RequestHeaders {
+		fmt.Fprintf(builder, "        proxy_set_header %s %s;\n", header.Name, nginxDirectiveQuote(header.Value))
+	}
+	fmt.Fprintf(builder, "        proxy_connect_timeout %ds;\n", rule.ConnectTimeoutSeconds)
+	fmt.Fprintf(builder, "        proxy_read_timeout %ds;\n", rule.ReadTimeoutSeconds)
+	fmt.Fprintf(builder, "        proxy_send_timeout %ds;\n", rule.SendTimeoutSeconds)
 	if rule.Streaming || rule.WebSocket {
 		builder.WriteString("        proxy_buffering off;\n")
 	}
@@ -909,32 +1195,49 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 		builder.WriteString("        proxy_request_buffering off;\n")
 	}
 	if rule.RateLimit.Enabled {
-		fmt.Fprintf(&builder, "        limit_req zone=fnproxy_req_%s burst=%d%s;\n", rule.ID, rule.RateLimit.Burst, map[bool]string{true: " nodelay", false: ""}[rule.RateLimit.NoDelay])
+		fmt.Fprintf(builder, "        limit_req zone=fnproxy_req_%s burst=%d%s;\n", rule.ID, rule.RateLimit.Burst, map[bool]string{true: " nodelay", false: ""}[rule.RateLimit.NoDelay])
 		if rule.RateLimit.Connections > 0 {
-			fmt.Fprintf(&builder, "        limit_conn fnproxy_conn_%s %d;\n", rule.ID, rule.RateLimit.Connections)
+			fmt.Fprintf(builder, "        limit_conn fnproxy_conn_%s %d;\n", rule.ID, rule.RateLimit.Connections)
 		}
 		if rule.RateLimit.DownloadKBps > 0 {
-			fmt.Fprintf(&builder, "        limit_rate %dk;\n", rule.RateLimit.DownloadKBps)
+			fmt.Fprintf(builder, "        limit_rate %dk;\n", rule.RateLimit.DownloadKBps)
 		}
 	}
-	if rule.UpstreamScheme == "https" {
+	if settings.Cache.Enabled {
+		fmt.Fprintf(builder, "        proxy_cache fnproxy_cache_%s;\n", cacheID)
+		fmt.Fprintf(builder, "        proxy_cache_valid %ds;\n", settings.Cache.ValidSeconds)
+		if settings.Cache.SliceKB == 0 {
+			fmt.Fprintf(builder, "        proxy_cache_key %s;\n", nginxDirectiveQuote(settings.Cache.Key))
+		}
+		if len(settings.Cache.Bypass) > 0 {
+			fmt.Fprintf(builder, "        proxy_cache_bypass %s;\n", strings.Join(settings.Cache.Bypass, " "))
+			fmt.Fprintf(builder, "        proxy_no_cache %s;\n", strings.Join(settings.Cache.Bypass, " "))
+		}
+		if settings.Cache.UseStale {
+			builder.WriteString("        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;\n")
+		}
+		if settings.Cache.SliceKB > 0 {
+			fmt.Fprintf(builder, "        slice %dk;\n", settings.Cache.SliceKB)
+			builder.WriteString("        proxy_set_header Range $slice_range;\n")
+			builder.WriteString("        proxy_cache_key \"$scheme$request_method$host$request_uri$slice_range\";\n")
+		}
+	}
+	if settings.UpstreamScheme == "https" {
 		builder.WriteString("        proxy_ssl_server_name on;\n")
-		fmt.Fprintf(&builder, "        proxy_ssl_name %s;\n", rule.UpstreamHost)
+		sslName := settings.UpstreamHost
+		if settings.UpstreamPoolID != "" {
+			sslName = "$host"
+		}
+		fmt.Fprintf(builder, "        proxy_ssl_name %s;\n", sslName)
 		if rule.VerifyUpstreamTLS {
 			caBundle := "/etc/ssl/certs/ca-certificates.crt"
-			if _, err := os.Stat(caBundle); err != nil {
-				return "", errors.New("启用上游 TLS 校验时未找到系统 CA 证书包")
-			}
-			fmt.Fprintf(&builder, "        proxy_ssl_trusted_certificate %s;\n", nginxQuote(caBundle))
+			fmt.Fprintf(builder, "        proxy_ssl_trusted_certificate %s;\n", nginxQuote(caBundle))
 			builder.WriteString("        proxy_ssl_verify on;\n")
 			builder.WriteString("        proxy_ssl_verify_depth 5;\n")
 		} else {
 			builder.WriteString("        proxy_ssl_verify off;\n")
 		}
 	}
-	builder.WriteString("    }\n")
-	builder.WriteString("}\n")
-	return builder.String(), nil
 }
 
 func (m *Manager) certificateFiles(id string) (string, string) {
@@ -958,6 +1261,22 @@ func requireFiles(paths ...string) error {
 func nginxQuote(value string) string {
 	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`)
 	return `"` + replacer.Replace(value) + `"`
+}
+
+func nginxDirectiveQuote(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return `"` + replacer.Replace(value) + `"`
+}
+
+func escapeNginxQuoted(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`, `$`, `\$`).Replace(value)
+}
+
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
 }
 
 func ensureTrailingSlash(path string) string {

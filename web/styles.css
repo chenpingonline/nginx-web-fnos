@@ -122,6 +122,23 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .sticky-actions { position: sticky; bottom: 12px; z-index: 10; display: flex; justify-content: flex-end; padding: 9px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--surface-solid) 92%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
 .server-editor { display: grid; grid-template-columns: minmax(130px, 1fr) 90px 68px 68px 88px auto auto auto; gap: 7px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }
 .sni-editor { display: grid; grid-template-columns: minmax(160px, 1.3fr) minmax(130px, 1fr) minmax(120px, 1fr) 90px auto; gap: 7px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }
+.location-card { border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: var(--surface-soft); }
+.location-card-title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.location-card-title span, .empty-inline { color: var(--text-muted); font-size: 10px; }
+.location-head { display: grid; grid-template-columns: minmax(120px,.8fr) 90px minmax(150px,1.3fr) auto auto; gap: 7px; align-items: center; margin-bottom: 8px; }
+.location-settings { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 10px; }
+.location-settings > .full { grid-column: 1 / -1; }
+.advanced-box { border: 1px solid var(--line); border-radius: 8px; background: var(--surface-solid); }
+.advanced-box summary { cursor: pointer; padding: 8px 10px; font-size: 11px; font-weight: 680; color: var(--text-muted); }
+.advanced-box[open] summary { border-bottom: 1px solid var(--line); }
+.compact-grid { padding: 9px; gap: 8px; }
+.inline-editor { display: grid; grid-template-columns: minmax(100px,1fr) minmax(130px,1.4fr) auto auto; gap: 6px; align-items: center; }
+.button.compact { min-height: 30px; padding: 0 8px; font-size: 10px; }
+.button.fit { width: fit-content; }
+.textarea.small { min-height: 58px; }
+.section-actions { display: flex; align-items: center; justify-content: space-between; }
+.routing-editor { display: grid; grid-template-columns: minmax(110px,.8fr) minmax(110px,1fr) minmax(110px,1fr) minmax(100px,1fr) auto auto; gap: 6px; align-items: center; padding: 7px; border: 1px solid var(--line); border-radius: 8px; }
+.routing-entry { grid-column: 1 / -1; }
 .checkbox-row { min-height: 34px; display: flex; align-items: center; gap: 7px; font-size: 12px; }
 .checkbox-row input { width: 16px; height: 16px; accent-color: var(--accent); }
 .switch { position: relative; width: 36px; height: 21px; display: inline-block; }
@@ -178,7 +195,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .notice.danger { background: var(--danger-soft); border-color: #efd1d1; color: #a23d3d; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(18,25,31,.48); display: grid; place-items: center; padding: 20px; backdrop-filter: blur(4px); }
-.modal { width: min(760px, 100%); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; background: var(--surface-solid); border-radius: 14px; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
+.modal { width: min(960px, 100%); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; background: var(--surface-solid); border-radius: 14px; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
 .modal-header { min-height: 56px; padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
 .modal-header > div { margin-right: auto; }
 .modal-header h2 { margin: 0; font-size: 15px; }
@@ -230,6 +247,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .table .hide-mobile { display: none; }
   .server-editor { grid-template-columns: 1fr 90px; }
   .sni-editor { grid-template-columns: 1fr; }
+  .location-settings, .location-head, .inline-editor, .routing-editor { grid-template-columns: 1fr; }
 }
 
 @media (prefers-color-scheme: dark) {

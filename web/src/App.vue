@@ -383,6 +383,14 @@ async function saveSettings(value: Settings) {
   );
   if (ok !== undefined) await loadCore(true);
 }
+async function clearCache() {
+  if (!(await ask("清理代理缓存", "将删除 nginx-web 生成的全部 HTTP 缓存文件，正在处理的请求可能重新回源。"))) return;
+  await mutate(() => request("/cache", { method: "DELETE" }), "代理缓存已清理");
+}
+async function rotateLogs() {
+  const ok = await mutate(() => request("/logs/rotate", { method: "POST", body: "{}" }), "日志已轮转");
+  if (ok !== undefined) await loadLogs();
+}
 async function saveUpstreamPool(value: UpstreamPoolInput, id: string) {
   const ok = await mutate(
     () =>
@@ -1040,6 +1048,7 @@ onBeforeUnmount(() => {
                     <option value="access">Nginx 访问日志</option>
                     <option value="stream">TCP/UDP Stream 日志</option>
                     <option value="backend">nginx-web 管理日志</option></select
+                  ><button class="button ghost small" @click="rotateLogs">立即轮转</button
                   ><button class="button ghost small" @click="loadLogs">
                     刷新
                   </button>
@@ -1151,6 +1160,7 @@ onBeforeUnmount(() => {
               :settings="state.settings"
               :busy="busy"
               @save="saveSettings"
+              @clear-cache="clearCache"
             />
           </template>
         </template>

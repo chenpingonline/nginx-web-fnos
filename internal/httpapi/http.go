@@ -163,6 +163,9 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		}
 		err := a.service.UpdateSettings(settings)
 		writeResult(w, http.StatusOK, a.service.State().Settings, err)
+	case apiPath == "/api/cache" && r.Method == http.MethodDelete:
+		err := a.service.ClearCache()
+		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	case apiPath == "/api/apply" && r.Method == http.MethodPost:
 		var input struct {
 			Summary string `json:"summary"`
@@ -195,6 +198,9 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		}
 		lines, err := a.service.Logs(kind, limit)
 		writeResult(w, http.StatusOK, map[string]any{"type": kind, "lines": lines}, err)
+	case apiPath == "/api/logs/rotate" && r.Method == http.MethodPost:
+		rotated, err := a.service.RotateLogs(true)
+		writeResult(w, http.StatusOK, map[string]any{"rotated": rotated}, err)
 	case apiPath == "/api/revisions" && r.Method == http.MethodGet:
 		revisions, err := a.service.ListRevisions()
 		writeResult(w, http.StatusOK, revisions, err)

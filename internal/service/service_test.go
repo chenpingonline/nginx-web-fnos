@@ -1,6 +1,7 @@
 package service
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -24,6 +25,37 @@ func testService(t *testing.T) *AppService {
 		t.Fatal(err)
 	}
 	return service
+}
+
+func TestCacheCleanupAndLogRotationStayInsideAppData(t *testing.T) {
+	service := testService(t)
+	cacheFile := filepath.Join(service.paths.NginxCacheDir, "rule", "cache.data")
+	if err := os.MkdirAll(filepath.Dir(cacheFile), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cacheFile, []byte("cache"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.ClearCache(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(cacheFile); !os.IsNotExist(err) {
+		t.Fatalf("cache file still exists: %v", err)
+	}
+
+	if err := os.WriteFile(service.paths.NginxAccessLog, []byte("line\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rotated, err := service.RotateLogs(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rotated {
+		t.Fatal("expected log rotation")
+	}
+	if _, err := os.Stat(service.paths.NginxAccessLog + ".1"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestUpdateSettingsValidatesBeforePersisting(t *testing.T) {

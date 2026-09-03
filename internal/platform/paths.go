@@ -28,6 +28,7 @@ type Paths struct {
 	NginxErrorLog  string
 	NginxStreamLog string
 	NginxTempDir   string
+	NginxCacheDir  string
 	BackendLog     string
 }
 
@@ -89,6 +90,7 @@ func LoadPaths() (Paths, error) {
 		NginxErrorLog:  filepath.Join(logDir, "nginx-error.log"),
 		NginxStreamLog: filepath.Join(logDir, "nginx-stream-access.log"),
 		NginxTempDir:   filepath.Join(tmpDir, "nginx"),
+		NginxCacheDir:  filepath.Join(varDir, "cache"),
 		BackendLog:     filepath.Join(logDir, "nginx-web-server.log"),
 	}
 	return paths, paths.Ensure()
@@ -120,8 +122,12 @@ func (p Paths) Ensure() error {
 		{filepath.Join(p.NginxTempDir, "fastcgi"), 0o750},
 		{filepath.Join(p.NginxTempDir, "scgi"), 0o750},
 		{filepath.Join(p.NginxTempDir, "uwsgi"), 0o750},
+		{p.NginxCacheDir, 0o750},
 	}
 	for _, dir := range dirs {
+		if dir.path == "" {
+			continue
+		}
 		if err := os.MkdirAll(dir.path, dir.mode); err != nil {
 			return err
 		}

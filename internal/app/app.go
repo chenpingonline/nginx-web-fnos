@@ -31,6 +31,9 @@ func New(paths platform.Paths, service *service.AppService, web fs.FS) *App {
 }
 
 func (a *App) Serve() error {
+	maintenanceContext, stopMaintenance := context.WithCancel(context.Background())
+	defer stopMaintenance()
+	go a.service.MaintainLogs(maintenanceContext)
 	if _, err := os.Stat(a.paths.NginxMaster); errors.Is(err, os.ErrNotExist) {
 		if _, prepareErr := a.service.Prepare(); prepareErr != nil {
 			log.Printf("初始 Nginx 配置生成失败，管理页面仍将启动: %v", prepareErr)
