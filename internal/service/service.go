@@ -31,6 +31,7 @@ type Settings = domain.Settings
 type ProxyRule = domain.ProxyRule
 type CertificateMeta = domain.CertificateMeta
 type UpstreamPool = domain.UpstreamPool
+type StreamRule = domain.StreamRule
 type Revision = domain.Revision
 type NginxStatus = domain.NginxStatus
 type ApplyResult = domain.ApplyResult
@@ -93,7 +94,7 @@ func (s *AppService) Overview() Overview {
 		AppVersion:       domain.AppVersion,
 		NginxVersion:     domain.NginxVersion,
 		Nginx:            s.nginx.Status(state),
-		RuleCount:        len(state.Rules),
+		RuleCount:        len(state.Rules) + len(state.StreamRules),
 		EnabledCount:     domain.EnabledRuleCount(state),
 		CertificateCount: len(state.Certificates),
 		Dirty:            state.Dirty,
@@ -165,6 +166,16 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 				return fmt.Errorf("上游池仍被规则 %q 使用", rule.Name)
 			}
 		}
+		for _, rule := range state.StreamRules {
+			if rule.UpstreamPoolID == id {
+				return fmt.Errorf("上游池仍被 Stream 规则 %q 使用", rule.Name)
+			}
+			for _, route := range rule.SNIRoutes {
+				if route.UpstreamPoolID == id {
+					return fmt.Errorf("上游池仍被 Stream SNI 规则 %q 使用", rule.Name)
+				}
+			}
+		}
 		for index := range state.UpstreamPools {
 			if state.UpstreamPools[index].ID == id {
 				state.UpstreamPools = append(state.UpstreamPools[:index], state.UpstreamPools[index+1:]...)
@@ -173,6 +184,60 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 			}
 		}
 		return errors.New("找不到指定上游池")
+	})
+}
+
+func (s *AppService) CreateStreamRule(input StreamRule) (StreamRule, error) {
+	now := time.Now().UTC()
+	input.ID = domain.RandomID()
+	input.CreatedAt = now
+	input.UpdatedAt = now
+	domain.NormalizeStreamRule(&input)
+	err := s.store.Update(func(state *State) error {
+		state.StreamRules = append(state.StreamRules, input)
+		state.Dirty = true
+		return nil
+	})
+	return input, err
+}
+
+func (s *AppService) UpdateStreamRule(id string, input StreamRule) (StreamRule, error) {
+	if !domain.ValidID(id) {
+		return StreamRule{}, errors.New("Stream 规则 ID 不合法")
+	}
+	var updated StreamRule
+	err := s.store.Update(func(state *State) error {
+		for index := range state.StreamRules {
+			if state.StreamRules[index].ID != id {
+				continue
+			}
+			input.ID = id
+			input.CreatedAt = state.StreamRules[index].CreatedAt
+			input.UpdatedAt = time.Now().UTC()
+			domain.NormalizeStreamRule(&input)
+			state.StreamRules[index] = input
+			state.Dirty = true
+			updated = input
+			return nil
+		}
+		return errors.New("找不到指定 Stream 规则")
+	})
+	return updated, err
+}
+
+func (s *AppService) DeleteStreamRule(id string) error {
+	if !domain.ValidID(id) {
+		return errors.New("Stream 规则 ID 不合法")
+	}
+	return s.store.Update(func(state *State) error {
+		for index := range state.StreamRules {
+			if state.StreamRules[index].ID == id {
+				state.StreamRules = append(state.StreamRules[:index], state.StreamRules[index+1:]...)
+				state.Dirty = true
+				return nil
+			}
+		}
+		return errors.New("找不到指定 Stream 规则")
 	})
 }
 
@@ -349,11 +414,21 @@ func (s *AppService) DeleteCertificate(id string) error {
 			return fmt.Errorf("证书仍被规则 %q 使用", rule.Name)
 		}
 	}
+	for _, rule := range state.StreamRules {
+		if rule.CertificateID == id {
+			return fmt.Errorf("证书仍被 Stream 规则 %q 使用", rule.Name)
+		}
+	}
 	revisions, _ := s.ListRevisions()
 	for _, revision := range revisions {
 		for _, rule := range revision.State.Rules {
 			if rule.CertificateID == id {
 				return fmt.Errorf("证书仍被配置历史 %s 引用，请先删除相关历史", revision.ID)
+			}
+		}
+		for _, rule := range revision.State.StreamRules {
+			if rule.CertificateID == id {
+				return fmt.Errorf("证书仍被配置历史 %s 的 Stream 规则引用，请先删除相关历史", revision.ID)
 			}
 		}
 	}
@@ -428,7 +503,7 @@ func (s *AppService) saveRevision(state State, summary string) error {
 		ID:           time.Now().UTC().Format("20060102T150405Z") + "-" + domain.RandomID()[:8],
 		CreatedAt:    time.Now().UTC(),
 		Summary:      strings.TrimSpace(summary),
-		RuleCount:    len(state.Rules),
+		RuleCount:    len(state.Rules) + len(state.StreamRules),
 		EnabledCount: domain.EnabledRuleCount(state),
 		State:        domain.CloneState(state),
 	}
@@ -532,8 +607,10 @@ func (s *AppService) Logs(kind string, limit int) ([]string, error) {
 		path = s.paths.NginxErrorLog
 	case "backend":
 		path = s.paths.BackendLog
+	case "stream":
+		path = s.paths.NginxStreamLog
 	default:
-		return nil, errors.New("日志类型必须是 access、error 或 backend")
+		return nil, errors.New("日志类型必须是 access、error、stream 或 backend")
 	}
 	return fileutil.TailLines(path, limit)
 }
@@ -549,7 +626,7 @@ func (s *AppService) Config() (ConfigSnapshot, error) {
 		return ConfigSnapshot{}, err
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
+		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".conf") && !strings.HasSuffix(entry.Name(), ".stream")) {
 			continue
 		}
 		data, readErr := os.ReadFile(filepath.Join(s.paths.NginxConfD, entry.Name()))

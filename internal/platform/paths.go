@@ -26,6 +26,7 @@ type Paths struct {
 	NginxLogDir    string
 	NginxAccessLog string
 	NginxErrorLog  string
+	NginxStreamLog string
 	NginxTempDir   string
 	BackendLog     string
 }
@@ -86,6 +87,7 @@ func LoadPaths() (Paths, error) {
 		NginxLogDir:    logDir,
 		NginxAccessLog: filepath.Join(logDir, "nginx-access.log"),
 		NginxErrorLog:  filepath.Join(logDir, "nginx-error.log"),
+		NginxStreamLog: filepath.Join(logDir, "nginx-stream-access.log"),
 		NginxTempDir:   filepath.Join(tmpDir, "nginx"),
 		BackendLog:     filepath.Join(logDir, "nginx-web-server.log"),
 	}

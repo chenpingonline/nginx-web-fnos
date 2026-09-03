@@ -123,6 +123,17 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusCreated, pool, err)
 	case strings.HasPrefix(apiPath, "/api/upstreams/"):
 		a.handleUpstreamPool(w, r, strings.TrimPrefix(apiPath, "/api/upstreams/"))
+	case apiPath == "/api/streams" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, a.service.State().StreamRules)
+	case apiPath == "/api/streams" && r.Method == http.MethodPost:
+		var input domain.StreamRule
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		rule, err := a.service.CreateStreamRule(input)
+		writeResult(w, http.StatusCreated, rule, err)
+	case strings.HasPrefix(apiPath, "/api/streams/"):
+		a.handleStreamRule(w, r, strings.TrimPrefix(apiPath, "/api/streams/"))
 	case apiPath == "/api/rules" && r.Method == http.MethodPost:
 		var input domain.ProxyRule
 		if !decodeJSON(w, r, &input) {
@@ -215,6 +226,27 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	default:
 		writeAPIError(w, http.StatusMethodNotAllowed, "上游池接口不支持该请求方法")
+	}
+}
+
+func (a *API) handleStreamRule(w http.ResponseWriter, r *http.Request, id string) {
+	if strings.Contains(id, "/") || id == "" {
+		writeAPIError(w, http.StatusNotFound, "Stream 规则不存在")
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var input domain.StreamRule
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		rule, err := a.service.UpdateStreamRule(id, input)
+		writeResult(w, http.StatusOK, rule, err)
+	case http.MethodDelete:
+		err := a.service.DeleteStreamRule(id)
+		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "Stream 规则接口不支持该请求方法")
 	}
 }
 

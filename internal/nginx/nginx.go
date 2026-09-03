@@ -458,6 +458,19 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 			files[fmt.Sprintf("%03d-%05d-%s.conf", index+10, port, rule.ID)] = content
 		}
 	}
+	if streamPrelude := renderStreamPrelude(state); streamPrelude != "" {
+		files["001-stream-runtime.stream"] = streamPrelude
+	}
+	for index, rule := range state.StreamRules {
+		if !rule.Enabled {
+			continue
+		}
+		content, err := m.renderStreamRule(rule, certs)
+		if err != nil {
+			return "", nil, err
+		}
+		files[fmt.Sprintf("%03d-%05d-%s.stream", index+10, rule.ListenPort, rule.ID)] = content
+	}
 
 	workerProcesses := "auto"
 	if state.Settings.WorkerProcesses > 0 {
@@ -540,7 +553,166 @@ http {
     include %s;
 }
 `, workerProcesses, workerRlimit, nginxQuote(m.paths.NginxPID), nginxQuote(m.paths.NginxErrorLog), state.Settings.Logging.ErrorLevel, effectiveWorkerConnections(state.Settings), multiAccept, nginxQuote(m.paths.MimeTypes), accessLog, aio, nginxQuote(filepath.Join(m.paths.NginxTempDir, "body")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "proxy")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "fastcgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "scgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "uwsgi")), strings.Join(state.Settings.TLS.Protocols, " "), renderTLSCiphers(state.Settings.TLS), state.Settings.TLS.SessionCacheMB, state.Settings.TLS.SessionTimeoutMinutes, renderRealIP(state.Settings.RealIP), boolDirective(state.Settings.Gzip.Enabled), state.Settings.Gzip.Level, state.Settings.Gzip.MinLength, strings.Join(state.Settings.Gzip.Types, " "), boolDirective(state.Settings.Gzip.Static), boolDirective(state.Settings.Gzip.Gunzip), nginxQuote(filepath.Join(confDPath, "*.conf")))
+	if hasStreamConfig(state) {
+		master += fmt.Sprintf(`
+stream {
+    log_format fnproxy_stream '$remote_addr [$time_local] $protocol $status '
+                              '$bytes_sent $bytes_received $session_time '
+                              '"$upstream_addr" "$ssl_preread_server_name"';
+    include %s;
+}
+`, nginxQuote(filepath.Join(confDPath, "*.stream")))
+	}
 	return master, files, nil
+}
+
+func hasStreamConfig(state State) bool {
+	for _, rule := range state.StreamRules {
+		if rule.Enabled {
+			return true
+		}
+	}
+	for _, pool := range state.UpstreamPools {
+		if pool.Protocol == "stream" {
+			return true
+		}
+	}
+	return false
+}
+
+func streamTarget(poolID, host string, port int) string {
+	if poolID != "" {
+		return "fnproxy_stream_" + poolID
+	}
+	if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	return fmt.Sprintf("%s:%d", host, port)
+}
+
+func renderStreamPrelude(state State) string {
+	var builder strings.Builder
+	for _, pool := range state.UpstreamPools {
+		if pool.Protocol != "stream" {
+			continue
+		}
+		fmt.Fprintf(&builder, "upstream fnproxy_stream_%s {\n", pool.ID)
+		switch pool.Strategy {
+		case "least_conn":
+			builder.WriteString("    least_conn;\n")
+		case "hash":
+			fmt.Fprintf(&builder, "    hash %s consistent;\n", pool.HashKey)
+		case "random":
+			builder.WriteString("    random two least_conn;\n")
+		}
+		for _, server := range pool.Servers {
+			host := server.Host
+			if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+				host = "[" + host + "]"
+			}
+			fmt.Fprintf(&builder, "    server %s:%d weight=%d max_fails=%d fail_timeout=%ds", host, server.Port, server.Weight, server.MaxFails, server.FailTimeout)
+			if server.Backup {
+				builder.WriteString(" backup")
+			}
+			if server.Down {
+				builder.WriteString(" down")
+			}
+			builder.WriteString(";\n")
+		}
+		builder.WriteString("}\n\n")
+	}
+	for _, rule := range state.StreamRules {
+		if !rule.Enabled {
+			continue
+		}
+		if rule.MaxConnections > 0 {
+			fmt.Fprintf(&builder, "limit_conn_zone $binary_remote_addr zone=fnproxy_stream_conn_%s:1m;\n", rule.ID)
+		}
+		if rule.TLSMode == "passthrough" && len(rule.SNIRoutes) > 0 {
+			fmt.Fprintf(&builder, "map $ssl_preread_server_name $fnproxy_stream_backend_%s {\n", rule.ID)
+			fmt.Fprintf(&builder, "    default %s;\n", streamTarget(rule.UpstreamPoolID, rule.UpstreamHost, rule.UpstreamPort))
+			for _, route := range rule.SNIRoutes {
+				target := streamTarget(route.UpstreamPoolID, route.UpstreamHost, route.UpstreamPort)
+				for _, name := range route.ServerNames {
+					fmt.Fprintf(&builder, "    %s %s;\n", name, target)
+				}
+			}
+			builder.WriteString("}\n")
+		}
+	}
+	return builder.String()
+}
+
+func (m *Manager) renderStreamRule(rule domain.StreamRule, certs map[string]CertificateMeta) (string, error) {
+	var builder strings.Builder
+	builder.WriteString("server {\n")
+	address := rule.ListenAddress
+	if address == "*" {
+		address = ""
+	}
+	if net.ParseIP(address) != nil && strings.Contains(address, ":") {
+		address = "[" + address + "]"
+	}
+	listen := fmt.Sprintf("%s:%d", address, rule.ListenPort)
+	if address == "" {
+		listen = strconv.Itoa(rule.ListenPort)
+	}
+	fmt.Fprintf(&builder, "    listen %s", listen)
+	if rule.Protocol == "udp" {
+		builder.WriteString(" udp reuseport")
+	}
+	if rule.TLSMode == "terminate" {
+		builder.WriteString(" ssl")
+	}
+	if rule.AcceptProxyProtocol {
+		builder.WriteString(" proxy_protocol")
+	}
+	builder.WriteString(";\n")
+	if rule.TLSMode == "terminate" {
+		cert, ok := certs[rule.CertificateID]
+		if !ok {
+			return "", fmt.Errorf("Stream 规则 %s 引用的证书不存在", rule.Name)
+		}
+		certFile, keyFile := m.certificateFiles(cert.ID)
+		if err := requireFiles(certFile, keyFile); err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&builder, "    ssl_certificate %s;\n    ssl_certificate_key %s;\n", nginxQuote(certFile), nginxQuote(keyFile))
+	}
+	if rule.TLSMode == "passthrough" {
+		builder.WriteString("    ssl_preread on;\n")
+	}
+	for _, proxy := range rule.TrustedProxies {
+		fmt.Fprintf(&builder, "    set_real_ip_from %s;\n", proxy)
+	}
+	for _, item := range rule.Allow {
+		fmt.Fprintf(&builder, "    allow %s;\n", item)
+	}
+	for _, item := range rule.Deny {
+		fmt.Fprintf(&builder, "    deny %s;\n", item)
+	}
+	target := streamTarget(rule.UpstreamPoolID, rule.UpstreamHost, rule.UpstreamPort)
+	if rule.TLSMode == "passthrough" && len(rule.SNIRoutes) > 0 {
+		target = "$fnproxy_stream_backend_" + rule.ID
+	}
+	fmt.Fprintf(&builder, "    proxy_pass %s;\n", target)
+	fmt.Fprintf(&builder, "    proxy_connect_timeout %ds;\n    proxy_timeout %ds;\n", rule.ConnectTimeoutSeconds, rule.ProxyTimeoutSeconds)
+	if rule.Protocol == "udp" && rule.UDPResponses > 0 {
+		fmt.Fprintf(&builder, "    proxy_responses %d;\n", rule.UDPResponses)
+	}
+	if rule.ProxyProtocol {
+		builder.WriteString("    proxy_protocol on;\n")
+	}
+	if rule.MaxConnections > 0 {
+		fmt.Fprintf(&builder, "    limit_conn fnproxy_stream_conn_%s %d;\n", rule.ID, rule.MaxConnections)
+	}
+	if rule.AccessLog {
+		fmt.Fprintf(&builder, "    access_log %s fnproxy_stream;\n", nginxQuote(m.paths.NginxStreamLog))
+	} else {
+		builder.WriteString("    access_log off;\n")
+	}
+	builder.WriteString("}\n")
+	return builder.String(), nil
 }
 
 func effectiveWorkerConnections(settings Settings) int {

@@ -13,6 +13,7 @@ import RuleForm from "./components/RuleForm.vue";
 import CertificateForm from "./components/CertificateForm.vue";
 import UpstreamPoolsPage from "./components/UpstreamPoolsPage.vue";
 import RuntimeSettingsForm from "./components/RuntimeSettingsForm.vue";
+import StreamRulesPage from "./components/StreamRulesPage.vue";
 import type {
   ApplyResult,
   CertificateInput,
@@ -27,6 +28,8 @@ import type {
   Revision,
   Settings,
   State,
+  StreamRule,
+  StreamRuleInput,
   Toast,
   UpstreamPool,
   UpstreamPoolInput,
@@ -45,6 +48,12 @@ const pages: { id: Page; icon: string; label: string; subtitle: string }[] = [
     icon: "⇄",
     label: "代理规则",
     subtitle: "管理域名、监听端口与上游服务",
+  },
+  {
+    id: "streams",
+    icon: "⇆",
+    label: "TCP/UDP 代理",
+    subtitle: "管理四层转发、TLS 终止与 SNI 透传",
   },
   {
     id: "upstreams",
@@ -398,6 +407,40 @@ async function removeUpstreamPool(pool: UpstreamPool) {
     "上游池已删除",
   );
   if (ok !== undefined) await loadCore(true);
+}
+async function saveStreamRule(value: StreamRuleInput, id: string) {
+  const ok = await mutate(
+    () =>
+      request(id ? `/streams/${id}` : "/streams", {
+        method: id ? "PUT" : "POST",
+        body: jsonBody(value),
+      }),
+    id ? "Stream 规则已更新" : "Stream 规则已创建",
+  );
+  if (ok !== undefined) await loadCore(true);
+}
+async function removeStreamRule(rule: StreamRule) {
+  if (!(await ask("删除 TCP/UDP 规则", `确定删除“${rule.name}”吗？`))) return;
+  const ok = await mutate(
+    () => request(`/streams/${rule.id}`, { method: "DELETE" }),
+    "Stream 规则已删除",
+  );
+  if (ok !== undefined) await loadCore(true);
+}
+async function toggleStreamRule(rule: StreamRule, enabled: boolean) {
+  const ok = await mutate(() =>
+    request(`/streams/${rule.id}`, {
+      method: "PUT",
+      body: jsonBody({ ...rule, enabled }),
+    }),
+  );
+  if (ok !== undefined) {
+    toast(
+      enabled ? "Stream 规则已启用，等待应用" : "Stream 规则已停用，等待应用",
+      "success",
+    );
+    await loadCore(true);
+  }
 }
 async function copyConfig() {
   try {
@@ -753,6 +796,17 @@ onBeforeUnmount(() => {
               配置不一致。检查无误后点击右上角“保存并应用”。
             </section>
           </template>
+          <template v-else-if="page === 'streams'">
+            <StreamRulesPage
+              :rules="state.stream_rules"
+              :pools="state.upstream_pools"
+              :certificates="state.certificates"
+              :busy="busy"
+              @save="saveStreamRule"
+              @remove="removeStreamRule"
+              @toggle="toggleStreamRule"
+            />
+          </template>
           <template v-else-if="page === 'upstreams'"
             ><UpstreamPoolsPage
               :pools="state.upstream_pools"
@@ -984,6 +1038,7 @@ onBeforeUnmount(() => {
                   <select v-model="logType" class="select" @change="loadLogs">
                     <option value="error">Nginx 错误日志</option>
                     <option value="access">Nginx 访问日志</option>
+                    <option value="stream">TCP/UDP Stream 日志</option>
                     <option value="backend">nginx-web 管理日志</option></select
                   ><button class="button ghost small" @click="loadLogs">
                     刷新

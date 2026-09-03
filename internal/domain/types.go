@@ -15,7 +15,7 @@ const (
 	AppName       = "nginx-web"
 	AppVersion    = "0.1.1"
 	NginxVersion  = "1.30.4"
-	SchemaVersion = 2
+	SchemaVersion = 3
 )
 
 type Settings struct {
@@ -78,6 +78,7 @@ type State struct {
 	Rules            []ProxyRule       `json:"rules"`
 	Certificates     []CertificateMeta `json:"certificates"`
 	UpstreamPools    []UpstreamPool    `json:"upstream_pools"`
+	StreamRules      []StreamRule      `json:"stream_rules"`
 	Dirty            bool              `json:"dirty"`
 	LastAppliedAt    *time.Time        `json:"last_applied_at,omitempty"`
 	LastApplyMessage string            `json:"last_apply_message,omitempty"`
@@ -126,6 +127,7 @@ func DefaultState() State {
 		Rules:         []ProxyRule{},
 		Certificates:  []CertificateMeta{},
 		UpstreamPools: []UpstreamPool{},
+		StreamRules:   []StreamRule{},
 		Dirty:         true,
 		UpdatedAt:     now,
 	}
@@ -352,6 +354,25 @@ func ValidateState(state State) error {
 			info.domains[domain] = rule.ID
 		}
 	}
+	streamPorts := make(map[string]string)
+	for _, rule := range state.StreamRules {
+		if err := ValidateStreamRule(rule, certs, pools); err != nil {
+			return fmt.Errorf("Stream 规则 %q: %w", rule.Name, err)
+		}
+		if !rule.Enabled {
+			continue
+		}
+		key := fmt.Sprintf("%s/%s/%d", rule.Protocol, rule.ListenAddress, rule.ListenPort)
+		if previous, exists := streamPorts[key]; exists {
+			return fmt.Errorf("Stream 规则 %q 与 %q 的监听地址冲突", rule.Name, previous)
+		}
+		streamPorts[key] = rule.Name
+		if rule.Protocol == "tcp" && (rule.ListenAddress == "*" || rule.ListenAddress == "0.0.0.0" || rule.ListenAddress == "::") {
+			if _, exists := ports[rule.ListenPort]; exists {
+				return fmt.Errorf("Stream TCP 端口 %d 与 HTTP 规则冲突", rule.ListenPort)
+			}
+		}
+	}
 	return nil
 }
 
@@ -388,12 +409,22 @@ func EnabledRuleCount(state State) int {
 			count++
 		}
 	}
+	for _, rule := range state.StreamRules {
+		if rule.Enabled {
+			count++
+		}
+	}
 	return count
 }
 
 func ActivePorts(state State) []int {
 	set := make(map[int]struct{})
 	for _, rule := range state.Rules {
+		if rule.Enabled {
+			set[rule.ListenPort] = struct{}{}
+		}
+	}
+	for _, rule := range state.StreamRules {
 		if rule.Enabled {
 			set[rule.ListenPort] = struct{}{}
 		}

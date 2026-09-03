@@ -73,6 +73,40 @@ type RateLimitSettings struct {
 	DownloadKBps      int  `json:"download_kbps"`
 }
 
+type SNIRoute struct {
+	ServerNames    []string `json:"server_names"`
+	UpstreamPoolID string   `json:"upstream_pool_id,omitempty"`
+	UpstreamHost   string   `json:"upstream_host,omitempty"`
+	UpstreamPort   int      `json:"upstream_port,omitempty"`
+}
+
+type StreamRule struct {
+	ID                    string     `json:"id"`
+	Name                  string     `json:"name"`
+	Enabled               bool       `json:"enabled"`
+	Protocol              string     `json:"protocol"`
+	ListenAddress         string     `json:"listen_address"`
+	ListenPort            int        `json:"listen_port"`
+	UpstreamPoolID        string     `json:"upstream_pool_id,omitempty"`
+	UpstreamHost          string     `json:"upstream_host,omitempty"`
+	UpstreamPort          int        `json:"upstream_port,omitempty"`
+	ConnectTimeoutSeconds int        `json:"connect_timeout_seconds"`
+	ProxyTimeoutSeconds   int        `json:"proxy_timeout_seconds"`
+	UDPResponses          int        `json:"udp_responses"`
+	ProxyProtocol         bool       `json:"proxy_protocol"`
+	AcceptProxyProtocol   bool       `json:"accept_proxy_protocol"`
+	TrustedProxies        []string   `json:"trusted_proxies"`
+	TLSMode               string     `json:"tls_mode"`
+	CertificateID         string     `json:"certificate_id,omitempty"`
+	SNIRoutes             []SNIRoute `json:"sni_routes"`
+	AccessLog             bool       `json:"access_log"`
+	Allow                 []string   `json:"allow"`
+	Deny                  []string   `json:"deny"`
+	MaxConnections        int        `json:"max_connections"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
 var variablePattern = regexp.MustCompile(`^\$[A-Za-z0-9_]+$`)
 
 func defaultRealIPSettings() RealIPSettings {
@@ -126,9 +160,130 @@ func ApplyStateDefaults(state *State) {
 	if state.UpstreamPools == nil {
 		state.UpstreamPools = []UpstreamPool{}
 	}
+	if state.StreamRules == nil {
+		state.StreamRules = []StreamRule{}
+	}
 	for index := range state.UpstreamPools {
 		NormalizeUpstreamPool(&state.UpstreamPools[index])
 	}
+	for index := range state.StreamRules {
+		NormalizeStreamRule(&state.StreamRules[index])
+	}
+}
+
+func NormalizeStreamRule(rule *StreamRule) {
+	rule.Name = strings.TrimSpace(rule.Name)
+	rule.Protocol = strings.ToLower(strings.TrimSpace(rule.Protocol))
+	rule.ListenAddress = strings.TrimSpace(strings.Trim(rule.ListenAddress, "[]"))
+	rule.UpstreamPoolID = strings.TrimSpace(rule.UpstreamPoolID)
+	rule.UpstreamHost = strings.TrimSpace(strings.Trim(rule.UpstreamHost, "[]"))
+	rule.TLSMode = strings.ToLower(strings.TrimSpace(rule.TLSMode))
+	rule.CertificateID = strings.TrimSpace(rule.CertificateID)
+	if rule.Protocol == "" {
+		rule.Protocol = "tcp"
+	}
+	if rule.ListenAddress == "" {
+		rule.ListenAddress = "0.0.0.0"
+	}
+	if rule.ConnectTimeoutSeconds == 0 {
+		rule.ConnectTimeoutSeconds = 10
+	}
+	if rule.ProxyTimeoutSeconds == 0 {
+		rule.ProxyTimeoutSeconds = 3600
+	}
+	if rule.TLSMode == "" {
+		rule.TLSMode = "off"
+	}
+	for routeIndex := range rule.SNIRoutes {
+		route := &rule.SNIRoutes[routeIndex]
+		route.UpstreamPoolID = strings.TrimSpace(route.UpstreamPoolID)
+		route.UpstreamHost = strings.TrimSpace(strings.Trim(route.UpstreamHost, "[]"))
+		for index := range route.ServerNames {
+			route.ServerNames[index] = strings.ToLower(strings.TrimSpace(route.ServerNames[index]))
+		}
+	}
+}
+
+func ValidateStreamRule(rule StreamRule, certs map[string]CertificateMeta, pools map[string]UpstreamPool) error {
+	if !idPattern.MatchString(rule.ID) {
+		return errors.New("Stream 规则 ID 格式不正确")
+	}
+	if len([]rune(rule.Name)) < 1 || len([]rune(rule.Name)) > 80 {
+		return errors.New("Stream 规则名称长度必须为 1 到 80 个字符")
+	}
+	if rule.Protocol != "tcp" && rule.Protocol != "udp" {
+		return errors.New("Stream 协议只能是 tcp 或 udp")
+	}
+	if rule.ListenPort < 1024 || rule.ListenPort > 65535 {
+		return errors.New("Stream 监听端口必须为 1024 到 65535")
+	}
+	if rule.ListenAddress != "*" && net.ParseIP(rule.ListenAddress) == nil {
+		return errors.New("Stream 监听地址必须是 IP 或 *")
+	}
+	if rule.ConnectTimeoutSeconds < 1 || rule.ConnectTimeoutSeconds > 600 || rule.ProxyTimeoutSeconds < 1 || rule.ProxyTimeoutSeconds > 86400 {
+		return errors.New("Stream 超时参数超出允许范围")
+	}
+	if rule.UDPResponses < 0 || rule.UDPResponses > 1000 || rule.MaxConnections < 0 || rule.MaxConnections > 1000000 {
+		return errors.New("Stream 响应或连接限制超出允许范围")
+	}
+	if err := validateCIDRs(rule.TrustedProxies); err != nil {
+		return err
+	}
+	if err := validateCIDRs(rule.Allow); err != nil {
+		return err
+	}
+	if err := validateCIDRs(rule.Deny); err != nil {
+		return err
+	}
+	if rule.TLSMode != "off" && rule.TLSMode != "terminate" && rule.TLSMode != "passthrough" {
+		return errors.New("Stream TLS 模式不支持")
+	}
+	if rule.Protocol == "udp" && rule.TLSMode != "off" {
+		return errors.New("UDP 规则不能启用 TLS")
+	}
+	if rule.TLSMode == "terminate" {
+		if _, ok := certs[rule.CertificateID]; !ok {
+			return errors.New("Stream TLS 终止引用的证书不存在")
+		}
+	}
+	if rule.TLSMode == "passthrough" && len(rule.SNIRoutes) > 0 {
+		for _, route := range rule.SNIRoutes {
+			if len(route.ServerNames) == 0 {
+				return errors.New("SNI 路由至少需要一个域名")
+			}
+			for _, name := range route.ServerNames {
+				if err := validateHostName(name, true); err != nil {
+					return err
+				}
+			}
+			if err := validateStreamTarget(route.UpstreamPoolID, route.UpstreamHost, route.UpstreamPort, pools); err != nil {
+				return err
+			}
+		}
+	} else if err := validateStreamTarget(rule.UpstreamPoolID, rule.UpstreamHost, rule.UpstreamPort, pools); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateStreamTarget(poolID, host string, port int, pools map[string]UpstreamPool) error {
+	if poolID != "" {
+		pool, ok := pools[poolID]
+		if !ok {
+			return errors.New("引用的 Stream 上游池不存在")
+		}
+		if pool.Protocol != "stream" {
+			return errors.New("Stream 规则只能引用 Stream 上游池")
+		}
+		return nil
+	}
+	if err := validateHostName(host, false); err != nil {
+		return fmt.Errorf("Stream 上游主机不合法: %w", err)
+	}
+	if port < 1 || port > 65535 {
+		return errors.New("Stream 上游端口必须为 1 到 65535")
+	}
+	return nil
 }
 
 func NormalizeUpstreamPool(pool *UpstreamPool) {

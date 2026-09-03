@@ -1,6 +1,7 @@
 export type Page =
   | "dashboard"
   | "rules"
+  | "streams"
   | "upstreams"
   | "certificates"
   | "logs"
@@ -8,7 +9,7 @@ export type Page =
   | "config"
   | "settings";
 export type NginxAction = "start" | "stop" | "reload" | "test";
-export type LogType = "error" | "access" | "backend";
+export type LogType = "error" | "access" | "stream" | "backend";
 export interface RealIPSettings {
   enabled: boolean;
   header: "X-Real-IP" | "X-Forwarded-For" | "proxy_protocol";
@@ -121,10 +122,45 @@ export interface UpstreamPool extends UpstreamPoolInput {
   created_at: string;
   updated_at: string;
 }
+export interface SNIRoute {
+  server_names: string[];
+  upstream_pool_id: string;
+  upstream_host: string;
+  upstream_port: number;
+}
+export interface StreamRuleInput {
+  name: string;
+  enabled: boolean;
+  protocol: "tcp" | "udp";
+  listen_address: string;
+  listen_port: number;
+  upstream_pool_id: string;
+  upstream_host: string;
+  upstream_port: number;
+  connect_timeout_seconds: number;
+  proxy_timeout_seconds: number;
+  udp_responses: number;
+  proxy_protocol: boolean;
+  accept_proxy_protocol: boolean;
+  trusted_proxies: string[];
+  tls_mode: "off" | "terminate" | "passthrough";
+  certificate_id: string;
+  sni_routes: SNIRoute[];
+  access_log: boolean;
+  allow: string[];
+  deny: string[];
+  max_connections: number;
+}
+export interface StreamRule extends StreamRuleInput {
+  id: string;
+  created_at: string;
+  updated_at: string;
+}
 export interface State {
   schema_version: number;
   settings: Settings;
   rules: ProxyRule[];
+  stream_rules: StreamRule[];
   certificates: CertificateMeta[];
   upstream_pools: UpstreamPool[];
   dirty: boolean;
