@@ -4,29 +4,102 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 
 它自带独立的 Nginx Open Source 1.30.4，不读取、不修改、也不会重启飞牛系统 Nginx；不依赖 Docker，管理后台通过 fnOS 统一网关和 Unix Socket 提供。
 
-## 功能
+## 页面功能总览
 
-- HTTP 与手动证书 HTTPS 反向代理
-- 多域名、独立监听端口、默认站点 `*`
-- WebSocket、SSE/流式传输和大文件请求体
-- 上游 HTTP/HTTPS、上游 TLS 校验开关
-- HTTP 上游池、权重/备份/故障恢复、Keepalive 与多种负载均衡算法
-- TCP/UDP 四层代理、TLS 终止、SNI 透传、PROXY Protocol 与 Stream 日志
-- 多 Location 路由、静态网站、跳转与 Rewrite
-- HTTP 缓存、大文件 Slice、缓存清理、Gzip/Gzip Static/Gunzip
-- 请求速率、并发连接与下载限速，HTTP/Stream IP 访问控制
-- Basic Auth、Auth Request、Secure Link、WebDAV 与 Referer 防盗链
-- 请求 Header、响应 `add_header`、Sub Filter、Addition、Mirror 与 SSI
-- FastCGI、gRPC、uWSGI、SCGI、Memcached 与 Stub Status
-- Real IP、Map、Geo、Split Clients 灰度变量、线程池、文件 AIO
-- TLS 协议/加密套件/会话缓存、OCSP Stapling 与客户端证书校验
-- Nginx 配置生成与 `nginx -t` 预检
-- 原子替换、平滑 reload、激活失败自动回滚
-- 配置历史与恢复为草稿
-- Nginx 访问日志、错误日志和管理服务日志
-- fnOS 管理员 Header 校验与变更请求标识
-- 普通 `nginx-web` package 用户运行
-- x86_64 与 ARM64 原生 FPK，不依赖 Docker
+管理页面使用 Vue 3、TypeScript 和 Vite，共有九个主要页面。所有配置都通过结构化表单生成，不允许直接提交任意 Nginx 指令。
+
+### 总览
+
+- 查看独立 Nginx 的运行状态、PID、版本和监听端口。
+- 查看 HTTP/HTTPS 与 TCP/UDP 规则总数、启用数量、证书数量和草稿状态。
+- 显示最近一次应用时间、当前启用的代理和最近一条 Nginx 错误。
+- 快速添加 HTTP/HTTPS 代理、导入证书、校验配置和查看日志。
+- 启动、停止或平滑重载应用自带的 Nginx。
+
+### HTTP/HTTPS 代理规则
+
+- 创建、编辑、启用、停用、搜索和删除代理规则。
+- 配置规则名称、一个或多个域名/IP、监听端口及 `*` 默认站点。
+- 配置 HTTP 或 HTTPS 入口、手动选择证书及 HTTP/2。
+- 使用单个 HTTP/HTTPS 上游，或选择可复用的 HTTP 上游服务器池。
+- 配置上游 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
+- 按客户端 IP 限制每秒请求数、突发请求、并发连接数和下载速度。
+- 为根路径和额外 Location 分别选择前缀、精确或正则匹配，并为每个路径配置不同处理方式。
+- Location 后端支持 HTTP 反向代理、静态文件、固定返回/跳转、gRPC、FastCGI、uWSGI、SCGI、Memcached 和 Stub Status。
+- 静态文件支持 `root`/`alias`、Index、目录浏览、Expires 和 Try Files。
+- 支持 HTTP 跳转 HTTPS，以及 `last`、`break`、临时跳转和永久跳转 Rewrite。
+- 支持代理缓存区、磁盘上限、未访问失效、响应有效期、自定义缓存 Key、变量绕过缓存、故障使用过期缓存和大文件 Slice。
+- 支持 IP/CIDR 允许与拒绝、Basic Auth、Auth Request、Secure Link、Referer 防盗链，以及静态 Location 的有限 WebDAV。
+- 支持添加、覆盖或清空上游请求 Header，以及通过原生 `add_header` 添加响应 Header。
+- 支持 Sub Filter 内容替换、Addition 响应前后追加、Mirror 请求镜像和 SSI。
+
+### TCP/UDP 代理
+
+- 创建、编辑、启用、停用和删除 TCP/UDP 四层代理规则。
+- 配置监听地址、监听端口、单个目标或 Stream 上游服务器池。
+- 配置连接超时、会话超时和 UDP 响应次数。
+- 支持入口接收和向上游发送 PROXY Protocol，并配置可信代理地址。
+- TCP 支持关闭 TLS、TLS 终止和 TLS SNI 透传；TLS 终止可选择已导入证书。
+- SNI 透传可按多个域名分流到不同单节点目标或 Stream 上游池。
+- 支持 Stream 访问日志、单 IP 最大连接数及 IP/CIDR 允许与拒绝。
+- 适用于 SSH、数据库、MQTT、游戏服务和 HTTPS 四层透传等场景。
+
+### 上游服务器池
+
+- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的服务器池，并在多个规则间复用。
+- 管理多个服务器节点的主机、端口、权重、最大失败次数、故障恢复时间、备份和停用状态。
+- HTTP 池支持 Round Robin、Least Connections、IP Hash、Hash 和 Random Two Least Connections。
+- Stream 池支持 Round Robin、Least Connections、Hash 和 Random Two Least Connections。
+- 配置 Keepalive 数量、单连接最大请求数、单连接最长时间和空闲超时。
+- 删除前检查规则引用，避免留下无效配置。
+
+### HTTPS 证书
+
+- 手动导入 PEM 证书链与私钥，并校验证书、私钥是否匹配。
+- 查看证书主体、SAN 域名/IP、序列号、有效期、状态和 SHA-256 指纹。
+- 私钥不会通过 API 返回浏览器；证书目录为 `0700`，私钥文件为 `0600`。
+- 删除前检查 HTTP 和 Stream 规则引用。
+
+### 运行日志
+
+- 查看最近的 Nginx 错误日志、HTTP 访问日志、Stream 访问日志和管理服务日志。
+- 页面每次读取最近 500 行，避免浏览器一次加载整个日志文件。
+- Nginx 日志支持按配置大小自动轮转、保留指定数量，并可在页面立即轮转。
+
+### 配置历史
+
+- 每次“保存并应用”成功后自动保存配置快照。
+- 查看快照时间、说明、规则数量和启用数量。
+- 将历史版本恢复为草稿，检查后再决定是否应用。
+- 删除不再需要的历史记录，并配置最多保留 1～100 个版本。
+
+### Nginx 配置
+
+- 只读查看当前实际使用的 `nginx.conf` 和生成的 HTTP/Stream 配置片段。
+- 在多个配置文件标签间切换，并复制当前文件内容。
+- 配置文件来自结构化数据，不暴露任意原始指令编辑入口。
+
+### 全局设置
+
+- 设置默认 HTTP/HTTPS 端口和配置历史保留数量。
+- 设置 Worker 数量、Worker Connections、文件句柄上限、Multi Accept、文件 AIO 和线程池。
+- 文件句柄未手动指定时，会根据 fnOS 当前软限制自动降低 Worker Connections，避免资源限制警告。
+- 配置 Real IP Header、可信代理网段和递归代理链解析。
+- 配置 Gzip 开关、压缩级别、最小响应大小、MIME 类型、Gzip Static 和 Gunzip。
+- 配置 TLS 1.2/1.3、加密套件、会话缓存、会话超时、OCSP Stapling 和客户端证书校验。
+- 配置访问日志开关、错误日志级别、自定义访问日志格式、缓冲、刷新周期和轮转策略。
+- 使用 Map、Geo 和 Split Clients 创建可供 Header、Rewrite 等配置引用的动态变量和灰度分流变量。
+- 一键清理 nginx-web 自己的全部 HTTP 代理缓存。
+
+### 应用、校验与安全保护
+
+- 页面顶部可随时刷新状态、运行 `nginx -t`，或保存并应用全部草稿。
+- 应用配置时先在隔离候选目录运行 `nginx -t`，通过后再原子替换正式配置。
+- 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
+- 校验重复域名、端口冲突、证书/上游池引用、IP/CIDR、路径和指令参数范围。
+- 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
+- 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
+- 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。
 
 ## 架构
 
