@@ -392,6 +392,10 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	for _, cert := range state.Certificates {
 		certs[cert.ID] = cert
 	}
+	pools := make(map[string]domain.UpstreamPool, len(state.UpstreamPools))
+	for _, pool := range state.UpstreamPools {
+		pools[pool.ID] = pool
+	}
 
 	type group struct {
 		port  int
@@ -421,6 +425,9 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	sort.Ints(ports)
 
 	files := make(map[string]string)
+	if prelude := renderHTTPPrelude(state); prelude != "" {
+		files["001-runtime-and-upstreams.conf"] = prelude
+	}
 	for _, port := range ports {
 		item := groupsByPort[port]
 		sort.Slice(item.rules, func(i, j int) bool {
@@ -444,7 +451,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 			files[fmt.Sprintf("000-default-%05d.conf", port)] = defaultConf
 		}
 		for index, rule := range item.rules {
-			content, err := m.renderRuleServer(rule, certs)
+			content, err := m.renderRuleServer(rule, certs, pools)
 			if err != nil {
 				return "", nil, err
 			}
@@ -452,16 +459,37 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 		}
 	}
 
+	workerProcesses := "auto"
+	if state.Settings.WorkerProcesses > 0 {
+		workerProcesses = strconv.Itoa(state.Settings.WorkerProcesses)
+	}
+	workerRlimit := ""
+	if state.Settings.WorkerRlimitNofile > 0 {
+		workerRlimit = fmt.Sprintf("worker_rlimit_nofile %d;\n", state.Settings.WorkerRlimitNofile)
+	}
+	accessLog := "access_log off;"
+	if state.Settings.Logging.AccessEnabled {
+		accessLog = fmt.Sprintf("access_log %s fnproxy buffer=%dk flush=%ds;", nginxQuote(m.paths.NginxAccessLog), state.Settings.Logging.AccessBufferKB, state.Settings.Logging.AccessFlushSec)
+	}
+	aio := "off"
+	if state.Settings.FileAIO {
+		aio = "on"
+	}
+	multiAccept := "off"
+	if state.Settings.MultiAccept {
+		multiAccept = "on"
+	}
 	master := fmt.Sprintf(`daemon on;
 master_process on;
-worker_processes auto;
+worker_processes %s;
+%s
 
 pid %s;
-error_log %s notice;
+error_log %s %s;
 
 events {
-    worker_connections 4096;
-    multi_accept on;
+    worker_connections %d;
+    multi_accept %s;
 }
 
 http {
@@ -473,10 +501,11 @@ http {
                        '"$http_user_agent" host="$host" upstream="$upstream_addr" '
                        'request_time=$request_time upstream_time=$upstream_response_time';
 
-    access_log %s fnproxy;
+    %s
 
     server_tokens off;
     sendfile on;
+    aio %s;
     tcp_nopush on;
     keepalive_timeout 65s;
     client_header_timeout 15s;
@@ -489,9 +518,19 @@ http {
     scgi_temp_path %s;
     uwsgi_temp_path %s;
 
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_session_cache shared:FNPROXY_SSL:10m;
-    ssl_session_timeout 10m;
+    ssl_protocols %s;
+    %s
+    ssl_session_cache shared:FNPROXY_SSL:%dm;
+    ssl_session_timeout %dm;
+
+%s
+
+    gzip %s;
+    gzip_comp_level %d;
+    gzip_min_length %d;
+    gzip_types %s;
+    gzip_static %s;
+    gunzip %s;
 
     map $http_upgrade $connection_upgrade {
         default upgrade;
@@ -500,8 +539,93 @@ http {
 
     include %s;
 }
-`, nginxQuote(m.paths.NginxPID), nginxQuote(m.paths.NginxErrorLog), nginxQuote(m.paths.MimeTypes), nginxQuote(m.paths.NginxAccessLog), nginxQuote(filepath.Join(m.paths.NginxTempDir, "body")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "proxy")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "fastcgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "scgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "uwsgi")), nginxQuote(filepath.Join(confDPath, "*.conf")))
+`, workerProcesses, workerRlimit, nginxQuote(m.paths.NginxPID), nginxQuote(m.paths.NginxErrorLog), state.Settings.Logging.ErrorLevel, effectiveWorkerConnections(state.Settings), multiAccept, nginxQuote(m.paths.MimeTypes), accessLog, aio, nginxQuote(filepath.Join(m.paths.NginxTempDir, "body")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "proxy")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "fastcgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "scgi")), nginxQuote(filepath.Join(m.paths.NginxTempDir, "uwsgi")), strings.Join(state.Settings.TLS.Protocols, " "), renderTLSCiphers(state.Settings.TLS), state.Settings.TLS.SessionCacheMB, state.Settings.TLS.SessionTimeoutMinutes, renderRealIP(state.Settings.RealIP), boolDirective(state.Settings.Gzip.Enabled), state.Settings.Gzip.Level, state.Settings.Gzip.MinLength, strings.Join(state.Settings.Gzip.Types, " "), boolDirective(state.Settings.Gzip.Static), boolDirective(state.Settings.Gzip.Gunzip), nginxQuote(filepath.Join(confDPath, "*.conf")))
 	return master, files, nil
+}
+
+func effectiveWorkerConnections(settings Settings) int {
+	value := settings.WorkerConnections
+	if settings.WorkerRlimitNofile > 0 {
+		return value
+	}
+	var limit syscall.Rlimit
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &limit); err == nil && limit.Cur > 0 && uint64(value) > limit.Cur {
+		return int(limit.Cur)
+	}
+	return value
+}
+
+func boolDirective(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
+func renderTLSCiphers(settings domain.TLSSettings) string {
+	if strings.TrimSpace(settings.Ciphers) == "" {
+		return ""
+	}
+	return fmt.Sprintf("ssl_ciphers %s;", nginxQuote(settings.Ciphers))
+}
+
+func renderRealIP(settings domain.RealIPSettings) string {
+	if !settings.Enabled {
+		return ""
+	}
+	var lines []string
+	for _, proxy := range settings.TrustedProxies {
+		lines = append(lines, "    set_real_ip_from "+proxy+";")
+	}
+	lines = append(lines, "    real_ip_header "+settings.Header+";", "    real_ip_recursive "+boolDirective(settings.Recursive)+";")
+	return strings.Join(lines, "\n")
+}
+
+func renderHTTPPrelude(state State) string {
+	var builder strings.Builder
+	for _, pool := range state.UpstreamPools {
+		if pool.Protocol != "http" {
+			continue
+		}
+		fmt.Fprintf(&builder, "upstream fnproxy_up_%s {\n", pool.ID)
+		switch pool.Strategy {
+		case "least_conn":
+			builder.WriteString("    least_conn;\n")
+		case "ip_hash":
+			builder.WriteString("    ip_hash;\n")
+		case "hash":
+			fmt.Fprintf(&builder, "    hash %s consistent;\n", pool.HashKey)
+		case "random":
+			builder.WriteString("    random two least_conn;\n")
+		}
+		for _, server := range pool.Servers {
+			host := server.Host
+			if net.ParseIP(host) != nil && strings.Contains(host, ":") {
+				host = "[" + host + "]"
+			}
+			fmt.Fprintf(&builder, "    server %s:%d weight=%d max_fails=%d fail_timeout=%ds", host, server.Port, server.Weight, server.MaxFails, server.FailTimeout)
+			if server.Backup {
+				builder.WriteString(" backup")
+			}
+			if server.Down {
+				builder.WriteString(" down")
+			}
+			builder.WriteString(";\n")
+		}
+		if pool.Keepalive > 0 {
+			fmt.Fprintf(&builder, "    keepalive %d;\n    keepalive_requests %d;\n    keepalive_time %ds;\n    keepalive_timeout %ds;\n", pool.Keepalive, pool.KeepaliveRequests, pool.KeepaliveTime, pool.KeepaliveTimeout)
+		}
+		builder.WriteString("}\n\n")
+	}
+	for _, rule := range state.Rules {
+		if rule.Enabled && rule.RateLimit.Enabled {
+			fmt.Fprintf(&builder, "limit_req_zone $binary_remote_addr zone=fnproxy_req_%s:1m rate=%dr/s;\n", rule.ID, rule.RateLimit.RequestsPerSecond)
+			if rule.RateLimit.Connections > 0 {
+				fmt.Fprintf(&builder, "limit_conn_zone $binary_remote_addr zone=fnproxy_conn_%s:1m;\n", rule.ID)
+			}
+		}
+	}
+	return builder.String()
 }
 
 func (m *Manager) renderDefaultServer(item struct {
@@ -536,7 +660,7 @@ func (m *Manager) renderDefaultServer(item struct {
 	return builder.String(), nil
 }
 
-func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateMeta) (string, error) {
+func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateMeta, pools map[string]domain.UpstreamPool) (string, error) {
 	var builder strings.Builder
 	catchAll := len(rule.Domains) == 1 && rule.Domains[0] == "*"
 	builder.WriteString("server {\n")
@@ -581,7 +705,11 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 		upstreamHost = "[" + upstreamHost + "]"
 	}
 	fmt.Fprintf(&builder, "\n    location / {\n")
-	fmt.Fprintf(&builder, "        proxy_pass %s://%s:%d;\n", rule.UpstreamScheme, upstreamHost, rule.UpstreamPort)
+	if rule.UpstreamPoolID != "" {
+		fmt.Fprintf(&builder, "        proxy_pass %s://fnproxy_up_%s;\n", rule.UpstreamScheme, rule.UpstreamPoolID)
+	} else {
+		fmt.Fprintf(&builder, "        proxy_pass %s://%s:%d;\n", rule.UpstreamScheme, upstreamHost, rule.UpstreamPort)
+	}
 	builder.WriteString("        proxy_http_version 1.1;\n")
 	if rule.PreserveHost {
 		builder.WriteString("        proxy_set_header Host $host;\n")
@@ -607,6 +735,15 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 	}
 	if rule.Streaming {
 		builder.WriteString("        proxy_request_buffering off;\n")
+	}
+	if rule.RateLimit.Enabled {
+		fmt.Fprintf(&builder, "        limit_req zone=fnproxy_req_%s burst=%d%s;\n", rule.ID, rule.RateLimit.Burst, map[bool]string{true: " nodelay", false: ""}[rule.RateLimit.NoDelay])
+		if rule.RateLimit.Connections > 0 {
+			fmt.Fprintf(&builder, "        limit_conn fnproxy_conn_%s %d;\n", rule.ID, rule.RateLimit.Connections)
+		}
+		if rule.RateLimit.DownloadKBps > 0 {
+			fmt.Fprintf(&builder, "        limit_rate %dk;\n", rule.RateLimit.DownloadKBps)
+		}
 	}
 	if rule.UpstreamScheme == "https" {
 		builder.WriteString("        proxy_ssl_server_name on;\n")

@@ -36,15 +36,7 @@ func New(path string) (*Store, error) {
 	if store.state.SchemaVersion == 0 {
 		store.state.SchemaVersion = domain.SchemaVersion
 	}
-	if store.state.Settings.DefaultHTTPPort == 0 {
-		store.state.Settings = domain.DefaultState().Settings
-	}
-	if store.state.Rules == nil {
-		store.state.Rules = []domain.ProxyRule{}
-	}
-	if store.state.Certificates == nil {
-		store.state.Certificates = []domain.CertificateMeta{}
-	}
+	domain.ApplyStateDefaults(&store.state)
 	if err := domain.ValidateState(store.state); err != nil {
 		return nil, err
 	}
@@ -66,6 +58,7 @@ func (s *Store) Update(fn func(*domain.State) error) error {
 		return err
 	}
 	next.SchemaVersion = domain.SchemaVersion
+	domain.ApplyStateDefaults(&next)
 	next.UpdatedAt = time.Now().UTC()
 	if err := domain.ValidateState(next); err != nil {
 		return err
@@ -81,6 +74,7 @@ func (s *Store) Replace(next domain.State) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next.SchemaVersion = domain.SchemaVersion
+	domain.ApplyStateDefaults(&next)
 	next.UpdatedAt = time.Now().UTC()
 	if err := domain.ValidateState(next); err != nil {
 		return err

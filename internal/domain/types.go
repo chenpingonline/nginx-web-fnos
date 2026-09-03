@@ -15,37 +15,48 @@ const (
 	AppName       = "nginx-web"
 	AppVersion    = "0.1.1"
 	NginxVersion  = "1.30.4"
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 type Settings struct {
-	DefaultHTTPPort  int `json:"default_http_port"`
-	DefaultHTTPSPort int `json:"default_https_port"`
-	RevisionLimit    int `json:"revision_limit"`
+	DefaultHTTPPort    int             `json:"default_http_port"`
+	DefaultHTTPSPort   int             `json:"default_https_port"`
+	RevisionLimit      int             `json:"revision_limit"`
+	WorkerProcesses    int             `json:"worker_processes"`
+	WorkerConnections  int             `json:"worker_connections"`
+	WorkerRlimitNofile int             `json:"worker_rlimit_nofile"`
+	MultiAccept        bool            `json:"multi_accept"`
+	FileAIO            bool            `json:"file_aio"`
+	RealIP             RealIPSettings  `json:"real_ip"`
+	Gzip               GzipSettings    `json:"gzip"`
+	TLS                TLSSettings     `json:"tls"`
+	Logging            LoggingSettings `json:"logging"`
 }
 
 type ProxyRule struct {
-	ID                    string    `json:"id"`
-	Name                  string    `json:"name"`
-	Enabled               bool      `json:"enabled"`
-	ListenPort            int       `json:"listen_port"`
-	Domains               []string  `json:"domains"`
-	TLS                   bool      `json:"tls"`
-	HTTP2                 bool      `json:"http2"`
-	CertificateID         string    `json:"certificate_id,omitempty"`
-	UpstreamScheme        string    `json:"upstream_scheme"`
-	UpstreamHost          string    `json:"upstream_host"`
-	UpstreamPort          int       `json:"upstream_port"`
-	PreserveHost          bool      `json:"preserve_host"`
-	WebSocket             bool      `json:"websocket"`
-	Streaming             bool      `json:"streaming"`
-	VerifyUpstreamTLS     bool      `json:"verify_upstream_tls"`
-	ConnectTimeoutSeconds int       `json:"connect_timeout_seconds"`
-	ReadTimeoutSeconds    int       `json:"read_timeout_seconds"`
-	SendTimeoutSeconds    int       `json:"send_timeout_seconds"`
-	ClientMaxBodyMB       int       `json:"client_max_body_mb"`
-	CreatedAt             time.Time `json:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at"`
+	ID                    string            `json:"id"`
+	Name                  string            `json:"name"`
+	Enabled               bool              `json:"enabled"`
+	ListenPort            int               `json:"listen_port"`
+	Domains               []string          `json:"domains"`
+	TLS                   bool              `json:"tls"`
+	HTTP2                 bool              `json:"http2"`
+	CertificateID         string            `json:"certificate_id,omitempty"`
+	UpstreamScheme        string            `json:"upstream_scheme"`
+	UpstreamHost          string            `json:"upstream_host"`
+	UpstreamPort          int               `json:"upstream_port"`
+	PreserveHost          bool              `json:"preserve_host"`
+	WebSocket             bool              `json:"websocket"`
+	Streaming             bool              `json:"streaming"`
+	VerifyUpstreamTLS     bool              `json:"verify_upstream_tls"`
+	ConnectTimeoutSeconds int               `json:"connect_timeout_seconds"`
+	ReadTimeoutSeconds    int               `json:"read_timeout_seconds"`
+	SendTimeoutSeconds    int               `json:"send_timeout_seconds"`
+	ClientMaxBodyMB       int               `json:"client_max_body_mb"`
+	UpstreamPoolID        string            `json:"upstream_pool_id,omitempty"`
+	RateLimit             RateLimitSettings `json:"rate_limit"`
+	CreatedAt             time.Time         `json:"created_at"`
+	UpdatedAt             time.Time         `json:"updated_at"`
 }
 
 type CertificateMeta struct {
@@ -66,6 +77,7 @@ type State struct {
 	Settings         Settings          `json:"settings"`
 	Rules            []ProxyRule       `json:"rules"`
 	Certificates     []CertificateMeta `json:"certificates"`
+	UpstreamPools    []UpstreamPool    `json:"upstream_pools"`
 	Dirty            bool              `json:"dirty"`
 	LastAppliedAt    *time.Time        `json:"last_applied_at,omitempty"`
 	LastApplyMessage string            `json:"last_apply_message,omitempty"`
@@ -101,14 +113,21 @@ func DefaultState() State {
 	return State{
 		SchemaVersion: SchemaVersion,
 		Settings: Settings{
-			DefaultHTTPPort:  9080,
-			DefaultHTTPSPort: 9443,
-			RevisionLimit:    20,
+			DefaultHTTPPort:   9080,
+			DefaultHTTPSPort:  9443,
+			RevisionLimit:     20,
+			WorkerConnections: 1024,
+			MultiAccept:       true,
+			RealIP:            defaultRealIPSettings(),
+			Gzip:              defaultGzipSettings(),
+			TLS:               defaultTLSSettings(),
+			Logging:           defaultLoggingSettings(),
 		},
-		Rules:        []ProxyRule{},
-		Certificates: []CertificateMeta{},
-		Dirty:        true,
-		UpdatedAt:    now,
+		Rules:         []ProxyRule{},
+		Certificates:  []CertificateMeta{},
+		UpstreamPools: []UpstreamPool{},
+		Dirty:         true,
+		UpdatedAt:     now,
 	}
 }
 
@@ -128,6 +147,7 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 	rule.UpstreamScheme = strings.ToLower(strings.TrimSpace(rule.UpstreamScheme))
 	rule.UpstreamHost = strings.TrimSpace(strings.Trim(rule.UpstreamHost, "[]"))
 	rule.CertificateID = strings.TrimSpace(rule.CertificateID)
+	rule.UpstreamPoolID = strings.TrimSpace(rule.UpstreamPoolID)
 
 	seen := make(map[string]struct{})
 	normalized := make([]string, 0, len(rule.Domains))
@@ -173,7 +193,7 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 	}
 }
 
-func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
+func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map[string]UpstreamPool) error {
 	if !idPattern.MatchString(rule.ID) {
 		return errors.New("规则 ID 格式不正确")
 	}
@@ -209,13 +229,28 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
 	} else if rule.CertificateID != "" {
 		return errors.New("HTTP 规则不能绑定 HTTPS 证书")
 	}
+	poolMap := map[string]UpstreamPool{}
+	if len(pools) > 0 {
+		poolMap = pools[0]
+	}
+	if rule.UpstreamPoolID != "" {
+		pool, ok := poolMap[rule.UpstreamPoolID]
+		if !ok {
+			return errors.New("引用的上游服务器池不存在")
+		}
+		if pool.Protocol != "http" {
+			return errors.New("HTTP 规则只能引用 HTTP 上游池")
+		}
+	}
 	if rule.UpstreamScheme != "http" && rule.UpstreamScheme != "https" {
 		return errors.New("上游协议只能是 http 或 https")
 	}
-	if err := validateHostName(rule.UpstreamHost, false); err != nil {
-		return fmt.Errorf("上游主机不合法: %w", err)
+	if rule.UpstreamPoolID == "" {
+		if err := validateHostName(rule.UpstreamHost, false); err != nil {
+			return fmt.Errorf("上游主机不合法: %w", err)
+		}
 	}
-	if rule.UpstreamPort < 1 || rule.UpstreamPort > 65535 {
+	if rule.UpstreamPoolID == "" && (rule.UpstreamPort < 1 || rule.UpstreamPort > 65535) {
 		return errors.New("上游端口必须为 1 到 65535")
 	}
 	if rule.ConnectTimeoutSeconds < 1 || rule.ConnectTimeoutSeconds > 600 {
@@ -230,6 +265,9 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta) error {
 	if rule.ClientMaxBodyMB < 0 || rule.ClientMaxBodyMB > 102400 {
 		return errors.New("请求体上限必须为 0 到 102400 MB，0 表示不限制")
 	}
+	if err := validateRateLimit(rule.RateLimit); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -243,6 +281,9 @@ func ValidateState(state State) error {
 	if state.Settings.RevisionLimit < 1 || state.Settings.RevisionLimit > 100 {
 		return errors.New("配置历史保留数量必须为 1 到 100")
 	}
+	if err := validateSettingsAdvanced(state.Settings); err != nil {
+		return err
+	}
 
 	certs := make(map[string]CertificateMeta, len(state.Certificates))
 	for _, cert := range state.Certificates {
@@ -253,6 +294,22 @@ func ValidateState(state State) error {
 			return errors.New("存在重复的证书 ID")
 		}
 		certs[cert.ID] = cert
+	}
+	pools := make(map[string]UpstreamPool, len(state.UpstreamPools))
+	poolNames := make(map[string]struct{}, len(state.UpstreamPools))
+	for _, pool := range state.UpstreamPools {
+		if err := ValidateUpstreamPool(pool); err != nil {
+			return fmt.Errorf("上游池 %q: %w", pool.Name, err)
+		}
+		if _, exists := pools[pool.ID]; exists {
+			return errors.New("存在重复的上游池 ID")
+		}
+		key := strings.ToLower(pool.Name)
+		if _, exists := poolNames[key]; exists {
+			return errors.New("存在重复的上游池名称")
+		}
+		pools[pool.ID] = pool
+		poolNames[key] = struct{}{}
 	}
 
 	type portInfo struct {
@@ -268,7 +325,7 @@ func ValidateState(state State) error {
 			return errors.New("存在重复的规则 ID")
 		}
 		ids[rule.ID] = struct{}{}
-		if err := ValidateRule(rule, certs); err != nil {
+		if err := ValidateRule(rule, certs, pools); err != nil {
 			return fmt.Errorf("规则 %q: %w", rule.Name, err)
 		}
 		if !rule.Enabled {

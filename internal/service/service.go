@@ -30,6 +30,7 @@ type State = domain.State
 type Settings = domain.Settings
 type ProxyRule = domain.ProxyRule
 type CertificateMeta = domain.CertificateMeta
+type UpstreamPool = domain.UpstreamPool
 type Revision = domain.Revision
 type NginxStatus = domain.NginxStatus
 type ApplyResult = domain.ApplyResult
@@ -108,9 +109,70 @@ func (s *AppService) State() State {
 
 func (s *AppService) UpdateSettings(settings Settings) error {
 	return s.store.Update(func(state *State) error {
-		state.Settings = settings
+		candidate := State{Settings: settings}
+		domain.ApplyStateDefaults(&candidate)
+		state.Settings = candidate.Settings
 		state.Dirty = true
 		return nil
+	})
+}
+
+func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error) {
+	now := time.Now().UTC()
+	input.ID = domain.RandomID()
+	input.CreatedAt = now
+	input.UpdatedAt = now
+	domain.NormalizeUpstreamPool(&input)
+	err := s.store.Update(func(state *State) error {
+		state.UpstreamPools = append(state.UpstreamPools, input)
+		state.Dirty = true
+		return nil
+	})
+	return input, err
+}
+
+func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (UpstreamPool, error) {
+	if !domain.ValidID(id) {
+		return UpstreamPool{}, errors.New("上游池 ID 不合法")
+	}
+	var updated UpstreamPool
+	err := s.store.Update(func(state *State) error {
+		for index := range state.UpstreamPools {
+			if state.UpstreamPools[index].ID != id {
+				continue
+			}
+			input.ID = id
+			input.CreatedAt = state.UpstreamPools[index].CreatedAt
+			input.UpdatedAt = time.Now().UTC()
+			domain.NormalizeUpstreamPool(&input)
+			state.UpstreamPools[index] = input
+			state.Dirty = true
+			updated = input
+			return nil
+		}
+		return errors.New("找不到指定上游池")
+	})
+	return updated, err
+}
+
+func (s *AppService) DeleteUpstreamPool(id string) error {
+	if !domain.ValidID(id) {
+		return errors.New("上游池 ID 不合法")
+	}
+	return s.store.Update(func(state *State) error {
+		for _, rule := range state.Rules {
+			if rule.UpstreamPoolID == id {
+				return fmt.Errorf("上游池仍被规则 %q 使用", rule.Name)
+			}
+		}
+		for index := range state.UpstreamPools {
+			if state.UpstreamPools[index].ID == id {
+				state.UpstreamPools = append(state.UpstreamPools[:index], state.UpstreamPools[index+1:]...)
+				state.Dirty = true
+				return nil
+			}
+		}
+		return errors.New("找不到指定上游池")
 	})
 }
 

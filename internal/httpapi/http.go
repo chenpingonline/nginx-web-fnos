@@ -112,6 +112,17 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeJSON(w, http.StatusOK, a.service.State())
 	case apiPath == "/api/rules" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().Rules)
+	case apiPath == "/api/upstreams" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, a.service.State().UpstreamPools)
+	case apiPath == "/api/upstreams" && r.Method == http.MethodPost:
+		var input domain.UpstreamPool
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		pool, err := a.service.CreateUpstreamPool(input)
+		writeResult(w, http.StatusCreated, pool, err)
+	case strings.HasPrefix(apiPath, "/api/upstreams/"):
+		a.handleUpstreamPool(w, r, strings.TrimPrefix(apiPath, "/api/upstreams/"))
 	case apiPath == "/api/rules" && r.Method == http.MethodPost:
 		var input domain.ProxyRule
 		if !decodeJSON(w, r, &input) {
@@ -183,6 +194,27 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusOK, config, err)
 	default:
 		writeAPIError(w, http.StatusNotFound, "接口不存在")
+	}
+}
+
+func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id string) {
+	if strings.Contains(id, "/") || id == "" {
+		writeAPIError(w, http.StatusNotFound, "上游池不存在")
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var input domain.UpstreamPool
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		pool, err := a.service.UpdateUpstreamPool(id, input)
+		writeResult(w, http.StatusOK, pool, err)
+	case http.MethodDelete:
+		err := a.service.DeleteUpstreamPool(id)
+		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "上游池接口不支持该请求方法")
 	}
 }
 
