@@ -52,7 +52,7 @@ func main() {
 	case "doctor":
 		printJSON(application.Doctor())
 	case "version", "--version", "-v":
-		fmt.Printf("%s %s (Nginx %s)\n", domain.AppName, domain.AppVersion, domain.NginxVersion)
+		fmt.Printf("%s (Nginx %s)\n", domain.BuildIdentity, domain.NginxVersion)
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", command)
 		fmt.Fprintln(os.Stderr, "可用命令: serve, init, nginx-start, nginx-stop, nginx-reload, nginx-test, doctor, version")

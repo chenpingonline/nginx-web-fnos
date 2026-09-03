@@ -14,6 +14,7 @@ import (
 const (
 	AppName       = "nginx-web"
 	AppVersion    = "0.1.1"
+	BuildIdentity = "nginx-web 0.1.1"
 	NginxVersion  = "1.30.4"
 	SchemaVersion = 4
 )
