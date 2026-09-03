@@ -216,7 +216,7 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 
 func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id string) {
 	if strings.Contains(id, "/") || id == "" {
-		writeAPIError(w, http.StatusNotFound, "上游池不存在")
+		writeAPIError(w, http.StatusNotFound, "目标服务池不存在")
 		return
 	}
 	switch r.Method {
@@ -231,7 +231,7 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 		err := a.service.DeleteUpstreamPool(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	default:
-		writeAPIError(w, http.StatusMethodNotAllowed, "上游池接口不支持该请求方法")
+		writeAPIError(w, http.StatusMethodNotAllowed, "目标服务池接口不支持该请求方法")
 	}
 }
 

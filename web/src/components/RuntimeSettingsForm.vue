@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { reactive, ref, toRaw, watch } from "vue";
 import type { Settings } from "../types";
-const props = defineProps<{ settings: Settings; busy: boolean }>();
-const emit = defineEmits<{ save: [value: Settings]; clearCache: [] }>();
-const form = reactive<Settings>(structuredClone(props.settings));
+const props = defineProps<{
+  settings: Settings;
+  busy: boolean;
+  dirty: boolean;
+}>();
+const emit = defineEmits<{
+  save: [value: Settings];
+  clearCache: [];
+  test: [];
+  apply: [];
+}>();
+const form = reactive<Settings>(structuredClone(toRaw(props.settings)));
 const trusted = ref(""),
   gzipTypes = ref("");
 watch(
   () => props.settings,
   (value) => {
-    Object.assign(form, structuredClone(value));
+    Object.assign(form, structuredClone(toRaw(value)));
     trusted.value = value.real_ip.trusted_proxies.join("\n");
     gzipTypes.value = value.gzip.types.join("\n");
   },
@@ -84,7 +93,7 @@ function addSplit() {
       </div>
     </article>
     <article class="card">
-      <header class="card-header"><div><h2>动态路由变量</h2><p>用 Map、Geo 和 Split Clients 生成可在 Header、重写和上游配置中引用的变量</p></div></header>
+      <header class="card-header"><div><h2>动态路由变量</h2><p>用 Map、Geo 和 Split Clients 生成可在 Header、重写和目标服务配置中引用的变量</p></div></header>
       <div class="card-body settings-stack">
         <details class="advanced-box"><summary>Map（{{ form.routing.maps.length }}）</summary><div class="form-grid compact-grid">
           <div v-for="(item, index) in form.routing.maps" :key="`map-${index}`" class="routing-editor full">
@@ -341,8 +350,19 @@ function addSplit() {
     </article>
     <div class="sticky-actions">
       <button class="button danger-ghost" type="button" :disabled="busy" @click="emit('clearCache')">清理代理缓存</button>
-      <button class="button primary" type="submit" :disabled="busy">
-        {{ busy ? "处理中…" : "保存全局设置" }}
+      <span class="spacer"></span>
+      <button class="button secondary" type="button" :disabled="busy" @click="emit('test')">校验配置</button>
+      <button class="button secondary" type="submit" :disabled="busy">
+        {{ busy ? "处理中…" : "保存为草稿" }}
+      </button>
+      <button
+        class="button"
+        :class="dirty ? 'primary' : 'secondary'"
+        type="button"
+        :disabled="busy"
+        @click="emit('apply')"
+      >
+        {{ dirty ? "保存并应用" : "重新应用" }}
       </button>
     </div>
   </form>

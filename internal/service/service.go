@@ -135,7 +135,7 @@ func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error
 
 func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (UpstreamPool, error) {
 	if !domain.ValidID(id) {
-		return UpstreamPool{}, errors.New("上游池 ID 不合法")
+		return UpstreamPool{}, errors.New("目标服务池 ID 不合法")
 	}
 	var updated UpstreamPool
 	err := s.store.Update(func(state *State) error {
@@ -152,28 +152,28 @@ func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (Upstream
 			updated = input
 			return nil
 		}
-		return errors.New("找不到指定上游池")
+		return errors.New("找不到指定目标服务池")
 	})
 	return updated, err
 }
 
 func (s *AppService) DeleteUpstreamPool(id string) error {
 	if !domain.ValidID(id) {
-		return errors.New("上游池 ID 不合法")
+		return errors.New("目标服务池 ID 不合法")
 	}
 	return s.store.Update(func(state *State) error {
 		for _, rule := range state.Rules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("上游池仍被规则 %q 使用", rule.Name)
+				return fmt.Errorf("目标服务池仍被规则 %q 使用", rule.Name)
 			}
 		}
 		for _, rule := range state.StreamRules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("上游池仍被 Stream 规则 %q 使用", rule.Name)
+				return fmt.Errorf("目标服务池仍被 Stream 规则 %q 使用", rule.Name)
 			}
 			for _, route := range rule.SNIRoutes {
 				if route.UpstreamPoolID == id {
-					return fmt.Errorf("上游池仍被 Stream SNI 规则 %q 使用", rule.Name)
+					return fmt.Errorf("目标服务池仍被 Stream SNI 规则 %q 使用", rule.Name)
 				}
 			}
 		}
@@ -184,7 +184,7 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 				return nil
 			}
 		}
-		return errors.New("找不到指定上游池")
+		return errors.New("找不到指定目标服务池")
 	})
 }
 

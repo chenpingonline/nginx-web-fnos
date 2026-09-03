@@ -21,8 +21,8 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 创建、编辑、启用、停用、搜索和删除代理规则。
 - 配置规则名称、一个或多个域名/IP、监听端口及 `*` 默认站点。
 - 配置 HTTP 或 HTTPS 入口、手动选择证书及 HTTP/2。
-- 使用单个 HTTP/HTTPS 上游，或选择可复用的 HTTP 上游服务器池。
-- 配置上游 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
+- 使用单个 HTTP/HTTPS 目标服务，或选择可复用的 HTTP 目标服务池。
+- 配置目标服务 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
 - 按客户端 IP 限制每秒请求数、突发请求、并发连接数和下载速度。
 - 为根路径和额外 Location 分别选择前缀、精确或正则匹配，并为每个路径配置不同处理方式。
 - Location 后端支持 HTTP 反向代理、静态文件、固定返回/跳转、gRPC、FastCGI、uWSGI、SCGI、Memcached 和 Stub Status。
@@ -30,21 +30,21 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 支持 HTTP 跳转 HTTPS，以及 `last`、`break`、临时跳转和永久跳转 Rewrite。
 - 支持代理缓存区、磁盘上限、未访问失效、响应有效期、自定义缓存 Key、变量绕过缓存、故障使用过期缓存和大文件 Slice。
 - 支持 IP/CIDR 允许与拒绝、Basic Auth、Auth Request、Secure Link、Referer 防盗链，以及静态 Location 的有限 WebDAV。
-- 支持添加、覆盖或清空上游请求 Header，以及通过原生 `add_header` 添加响应 Header。
+- 支持添加、覆盖或清空目标服务请求 Header，以及通过原生 `add_header` 添加响应 Header。
 - 支持 Sub Filter 内容替换、Addition 响应前后追加、Mirror 请求镜像和 SSI。
 
 ### TCP/UDP 代理
 
 - 创建、编辑、启用、停用和删除 TCP/UDP 四层代理规则。
-- 配置监听地址、监听端口、单个目标或 Stream 上游服务器池。
+- 配置监听地址、监听端口、单个目标服务或 Stream 目标服务池。
 - 配置连接超时、会话超时和 UDP 响应次数。
-- 支持入口接收和向上游发送 PROXY Protocol，并配置可信代理地址。
+- 支持入口接收和向目标服务发送 PROXY Protocol，并配置可信代理地址。
 - TCP 支持关闭 TLS、TLS 终止和 TLS SNI 透传；TLS 终止可选择已导入证书。
-- SNI 透传可按多个域名分流到不同单节点目标或 Stream 上游池。
+- SNI 透传可按多个域名分流到不同单节点目标服务或 Stream 目标服务池。
 - 支持 Stream 访问日志、单 IP 最大连接数及 IP/CIDR 允许与拒绝。
 - 适用于 SSH、数据库、MQTT、游戏服务和 HTTPS 四层透传等场景。
 
-### 上游服务器池
+### 目标服务池
 
 - 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的服务器池，并在多个规则间复用。
 - 管理多个服务器节点的主机、端口、权重、最大失败次数、故障恢复时间、备份和停用状态。
@@ -96,7 +96,7 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 页面顶部可随时刷新状态、运行 `nginx -t`，或保存并应用全部草稿。
 - 应用配置时先在隔离候选目录运行 `nginx -t`，通过后再原子替换正式配置。
 - 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
-- 校验重复域名、端口冲突、证书/上游池引用、IP/CIDR、路径和指令参数范围。
+- 校验重复域名、端口冲突、证书/目标服务池引用、IP/CIDR、路径和指令参数范围。
 - 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
 - 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
 - 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。
@@ -232,8 +232,8 @@ make build-all
 输出：
 
 ```text
-dist/nginx-web-0.1.1-x86.fpk
-dist/nginx-web-0.1.1-arm64.fpk
+dist/nginx-web-0.1.5-x86.fpk
+dist/nginx-web-0.1.5-arm64.fpk
 ```
 
 ## 测试
@@ -243,7 +243,7 @@ make integration
 make release
 ```
 
-`tests/integration.sh` 会启动临时管理服务、独立 Nginx、HTTP 上游和临时自签名证书，验证 HTTP、HTTPS、配置应用、历史版本及平滑重载。
+`tests/integration.sh` 会启动临时管理服务、独立 Nginx、HTTP 目标服务和临时自签名证书，验证 HTTP、HTTPS、配置应用、历史版本及平滑重载。
 
 ## 当前限制
 

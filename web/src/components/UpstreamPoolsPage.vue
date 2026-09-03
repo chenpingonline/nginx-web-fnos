@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from "vue";
 import type { UpstreamPool, UpstreamPoolInput, UpstreamServer } from "../types";
-const props = defineProps<{ pools: UpstreamPool[]; busy: boolean }>();
+const props = defineProps<{
+  pools: UpstreamPool[];
+  busy: boolean;
+  dirty: boolean;
+}>();
 const emit = defineEmits<{
   save: [value: UpstreamPoolInput, id: string];
   remove: [pool: UpstreamPool];
+  refresh: [];
+  apply: [];
 }>();
 const editing = ref<UpstreamPool | null>(null),
   open = ref(false);
@@ -79,8 +85,19 @@ watch(
       服务器池可以被多个 HTTP 或 TCP/UDP
       规则复用，并统一配置负载均衡与故障恢复。
     </div>
-    <span class="spacer"></span
-    ><button class="button primary" @click="show()">＋ 添加上游池</button>
+    <span class="spacer"></span>
+    <button class="button ghost" :disabled="busy" @click="emit('refresh')">
+      刷新
+    </button>
+    <button
+      class="button"
+      :class="dirty ? 'primary' : 'secondary'"
+      :disabled="busy"
+      @click="emit('apply')"
+    >
+      {{ dirty ? "保存并应用" : "重新应用" }}
+    </button>
+    <button class="button primary" @click="show()">＋ 添加目标服务池</button>
   </div>
   <article class="card">
     <div v-if="pools.length" class="table-wrap">
@@ -135,9 +152,9 @@ watch(
     </div>
     <div v-else class="empty-state">
       <div class="empty-icon">⇶</div>
-      <h3>还没有上游服务器池</h3>
+      <h3>还没有目标服务池</h3>
       <p>单节点规则可以继续直接填写主机和端口；多节点服务建议创建服务器池。</p>
-      <button class="button primary" @click="show()">添加上游池</button>
+      <button class="button primary" @click="show()">添加目标服务池</button>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
@@ -149,7 +166,7 @@ watch(
     >
       <header class="modal-header">
         <div>
-          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}上游服务器池</h2>
+          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}目标服务池</h2>
           <p>结构化配置负载均衡、节点权重与连接复用。</p>
         </div>
         <button class="icon-button" aria-label="关闭" @click="open = false">
@@ -157,7 +174,7 @@ watch(
         </button>
       </header>
       <div class="modal-body">
-        <form class="form-grid" @submit.prevent="submit">
+        <form class="form-grid modal-form-grid" @submit.prevent="submit">
           <div class="field">
             <label>名称</label
             ><input
@@ -296,7 +313,7 @@ watch(
             <button type="button" class="button ghost" @click="open = false">
               取消</button
             ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存上游池" }}
+              {{ busy ? "处理中…" : "保存目标服务池" }}
             </button>
           </footer>
         </form>

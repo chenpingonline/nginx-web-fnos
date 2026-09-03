@@ -12,11 +12,14 @@ const props = defineProps<{
   pools: UpstreamPool[];
   certificates: CertificateMeta[];
   busy: boolean;
+  dirty: boolean;
 }>();
 const emit = defineEmits<{
   save: [value: StreamRuleInput, id: string];
   remove: [rule: StreamRule];
   toggle: [rule: StreamRule, enabled: boolean];
+  refresh: [];
+  apply: [];
 }>();
 const open = ref(false),
   editing = ref<StreamRule | null>(null),
@@ -108,8 +111,19 @@ watch(
       四层代理独立于 HTTP 规则，适用于 SSH、数据库、MQTT、游戏服务和 HTTPS SNI
       透传。
     </div>
-    <span class="spacer"></span
-    ><button class="button primary" @click="show()">
+    <span class="spacer"></span>
+    <button class="button ghost" :disabled="busy" @click="emit('refresh')">
+      刷新
+    </button>
+    <button
+      class="button"
+      :class="dirty ? 'primary' : 'secondary'"
+      :disabled="busy"
+      @click="emit('apply')"
+    >
+      {{ dirty ? "保存并应用" : "重新应用" }}
+    </button>
+    <button class="button primary" @click="show()">
       ＋ 添加 TCP/UDP 规则
     </button>
   </div>
@@ -188,7 +202,7 @@ watch(
     <div v-else class="empty-state">
       <div class="empty-icon">⇆</div>
       <h3>还没有 TCP/UDP 代理</h3>
-      <p>创建独立监听端口并转发到单个目标或 Stream 上游服务器池。</p>
+      <p>创建独立监听端口并转发到单个目标服务或 Stream 目标服务池。</p>
       <button class="button primary" @click="show()">添加规则</button>
     </div>
   </article>
@@ -211,7 +225,7 @@ watch(
         </button>
       </header>
       <div class="modal-body">
-        <form class="form-grid" @submit.prevent="submit">
+        <form class="form-grid modal-form-grid" @submit.prevent="submit">
           <div class="field">
             <label>名称</label
             ><input
@@ -264,7 +278,7 @@ watch(
                 type="checkbox"
               />入口接收 PROXY Protocol</label
             ><label class="checkbox-row"
-              ><input v-model="form.proxy_protocol" type="checkbox" />向上游发送
+              ><input v-model="form.proxy_protocol" type="checkbox" />向目标服务发送
               PROXY Protocol</label
             >
           </div>
@@ -276,9 +290,9 @@ watch(
               placeholder="仅在接收 PROXY Protocol 时填写"
             ></textarea>
           </div>
-          <div class="form-section">上游目标</div>
+          <div class="form-section">目标服务</div>
           <div class="field full">
-            <label>Stream 上游服务器池</label
+            <label>Stream 目标服务池</label
             ><select v-model="form.upstream_pool_id" class="select">
               <option value="">单个目标</option>
               <option
@@ -294,7 +308,7 @@ watch(
           </div>
           <template v-if="!form.upstream_pool_id"
             ><div class="field">
-              <label>上游主机</label
+              <label>目标主机</label
               ><input
                 v-model.trim="form.upstream_host"
                 class="input"
@@ -302,7 +316,7 @@ watch(
               />
             </div>
             <div class="field">
-              <label>上游端口</label
+              <label>目标端口</label
               ><input
                 v-model.number="form.upstream_port"
                 class="input"

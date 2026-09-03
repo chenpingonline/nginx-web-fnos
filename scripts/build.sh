@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARCH="${1:-x86}"
-VERSION="${VERSION:-0.1.1}"
+VERSION="${VERSION:-0.1.5}"
 DIST="$ROOT/dist"
 case "$ARCH" in
   x86|x86_64|amd64) ARCH="x86"; GOARCH="amd64"; PLATFORM="x86"; FILE_PATTERN='x86-64|x86_64'; OUTPUT_ARCH="x86" ;;

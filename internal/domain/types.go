@@ -13,8 +13,8 @@ import (
 
 const (
 	AppName       = "nginx-web"
-	AppVersion    = "0.1.1"
-	BuildIdentity = "nginx-web 0.1.1"
+	AppVersion    = "0.1.5"
+	BuildIdentity = "nginx-web 0.1.5"
 	NginxVersion  = "1.30.4"
 	SchemaVersion = 4
 )
@@ -257,22 +257,22 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if rule.UpstreamPoolID != "" {
 		pool, ok := poolMap[rule.UpstreamPoolID]
 		if !ok {
-			return errors.New("引用的上游服务器池不存在")
+			return errors.New("引用的目标服务池不存在")
 		}
 		if pool.Protocol != "http" {
-			return errors.New("HTTP 规则只能引用 HTTP 上游池")
+			return errors.New("HTTP 规则只能引用 HTTP 目标服务池")
 		}
 	}
 	if rule.UpstreamScheme != "http" && rule.UpstreamScheme != "https" {
-		return errors.New("上游协议只能是 http 或 https")
+		return errors.New("目标服务协议只能是 http 或 https")
 	}
 	if rule.UpstreamPoolID == "" {
 		if err := validateHostName(rule.UpstreamHost, false); err != nil {
-			return fmt.Errorf("上游主机不合法: %w", err)
+			return fmt.Errorf("目标主机不合法: %w", err)
 		}
 	}
 	if rule.UpstreamPoolID == "" && (rule.UpstreamPort < 1 || rule.UpstreamPort > 65535) {
-		return errors.New("上游端口必须为 1 到 65535")
+		return errors.New("目标端口必须为 1 到 65535")
 	}
 	if rule.ConnectTimeoutSeconds < 1 || rule.ConnectTimeoutSeconds > 600 {
 		return errors.New("连接超时必须为 1 到 600 秒")
@@ -324,14 +324,14 @@ func ValidateState(state State) error {
 	poolNames := make(map[string]struct{}, len(state.UpstreamPools))
 	for _, pool := range state.UpstreamPools {
 		if err := ValidateUpstreamPool(pool); err != nil {
-			return fmt.Errorf("上游池 %q: %w", pool.Name, err)
+			return fmt.Errorf("目标服务池 %q: %w", pool.Name, err)
 		}
 		if _, exists := pools[pool.ID]; exists {
-			return errors.New("存在重复的上游池 ID")
+			return errors.New("存在重复的目标服务池 ID")
 		}
 		key := strings.ToLower(pool.Name)
 		if _, exists := poolNames[key]; exists {
-			return errors.New("存在重复的上游池名称")
+			return errors.New("存在重复的目标服务池名称")
 		}
 		pools[pool.ID] = pool
 		poolNames[key] = struct{}{}

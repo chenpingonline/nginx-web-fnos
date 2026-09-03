@@ -476,19 +476,19 @@ func ValidateLocationSettings(settings LocationSettings, pools map[string]Upstre
 		if settings.UpstreamPoolID != "" {
 			pool, ok := pools[settings.UpstreamPoolID]
 			if !ok || pool.Protocol != "http" {
-				return errors.New("Location 引用的 HTTP 上游池不存在")
+				return errors.New("Location 引用的 HTTP 目标服务池不存在")
 			}
 		} else {
 			if err := validateHostName(settings.UpstreamHost, false); err != nil {
 				return err
 			}
 			if settings.UpstreamPort < 1 || settings.UpstreamPort > 65535 {
-				return errors.New("Location 上游端口不合法")
+				return errors.New("Location 目标端口不合法")
 			}
 		}
 	}
 	if settings.UpstreamScheme != "http" && settings.UpstreamScheme != "https" {
-		return errors.New("Location 上游协议不支持")
+		return errors.New("Location 目标服务协议不支持")
 	}
 	if settings.BackendType == "static" {
 		if !strings.HasPrefix(settings.StaticPath, "/") || strings.Contains(settings.StaticPath, "..") || strings.ContainsAny(settings.StaticPath, "\x00\r\n") {
@@ -700,18 +700,18 @@ func validateStreamTarget(poolID, host string, port int, pools map[string]Upstre
 	if poolID != "" {
 		pool, ok := pools[poolID]
 		if !ok {
-			return errors.New("引用的 Stream 上游池不存在")
+			return errors.New("引用的 Stream 目标服务池不存在")
 		}
 		if pool.Protocol != "stream" {
-			return errors.New("Stream 规则只能引用 Stream 上游池")
+			return errors.New("Stream 规则只能引用 Stream 目标服务池")
 		}
 		return nil
 	}
 	if err := validateHostName(host, false); err != nil {
-		return fmt.Errorf("Stream 上游主机不合法: %w", err)
+		return fmt.Errorf("Stream 目标主机不合法: %w", err)
 	}
 	if port < 1 || port > 65535 {
-		return errors.New("Stream 上游端口必须为 1 到 65535")
+		return errors.New("Stream 目标端口必须为 1 到 65535")
 	}
 	return nil
 }
@@ -753,39 +753,39 @@ func NormalizeUpstreamPool(pool *UpstreamPool) {
 
 func ValidateUpstreamPool(pool UpstreamPool) error {
 	if !idPattern.MatchString(pool.ID) {
-		return errors.New("上游池 ID 格式不正确")
+		return errors.New("目标服务池 ID 格式不正确")
 	}
 	if len([]rune(pool.Name)) < 1 || len([]rune(pool.Name)) > 80 {
-		return errors.New("上游池名称长度必须为 1 到 80 个字符")
+		return errors.New("目标服务池名称长度必须为 1 到 80 个字符")
 	}
 	if pool.Protocol != "http" && pool.Protocol != "stream" {
-		return errors.New("上游池协议只能是 http 或 stream")
+		return errors.New("目标服务池协议只能是 http 或 stream")
 	}
 	allowedStrategy := map[string]bool{"round_robin": true, "least_conn": true, "ip_hash": true, "hash": true, "random": true}
 	if !allowedStrategy[pool.Strategy] {
-		return errors.New("上游池负载均衡算法不支持")
+		return errors.New("目标服务池负载均衡算法不支持")
 	}
 	if pool.Protocol == "stream" && pool.Strategy == "ip_hash" {
-		return errors.New("Stream 上游池不支持 IP Hash")
+		return errors.New("Stream 目标服务池不支持 IP Hash")
 	}
 	if pool.Strategy == "hash" && !variablePattern.MatchString(pool.HashKey) {
 		return errors.New("Hash 算法必须使用安全的 Nginx 变量，例如 $request_uri")
 	}
 	if len(pool.Servers) == 0 || len(pool.Servers) > 64 {
-		return errors.New("上游池需要 1 到 64 个服务器")
+		return errors.New("目标服务池需要 1 到 64 个服务节点")
 	}
 	if pool.Keepalive < 0 || pool.Keepalive > 4096 || pool.KeepaliveRequests < 1 || pool.KeepaliveRequests > 100000 || pool.KeepaliveTime < 1 || pool.KeepaliveTime > 86400 || pool.KeepaliveTimeout < 1 || pool.KeepaliveTimeout > 3600 {
-		return errors.New("上游连接池参数超出允许范围")
+		return errors.New("目标服务连接池参数超出允许范围")
 	}
 	for _, server := range pool.Servers {
 		if err := validateHostName(server.Host, false); err != nil {
-			return fmt.Errorf("上游服务器 %q 不合法: %w", server.Host, err)
+			return fmt.Errorf("目标服务节点 %q 不合法: %w", server.Host, err)
 		}
 		if server.Port < 1 || server.Port > 65535 {
-			return errors.New("上游服务器端口必须为 1 到 65535")
+			return errors.New("目标服务节点端口必须为 1 到 65535")
 		}
 		if server.Weight < 1 || server.Weight > 1000 || server.MaxFails < 0 || server.MaxFails > 100 || server.FailTimeout < 1 || server.FailTimeout > 86400 {
-			return errors.New("上游服务器权重或故障参数超出允许范围")
+			return errors.New("目标服务节点权重或故障参数超出允许范围")
 		}
 	}
 	return nil

@@ -160,7 +160,7 @@ function addLocation() {
 }
 </script>
 <template>
-  <form class="form-grid" @submit.prevent="submit">
+  <form class="form-grid modal-form-grid" @submit.prevent="submit">
     <div class="field">
       <label for="rule-name">规则名称</label
       ><input
@@ -232,15 +232,15 @@ function addLocation() {
         ><input v-model="form.http2" type="checkbox" /> 启用 HTTP/2</label
       >
     </div>
-    <div class="form-section">上游服务</div>
+    <div class="form-section">目标服务</div>
     <div class="field full">
-      <label for="upstream-pool">上游服务器池</label
+      <label for="upstream-pool">目标服务池</label
       ><select
         id="upstream-pool"
         v-model="form.upstream_pool_id"
         class="select"
       >
-        <option value="">单个上游服务器</option>
+        <option value="">单个目标服务</option>
         <option
           v-for="pool in upstreamPools.filter(
             (item) => item.protocol === 'http',
@@ -254,43 +254,45 @@ function addLocation() {
         >服务器池支持权重、备份节点、故障恢复和负载均衡。</span
       >
     </div>
-    <div class="field">
-      <label for="upstream-scheme">上游协议</label
-      ><select
-        id="upstream-scheme"
-        v-model="form.upstream_scheme"
-        class="select"
-      >
-        <option value="http">HTTP</option>
-        <option value="https">HTTPS</option>
-      </select>
-    </div>
-    <div v-if="!form.upstream_pool_id" class="field">
-      <label for="upstream-host">上游主机</label
-      ><input
-        id="upstream-host"
-        v-model.trim="form.upstream_host"
-        class="input"
-        required
-        placeholder="127.0.0.1 或 192.168.1.20"
-      />
-    </div>
-    <div v-if="!form.upstream_pool_id" class="field">
-      <label for="upstream-port">上游端口</label
-      ><input
-        id="upstream-port"
-        v-model.number="form.upstream_port"
-        class="input"
-        type="number"
-        min="1"
-        max="65535"
-        required
-      />
+    <div class="target-service-fields full">
+      <div class="field">
+        <label for="upstream-scheme">目标服务协议</label
+        ><select
+          id="upstream-scheme"
+          v-model="form.upstream_scheme"
+          class="select"
+        >
+          <option value="http">HTTP</option>
+          <option value="https">HTTPS</option>
+        </select>
+      </div>
+      <div v-if="!form.upstream_pool_id" class="field">
+        <label for="upstream-host">目标主机</label
+        ><input
+          id="upstream-host"
+          v-model.trim="form.upstream_host"
+          class="input"
+          required
+          placeholder="127.0.0.1 或 192.168.1.20"
+        />
+      </div>
+      <div v-if="!form.upstream_pool_id" class="field">
+        <label for="upstream-port">目标端口</label
+        ><input
+          id="upstream-port"
+          v-model.number="form.upstream_port"
+          class="input"
+          type="number"
+          min="1"
+          max="65535"
+          required
+        />
+      </div>
     </div>
     <div v-if="form.upstream_scheme === 'https'" class="field">
-      <label>上游证书校验</label
+      <label>目标服务证书校验</label
       ><label class="checkbox-row"
-        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验上游
+        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验目标服务
         HTTPS 证书</label
       >
     </div>
@@ -364,7 +366,7 @@ function addLocation() {
       >
     </div>
     <div class="form-section">访问限流</div>
-    <div class="field full">
+    <div class="field full standalone-field">
       <label class="checkbox-row"
         ><input v-model="form.rate_limit.enabled" type="checkbox" />
         启用请求速率、连接数和下载速度限制</label
