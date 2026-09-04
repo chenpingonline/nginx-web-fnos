@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref, toRaw, watch } from "vue";
+import {
+  PhArrowClockwise,
+  PhCheckCircle,
+  PhPlusCircle,
+} from "@phosphor-icons/vue";
 import type {
   ProxyRule,
   RateLimitPolicy,
@@ -77,7 +82,7 @@ watch(
     </div>
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
-      刷新
+      <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
     <button
       class="button"
@@ -85,9 +90,13 @@ watch(
       :disabled="busy"
       @click="emit('apply')"
     >
-      {{ dirty ? "保存并应用" : "重新应用" }}
+      <PhCheckCircle :size="16" aria-hidden="true" />{{
+        dirty ? "保存并应用" : "重新应用"
+      }}
     </button>
-    <button class="button primary" @click="show()">＋ 添加限流策略</button>
+    <button class="button primary" @click="show()">
+      <PhPlusCircle :size="17" aria-hidden="true" />添加限流策略
+    </button>
   </div>
   <article class="card">
     <div v-if="policies.length" class="table-wrap">
@@ -136,7 +145,9 @@ watch(
       <div class="empty-icon">⏱</div>
       <h3>还没有限流策略</h3>
       <p>先创建一组限流参数，再在代理规则中选择。未选择策略的规则不受限流影响。</p>
-      <button class="button primary" @click="show()">添加限流策略</button>
+      <button class="button primary" @click="show()">
+        <PhPlusCircle :size="17" aria-hidden="true" />添加限流策略
+      </button>
     </div>
   </article>
 

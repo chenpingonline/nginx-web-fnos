@@ -74,6 +74,47 @@
 
 final result: passed
 
+## Smoked Glass Button System — 2026-09-04
+
+### Evidence
+
+- Source visual truth: `/Users/chenping/.codex/generated_images/01a06b44-3cbd-7b91-8e4f-f472bcfb351d/exec-92a3136b-45e1-431a-ad6c-87921c5f9da6.png`
+- Browser-rendered implementation: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-implementation.png`
+- Normalized source: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-source.png`
+- Full-view comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-comparison.png`
+- Focused button comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-focused-comparison.png`
+- Narrow-screen evidence: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-narrow.png`
+- Source pixels: 1672 x 941; normalized to 1440 x 810 with no crop.
+- Implementation pixels and CSS viewport: 1440 x 810 at device pixel ratio 1.
+- State: dark theme, TCP/UDP proxy empty state, complete local management service connected through its Unix socket.
+
+### Findings
+
+- No actionable P0, P1, or P2 differences remain for the selected button direction.
+- Fonts and typography: the existing system-font stack, compact 12 px button labels, weights, and line heights remain intact. Icons use the installed Phosphor set and align optically with the labels.
+- Spacing and layout rhythm: primary toolbar buttons render at 38 px high with 9 px radii, 7 px icon gaps, close shadows, and the existing toolbar spacing. The generated source's altered content proportions were not copied because the request scoped the change to the button system.
+- Colors and visual tokens: dark buttons use translucent graphite centers, cool-silver borders, restrained inner highlights, and a muted cobalt icon accent. The former mint dark-theme accent is replaced by slate blue; offline and destructive states remain semantic red.
+- Image and icon fidelity: all action glyphs use the existing Phosphor icon library. No raster placeholders, custom SVGs, CSS drawings, or generated icon assets were introduced.
+- Copy and content: all visible action labels remain unchanged; decorative full-width plus characters were replaced by accessible leading `PlusCircle` icons.
+- Responsive behavior: at 720 x 900, toolbar actions wrap without horizontal overflow; document and body scroll widths both equal the 720 px viewport.
+
+### Interaction Verification
+
+- Opened the TCP/UDP page and activated `添加 TCP/UDP 规则`; the complete rule modal opened.
+- Closed the modal and used keyboard navigation; the focused navigation button showed the two-ring slate-blue focus treatment.
+- Verified the primary action's computed geometry and paint: 38 px height, 9 px radius, translucent graphite background, cool-silver border, and compact layered shadow.
+- Checked the browser console after navigation and modal interaction; no errors or warnings were reported.
+
+### Comparison History
+
+- First normalized full-view and focused comparisons found no actionable P0, P1, or P2 mismatch within the button-only scope, so no visual correction loop was required.
+
+### Follow-up Polish
+
+- P3: hover and pressed depth can be tuned further after subjective review, but both states are implemented and keyboard focus is visibly distinct.
+
+final result: passed
+
 ## Hand-drawn Sidebar Icon Refinement — 2026-09-04
 
 - Source visual truth: `/Users/chenping/.codex/generated_images/01a06b45-8b4a-7452-9e72-3fd9d1d0c27c/exec-0fbbc702-e0ad-4581-90b3-bf58e85a8e8d.png`
@@ -145,5 +186,13 @@ final result: passed
 ### Follow-up Polish
 
 - P3: the generated concept uses a larger presentation scale than the production sidebar; the implementation intentionally keeps the product's established compact 220 px sidebar.
+
+final result: passed
+
+## Current Build Gate — Smoked Glass Buttons
+
+- Latest evaluated change: smoked-glass button system.
+- Full and focused evidence: `design-qa-button-style-3-comparison.png` and `design-qa-button-style-3-focused-comparison.png`.
+- Browser interaction, keyboard focus, console, desktop viewport, and 720 px responsive checks passed.
 
 final result: passed

@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref, toRaw, watch } from "vue";
+import {
+  PhArrowClockwise,
+  PhCheckCircle,
+  PhPlusCircle,
+} from "@phosphor-icons/vue";
 import type {
   CertificateMeta,
   SNIRoute,
@@ -112,7 +117,7 @@ watch(
     </div>
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
-      刷新
+      <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
     <button
       class="button"
@@ -120,10 +125,12 @@ watch(
       :disabled="busy"
       @click="emit('apply')"
     >
-      {{ dirty ? "保存并应用" : "重新应用" }}
+      <PhCheckCircle :size="16" aria-hidden="true" />{{
+        dirty ? "保存并应用" : "重新应用"
+      }}
     </button>
     <button class="button primary" @click="show()">
-      ＋ 添加 TCP/UDP 规则
+      <PhPlusCircle :size="17" aria-hidden="true" />添加 TCP/UDP 规则
     </button>
   </div>
   <article class="card">
@@ -202,7 +209,9 @@ watch(
       <div class="empty-icon">⇆</div>
       <h3>还没有 TCP/UDP 代理</h3>
       <p>创建独立监听端口并转发到单个后端服务或 Stream 后端服务池。</p>
-      <button class="button primary" @click="show()">添加规则</button>
+      <button class="button primary" @click="show()">
+        <PhPlusCircle :size="17" aria-hidden="true" />添加规则
+      </button>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">

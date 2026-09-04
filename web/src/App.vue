@@ -18,6 +18,7 @@ import {
   PhGlobeHemisphereWest,
   PhInfo,
   PhList,
+  PhPlusCircle,
   PhShieldCheck,
   PhShareNetwork,
   PhWarningCircle,
@@ -930,10 +931,12 @@ onBeforeUnmount(() => {
                 :disabled="busy"
                 @click="applyConfiguration"
               >
-                {{ state.dirty ? "保存并应用" : "重新应用" }}
+                <PhCheckCircle :size="16" aria-hidden="true" />{{
+                  state.dirty ? "保存并应用" : "重新应用"
+                }}
               </button>
               ><button class="button primary" @click="openRule()">
-                ＋ 添加代理规则
+                <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
               </button>
             </div>
             <article class="card">
@@ -1048,7 +1051,7 @@ onBeforeUnmount(() => {
                   class="button primary"
                   @click="openRule()"
                 >
-                  添加代理规则
+                  <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
                 </button>
               </div>
             </article>
@@ -1075,10 +1078,12 @@ onBeforeUnmount(() => {
                 :disabled="busy"
                 @click="applyConfiguration"
               >
-                {{ state.dirty ? "保存并应用" : "重新应用" }}
+                <PhCheckCircle :size="16" aria-hidden="true" />{{
+                  state.dirty ? "保存并应用" : "重新应用"
+                }}
               </button>
               ><button class="button primary" @click="openCertificate">
-                ＋ 导入证书
+                <PhPlusCircle :size="17" aria-hidden="true" />导入证书
               </button>
             </div>
             <article class="card">
@@ -1195,7 +1200,7 @@ onBeforeUnmount(() => {
                   :disabled="busy"
                   @click="applyConfiguration"
                 >
-                  保存并应用
+                  <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
                 </button>
               </header>
               <div v-if="revisions.length" class="table-wrap">
@@ -1271,7 +1276,9 @@ onBeforeUnmount(() => {
                   :disabled="busy"
                   @click="applyConfiguration"
                 >
-                  {{ state.dirty ? "保存并应用" : "重新应用" }}
+                  <PhCheckCircle :size="14" aria-hidden="true" />{{
+                    state.dirty ? "保存并应用" : "重新应用"
+                  }}
                 </button>
                 <button class="button ghost small" @click="copyConfig">
                   复制当前文件

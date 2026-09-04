@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref, toRaw, watch } from "vue";
+import {
+  PhArrowClockwise,
+  PhCheckCircle,
+  PhPlusCircle,
+} from "@phosphor-icons/vue";
 import type { UpstreamPool, UpstreamPoolInput, UpstreamServer } from "../types";
 const props = defineProps<{
   pools: UpstreamPool[];
@@ -86,7 +91,7 @@ watch(
     </div>
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
-      刷新
+      <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
     <button
       class="button"
@@ -94,9 +99,13 @@ watch(
       :disabled="busy"
       @click="emit('apply')"
     >
-      {{ dirty ? "保存并应用" : "重新应用" }}
+      <PhCheckCircle :size="16" aria-hidden="true" />{{
+        dirty ? "保存并应用" : "重新应用"
+      }}
     </button>
-    <button class="button primary" @click="show()">＋ 添加后端服务池</button>
+    <button class="button primary" @click="show()">
+      <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务池
+    </button>
   </div>
   <article class="card">
     <div v-if="pools.length" class="table-wrap">
@@ -153,7 +162,9 @@ watch(
       <div class="empty-icon">⇶</div>
       <h3>还没有后端服务池</h3>
       <p>单节点规则可以继续直接填写主机和端口；多节点服务建议创建服务器池。</p>
-      <button class="button primary" @click="show()">添加后端服务池</button>
+      <button class="button primary" @click="show()">
+        <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务池
+      </button>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
