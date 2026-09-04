@@ -32,6 +32,7 @@ type Settings = domain.Settings
 type ProxyRule = domain.ProxyRule
 type CertificateMeta = domain.CertificateMeta
 type UpstreamPool = domain.UpstreamPool
+type RateLimitPolicy = domain.RateLimitPolicy
 type StreamRule = domain.StreamRule
 type Revision = domain.Revision
 type NginxStatus = domain.NginxStatus
@@ -135,7 +136,7 @@ func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error
 
 func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (UpstreamPool, error) {
 	if !domain.ValidID(id) {
-		return UpstreamPool{}, errors.New("目标服务池 ID 不合法")
+		return UpstreamPool{}, errors.New("后端服务池 ID 不合法")
 	}
 	var updated UpstreamPool
 	err := s.store.Update(func(state *State) error {
@@ -152,28 +153,28 @@ func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (Upstream
 			updated = input
 			return nil
 		}
-		return errors.New("找不到指定目标服务池")
+		return errors.New("找不到指定后端服务池")
 	})
 	return updated, err
 }
 
 func (s *AppService) DeleteUpstreamPool(id string) error {
 	if !domain.ValidID(id) {
-		return errors.New("目标服务池 ID 不合法")
+		return errors.New("后端服务池 ID 不合法")
 	}
 	return s.store.Update(func(state *State) error {
 		for _, rule := range state.Rules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("目标服务池仍被规则 %q 使用", rule.Name)
+				return fmt.Errorf("后端服务池仍被规则 %q 使用", rule.Name)
 			}
 		}
 		for _, rule := range state.StreamRules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("目标服务池仍被 Stream 规则 %q 使用", rule.Name)
+				return fmt.Errorf("后端服务池仍被 Stream 规则 %q 使用", rule.Name)
 			}
 			for _, route := range rule.SNIRoutes {
 				if route.UpstreamPoolID == id {
-					return fmt.Errorf("目标服务池仍被 Stream SNI 规则 %q 使用", rule.Name)
+					return fmt.Errorf("后端服务池仍被 Stream SNI 规则 %q 使用", rule.Name)
 				}
 			}
 		}
@@ -184,7 +185,66 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 				return nil
 			}
 		}
-		return errors.New("找不到指定目标服务池")
+		return errors.New("找不到指定后端服务池")
+	})
+}
+
+func (s *AppService) CreateRateLimitPolicy(input RateLimitPolicy) (RateLimitPolicy, error) {
+	now := time.Now().UTC()
+	input.ID = domain.RandomID()
+	input.CreatedAt = now
+	input.UpdatedAt = now
+	domain.NormalizeRateLimitPolicy(&input)
+	err := s.store.Update(func(state *State) error {
+		state.RateLimitPolicies = append(state.RateLimitPolicies, input)
+		state.Dirty = true
+		return nil
+	})
+	return input, err
+}
+
+func (s *AppService) UpdateRateLimitPolicy(id string, input RateLimitPolicy) (RateLimitPolicy, error) {
+	if !domain.ValidID(id) {
+		return RateLimitPolicy{}, errors.New("限流策略 ID 不合法")
+	}
+	var updated RateLimitPolicy
+	err := s.store.Update(func(state *State) error {
+		for index := range state.RateLimitPolicies {
+			if state.RateLimitPolicies[index].ID != id {
+				continue
+			}
+			input.ID = id
+			input.CreatedAt = state.RateLimitPolicies[index].CreatedAt
+			input.UpdatedAt = time.Now().UTC()
+			domain.NormalizeRateLimitPolicy(&input)
+			state.RateLimitPolicies[index] = input
+			state.Dirty = true
+			updated = input
+			return nil
+		}
+		return errors.New("找不到指定限流策略")
+	})
+	return updated, err
+}
+
+func (s *AppService) DeleteRateLimitPolicy(id string) error {
+	if !domain.ValidID(id) {
+		return errors.New("限流策略 ID 不合法")
+	}
+	return s.store.Update(func(state *State) error {
+		for _, rule := range state.Rules {
+			if rule.RateLimitPolicyID == id {
+				return fmt.Errorf("限流策略仍被规则 %q 使用", rule.Name)
+			}
+		}
+		for index := range state.RateLimitPolicies {
+			if state.RateLimitPolicies[index].ID == id {
+				state.RateLimitPolicies = append(state.RateLimitPolicies[:index], state.RateLimitPolicies[index+1:]...)
+				state.Dirty = true
+				return nil
+			}
+		}
+		return errors.New("找不到指定限流策略")
 	})
 }
 

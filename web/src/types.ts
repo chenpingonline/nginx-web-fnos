@@ -3,6 +3,7 @@ export type Page =
   | "rules"
   | "streams"
   | "upstreams"
+  | "rate-limits"
   | "certificates"
   | "logs"
   | "revisions"
@@ -82,6 +83,15 @@ export interface RateLimitSettings {
   no_delay: boolean;
   connections: number;
   download_kbps: number;
+}
+export interface RateLimitPolicyInput {
+  name: string;
+  settings: RateLimitSettings;
+}
+export interface RateLimitPolicy extends RateLimitPolicyInput {
+  id: string;
+  created_at: string;
+  updated_at: string;
 }
 export interface CacheSettings {
   enabled: boolean;
@@ -176,6 +186,7 @@ export interface ProxyRuleInput {
   upstream_host: string;
   upstream_port: number;
   upstream_pool_id: string;
+  rate_limit_policy_id: string;
   preserve_host: boolean;
   websocket: boolean;
   streaming: boolean;
@@ -271,6 +282,7 @@ export interface State {
   stream_rules: StreamRule[];
   certificates: CertificateMeta[];
   upstream_pools: UpstreamPool[];
+  rate_limit_policies: RateLimitPolicy[];
   dirty: boolean;
   last_applied_at?: string;
   last_apply_message?: string;

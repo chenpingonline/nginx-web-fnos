@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { reactive, ref, toRaw, watch } from "vue";
 import type {
   CertificateMeta,
   SNIRoute,
@@ -77,7 +77,7 @@ function removeRoute(index: number) {
   routeNames.value.splice(index, 1);
 }
 function submit() {
-  const value = structuredClone(form);
+  const value = structuredClone(toRaw(form));
   value.trusted_proxies = trustedText.value.split(/[\s,]+/).filter(Boolean);
   value.allow = allowText.value.split(/[\s,]+/).filter(Boolean);
   value.deny = denyText.value.split(/[\s,]+/).filter(Boolean);
@@ -90,10 +90,9 @@ function submit() {
   emit("save", value, editing.value?.id ?? "");
 }
 watch(
-  () => props.busy,
-  (value) => {
+  () => props.rules,
+  () => {
     if (
-      !value &&
       open.value &&
       props.rules.some(
         (rule) =>
@@ -202,7 +201,7 @@ watch(
     <div v-else class="empty-state">
       <div class="empty-icon">⇆</div>
       <h3>还没有 TCP/UDP 代理</h3>
-      <p>创建独立监听端口并转发到单个目标服务或 Stream 目标服务池。</p>
+      <p>创建独立监听端口并转发到单个后端服务或 Stream 后端服务池。</p>
       <button class="button primary" @click="show()">添加规则</button>
     </div>
   </article>
@@ -278,7 +277,7 @@ watch(
                 type="checkbox"
               />入口接收 PROXY Protocol</label
             ><label class="checkbox-row"
-              ><input v-model="form.proxy_protocol" type="checkbox" />向目标服务发送
+              ><input v-model="form.proxy_protocol" type="checkbox" />向后端服务发送
               PROXY Protocol</label
             >
           </div>
@@ -290,9 +289,9 @@ watch(
               placeholder="仅在接收 PROXY Protocol 时填写"
             ></textarea>
           </div>
-          <div class="form-section">目标服务</div>
+          <div class="form-section">后端服务</div>
           <div class="field full">
-            <label>Stream 目标服务池</label
+            <label>Stream 后端服务池</label
             ><select v-model="form.upstream_pool_id" class="select">
               <option value="">单个目标</option>
               <option

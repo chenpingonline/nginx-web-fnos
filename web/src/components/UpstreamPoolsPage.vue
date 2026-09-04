@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { reactive, ref, toRaw, watch } from "vue";
 import type { UpstreamPool, UpstreamPoolInput, UpstreamServer } from "../types";
 const props = defineProps<{
   pools: UpstreamPool[];
@@ -61,13 +61,12 @@ function removeServer(index: number) {
   if (form.servers.length > 1) form.servers.splice(index, 1);
 }
 function submit() {
-  emit("save", structuredClone(form), editing.value?.id ?? "");
+  emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "");
 }
 watch(
-  () => props.busy,
-  (value) => {
+  () => props.pools,
+  () => {
     if (
-      !value &&
       open.value &&
       props.pools.some(
         (pool) =>
@@ -97,7 +96,7 @@ watch(
     >
       {{ dirty ? "保存并应用" : "重新应用" }}
     </button>
-    <button class="button primary" @click="show()">＋ 添加目标服务池</button>
+    <button class="button primary" @click="show()">＋ 添加后端服务池</button>
   </div>
   <article class="card">
     <div v-if="pools.length" class="table-wrap">
@@ -152,9 +151,9 @@ watch(
     </div>
     <div v-else class="empty-state">
       <div class="empty-icon">⇶</div>
-      <h3>还没有目标服务池</h3>
+      <h3>还没有后端服务池</h3>
       <p>单节点规则可以继续直接填写主机和端口；多节点服务建议创建服务器池。</p>
-      <button class="button primary" @click="show()">添加目标服务池</button>
+      <button class="button primary" @click="show()">添加后端服务池</button>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
@@ -166,7 +165,7 @@ watch(
     >
       <header class="modal-header">
         <div>
-          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}目标服务池</h2>
+          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}后端服务池</h2>
           <p>结构化配置负载均衡、节点权重与连接复用。</p>
         </div>
         <button class="icon-button" aria-label="关闭" @click="open = false">
@@ -195,12 +194,15 @@ watch(
           <div class="field">
             <label>负载均衡算法</label
             ><select v-model="form.strategy" class="select">
-              <option value="round_robin">Round Robin</option>
-              <option value="least_conn">Least Connections</option>
-              <option value="ip_hash">IP Hash</option>
-              <option value="hash">Hash</option>
-              <option value="random">Random Two Least Conn</option>
-            </select>
+              <option value="round_robin">轮询（Round Robin）</option>
+              <option value="least_conn">最少连接（Least Connections）</option>
+              <option value="ip_hash">IP 哈希（IP Hash）</option>
+              <option value="hash">哈希（Hash）</option>
+              <option value="random">
+                随机二选一最少连接（Random Two Least Conn）
+              </option>
+            </select
+            ><span class="field-help">权重在下方每个服务器节点中单独设置。</span>
           </div>
           <div v-if="form.strategy === 'hash'" class="field">
             <label>Hash Key</label
@@ -211,6 +213,16 @@ watch(
             </select>
           </div>
           <div class="form-section">服务器节点</div>
+          <div class="full server-editor-head" aria-hidden="true">
+            <span>主机 / IP</span>
+            <span>端口</span>
+            <span>权重</span>
+            <span>最大失败次数</span>
+            <span>恢复时间（秒）</span>
+            <span>备份</span>
+            <span>停用</span>
+            <span>操作</span>
+          </div>
           <div
             v-for="(server, index) in form.servers"
             :key="index"
@@ -235,6 +247,7 @@ watch(
               type="number"
               min="1"
               max="1000"
+              aria-label="权重"
               title="权重"
             /><input
               v-model.number="server.max_fails"
@@ -242,6 +255,7 @@ watch(
               type="number"
               min="0"
               max="100"
+              aria-label="最大失败次数"
               title="最大失败次数"
             /><input
               v-model.number="server.fail_timeout_seconds"
@@ -249,6 +263,7 @@ watch(
               type="number"
               min="1"
               max="86400"
+              aria-label="故障恢复时间（秒）"
               title="故障恢复秒数"
             /><label class="checkbox-row"
               ><input v-model="server.backup" type="checkbox" />备份</label
@@ -313,7 +328,7 @@ watch(
             <button type="button" class="button ghost" @click="open = false">
               取消</button
             ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存目标服务池" }}
+              {{ busy ? "处理中…" : "保存后端服务池" }}
             </button>
           </footer>
         </form>

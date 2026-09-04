@@ -26,7 +26,7 @@ watch(
 );
 function submit() {
   emit("save", {
-    ...structuredClone(form),
+    ...structuredClone(toRaw(form)),
     real_ip: {
       ...form.real_ip,
       trusted_proxies: trusted.value.split(/[\s,]+/).filter(Boolean),
@@ -93,7 +93,7 @@ function addSplit() {
       </div>
     </article>
     <article class="card">
-      <header class="card-header"><div><h2>动态路由变量</h2><p>用 Map、Geo 和 Split Clients 生成可在 Header、重写和目标服务配置中引用的变量</p></div></header>
+      <header class="card-header"><div><h2>动态路由变量</h2><p>用 Map、Geo 和 Split Clients 生成可在 Header、重写和后端服务配置中引用的变量</p></div></header>
       <div class="card-body settings-stack">
         <details class="advanced-box"><summary>Map（{{ form.routing.maps.length }}）</summary><div class="form-grid compact-grid">
           <div v-for="(item, index) in form.routing.maps" :key="`map-${index}`" class="routing-editor full">

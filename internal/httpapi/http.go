@@ -123,6 +123,17 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusCreated, pool, err)
 	case strings.HasPrefix(apiPath, "/api/upstreams/"):
 		a.handleUpstreamPool(w, r, strings.TrimPrefix(apiPath, "/api/upstreams/"))
+	case apiPath == "/api/rate-limit-policies" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, a.service.State().RateLimitPolicies)
+	case apiPath == "/api/rate-limit-policies" && r.Method == http.MethodPost:
+		var input domain.RateLimitPolicy
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		policy, err := a.service.CreateRateLimitPolicy(input)
+		writeResult(w, http.StatusCreated, policy, err)
+	case strings.HasPrefix(apiPath, "/api/rate-limit-policies/"):
+		a.handleRateLimitPolicy(w, r, strings.TrimPrefix(apiPath, "/api/rate-limit-policies/"))
 	case apiPath == "/api/streams" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().StreamRules)
 	case apiPath == "/api/streams" && r.Method == http.MethodPost:
@@ -214,9 +225,30 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 	}
 }
 
+func (a *API) handleRateLimitPolicy(w http.ResponseWriter, r *http.Request, id string) {
+	if strings.Contains(id, "/") || id == "" {
+		writeAPIError(w, http.StatusNotFound, "限流策略不存在")
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var input domain.RateLimitPolicy
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		policy, err := a.service.UpdateRateLimitPolicy(id, input)
+		writeResult(w, http.StatusOK, policy, err)
+	case http.MethodDelete:
+		err := a.service.DeleteRateLimitPolicy(id)
+		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "限流策略接口不支持该请求方法")
+	}
+}
+
 func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id string) {
 	if strings.Contains(id, "/") || id == "" {
-		writeAPIError(w, http.StatusNotFound, "目标服务池不存在")
+		writeAPIError(w, http.StatusNotFound, "后端服务池不存在")
 		return
 	}
 	switch r.Method {
@@ -231,7 +263,7 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 		err := a.service.DeleteUpstreamPool(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	default:
-		writeAPIError(w, http.StatusMethodNotAllowed, "目标服务池接口不支持该请求方法")
+		writeAPIError(w, http.StatusMethodNotAllowed, "后端服务池接口不支持该请求方法")
 	}
 }
 

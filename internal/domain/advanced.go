@@ -80,6 +80,14 @@ type RateLimitSettings struct {
 	DownloadKBps      int  `json:"download_kbps"`
 }
 
+type RateLimitPolicy struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Settings  RateLimitSettings `json:"settings"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
 type KeyValue struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -304,8 +312,48 @@ func ApplyStateDefaults(state *State) {
 	if state.Rules == nil {
 		state.Rules = []ProxyRule{}
 	}
+	if state.RateLimitPolicies == nil {
+		state.RateLimitPolicies = []RateLimitPolicy{}
+	}
+	policyNames := make(map[string]struct{}, len(state.RateLimitPolicies))
+	for index := range state.RateLimitPolicies {
+		NormalizeRateLimitPolicy(&state.RateLimitPolicies[index])
+		policyNames[strings.ToLower(state.RateLimitPolicies[index].Name)] = struct{}{}
+	}
 	for index := range state.Rules {
 		NormalizeRule(&state.Rules[index], state.Settings)
+		rule := &state.Rules[index]
+		if rule.RateLimitPolicyID == "" && rule.RateLimit.Enabled {
+			name := strings.TrimSpace(rule.Name) + " 限流"
+			if name == " 限流" {
+				name = "迁移的限流策略"
+			}
+			base := name
+			for suffix := 2; ; suffix++ {
+				if _, exists := policyNames[strings.ToLower(name)]; !exists {
+					break
+				}
+				name = fmt.Sprintf("%s %d", base, suffix)
+			}
+			createdAt := rule.CreatedAt
+			if createdAt.IsZero() {
+				createdAt = time.Now().UTC()
+			}
+			policy := RateLimitPolicy{
+				ID:        RandomID(),
+				Name:      name,
+				Settings:  rule.RateLimit,
+				CreatedAt: createdAt,
+				UpdatedAt: rule.UpdatedAt,
+			}
+			if policy.UpdatedAt.IsZero() {
+				policy.UpdatedAt = createdAt
+			}
+			NormalizeRateLimitPolicy(&policy)
+			state.RateLimitPolicies = append(state.RateLimitPolicies, policy)
+			policyNames[strings.ToLower(policy.Name)] = struct{}{}
+			rule.RateLimitPolicyID = policy.ID
+		}
 	}
 	if state.Certificates == nil {
 		state.Certificates = []CertificateMeta{}
@@ -322,6 +370,11 @@ func ApplyStateDefaults(state *State) {
 	for index := range state.StreamRules {
 		NormalizeStreamRule(&state.StreamRules[index])
 	}
+}
+
+func NormalizeRateLimitPolicy(policy *RateLimitPolicy) {
+	policy.Name = strings.TrimSpace(policy.Name)
+	policy.Settings.Enabled = true
 }
 
 func NormalizeStreamRule(rule *StreamRule) {
@@ -476,7 +529,7 @@ func ValidateLocationSettings(settings LocationSettings, pools map[string]Upstre
 		if settings.UpstreamPoolID != "" {
 			pool, ok := pools[settings.UpstreamPoolID]
 			if !ok || pool.Protocol != "http" {
-				return errors.New("Location 引用的 HTTP 目标服务池不存在")
+				return errors.New("Location 引用的 HTTP 后端服务池不存在")
 			}
 		} else {
 			if err := validateHostName(settings.UpstreamHost, false); err != nil {
@@ -488,7 +541,7 @@ func ValidateLocationSettings(settings LocationSettings, pools map[string]Upstre
 		}
 	}
 	if settings.UpstreamScheme != "http" && settings.UpstreamScheme != "https" {
-		return errors.New("Location 目标服务协议不支持")
+		return errors.New("Location 后端服务协议不支持")
 	}
 	if settings.BackendType == "static" {
 		if !strings.HasPrefix(settings.StaticPath, "/") || strings.Contains(settings.StaticPath, "..") || strings.ContainsAny(settings.StaticPath, "\x00\r\n") {
@@ -700,10 +753,10 @@ func validateStreamTarget(poolID, host string, port int, pools map[string]Upstre
 	if poolID != "" {
 		pool, ok := pools[poolID]
 		if !ok {
-			return errors.New("引用的 Stream 目标服务池不存在")
+			return errors.New("引用的 Stream 后端服务池不存在")
 		}
 		if pool.Protocol != "stream" {
-			return errors.New("Stream 规则只能引用 Stream 目标服务池")
+			return errors.New("Stream 规则只能引用 Stream 后端服务池")
 		}
 		return nil
 	}
@@ -753,39 +806,39 @@ func NormalizeUpstreamPool(pool *UpstreamPool) {
 
 func ValidateUpstreamPool(pool UpstreamPool) error {
 	if !idPattern.MatchString(pool.ID) {
-		return errors.New("目标服务池 ID 格式不正确")
+		return errors.New("后端服务池 ID 格式不正确")
 	}
 	if len([]rune(pool.Name)) < 1 || len([]rune(pool.Name)) > 80 {
-		return errors.New("目标服务池名称长度必须为 1 到 80 个字符")
+		return errors.New("后端服务池名称长度必须为 1 到 80 个字符")
 	}
 	if pool.Protocol != "http" && pool.Protocol != "stream" {
-		return errors.New("目标服务池协议只能是 http 或 stream")
+		return errors.New("后端服务池协议只能是 http 或 stream")
 	}
 	allowedStrategy := map[string]bool{"round_robin": true, "least_conn": true, "ip_hash": true, "hash": true, "random": true}
 	if !allowedStrategy[pool.Strategy] {
-		return errors.New("目标服务池负载均衡算法不支持")
+		return errors.New("后端服务池负载均衡算法不支持")
 	}
 	if pool.Protocol == "stream" && pool.Strategy == "ip_hash" {
-		return errors.New("Stream 目标服务池不支持 IP Hash")
+		return errors.New("Stream 后端服务池不支持 IP Hash")
 	}
 	if pool.Strategy == "hash" && !variablePattern.MatchString(pool.HashKey) {
 		return errors.New("Hash 算法必须使用安全的 Nginx 变量，例如 $request_uri")
 	}
 	if len(pool.Servers) == 0 || len(pool.Servers) > 64 {
-		return errors.New("目标服务池需要 1 到 64 个服务节点")
+		return errors.New("后端服务池需要 1 到 64 个服务节点")
 	}
 	if pool.Keepalive < 0 || pool.Keepalive > 4096 || pool.KeepaliveRequests < 1 || pool.KeepaliveRequests > 100000 || pool.KeepaliveTime < 1 || pool.KeepaliveTime > 86400 || pool.KeepaliveTimeout < 1 || pool.KeepaliveTimeout > 3600 {
-		return errors.New("目标服务连接池参数超出允许范围")
+		return errors.New("后端服务连接池参数超出允许范围")
 	}
 	for _, server := range pool.Servers {
 		if err := validateHostName(server.Host, false); err != nil {
-			return fmt.Errorf("目标服务节点 %q 不合法: %w", server.Host, err)
+			return fmt.Errorf("后端服务节点 %q 不合法: %w", server.Host, err)
 		}
 		if server.Port < 1 || server.Port > 65535 {
-			return errors.New("目标服务节点端口必须为 1 到 65535")
+			return errors.New("后端服务节点端口必须为 1 到 65535")
 		}
 		if server.Weight < 1 || server.Weight > 1000 || server.MaxFails < 0 || server.MaxFails > 100 || server.FailTimeout < 1 || server.FailTimeout > 86400 {
-			return errors.New("目标服务节点权重或故障参数超出允许范围")
+			return errors.New("后端服务节点权重或故障参数超出允许范围")
 		}
 	}
 	return nil
@@ -935,4 +988,15 @@ func validateRateLimit(value RateLimitSettings) error {
 		return errors.New("限流参数超出允许范围")
 	}
 	return nil
+}
+
+func ValidateRateLimitPolicy(policy RateLimitPolicy) error {
+	if !idPattern.MatchString(policy.ID) {
+		return errors.New("限流策略 ID 格式不正确")
+	}
+	if len([]rune(policy.Name)) < 1 || len([]rune(policy.Name)) > 80 {
+		return errors.New("限流策略名称长度必须为 1 到 80 个字符")
+	}
+	policy.Settings.Enabled = true
+	return validateRateLimit(policy.Settings)
 }

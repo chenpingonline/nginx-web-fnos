@@ -47,7 +47,7 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
 
     <template v-if="!root && ['proxy', 'grpc', 'fastcgi', 'uwsgi', 'scgi', 'memcached'].includes(model.backend_type)">
       <div class="field">
-        <label>目标服务池</label>
+        <label>后端服务池</label>
         <select v-model="model.upstream_pool_id" class="select">
           <option value="">单个服务器</option>
           <option v-for="pool in upstreamPools.filter((item) => item.protocol === 'http')" :key="pool.id" :value="pool.id">{{ pool.name }}</option>

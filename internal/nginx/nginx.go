@@ -413,6 +413,19 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	for _, pool := range state.UpstreamPools {
 		pools[pool.ID] = pool
 	}
+	policies := make(map[string]domain.RateLimitPolicy, len(state.RateLimitPolicies))
+	for _, policy := range state.RateLimitPolicies {
+		policies[policy.ID] = policy
+	}
+	for index := range state.Rules {
+		policy, exists := policies[state.Rules[index].RateLimitPolicyID]
+		if !exists {
+			state.Rules[index].RateLimit.Enabled = false
+			continue
+		}
+		state.Rules[index].RateLimit = policy.Settings
+		state.Rules[index].RateLimit.Enabled = true
+	}
 
 	type group struct {
 		port  int

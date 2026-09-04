@@ -65,3 +65,24 @@ func TestNormalizeRule(t *testing.T) {
 		t.Fatalf("defaults not applied: %#v", rule)
 	}
 }
+
+func TestApplyStateDefaultsMigratesInlineRateLimitToPolicy(t *testing.T) {
+	state := DefaultState()
+	state.Rules = []ProxyRule{{
+		ID: "abcdef012345", Name: "公开接口", RateLimit: RateLimitSettings{
+			Enabled: true, RequestsPerSecond: 12, Burst: 24, NoDelay: true,
+		},
+	}}
+
+	ApplyStateDefaults(&state)
+
+	if len(state.RateLimitPolicies) != 1 {
+		t.Fatalf("expected one migrated policy, got %d", len(state.RateLimitPolicies))
+	}
+	if state.Rules[0].RateLimitPolicyID != state.RateLimitPolicies[0].ID {
+		t.Fatal("expected migrated rule to reference the new policy")
+	}
+	if state.RateLimitPolicies[0].Settings.RequestsPerSecond != 12 {
+		t.Fatal("expected migrated policy to preserve rate-limit settings")
+	}
+}

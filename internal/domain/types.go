@@ -13,10 +13,10 @@ import (
 
 const (
 	AppName       = "nginx-web"
-	AppVersion    = "0.1.5"
-	BuildIdentity = "nginx-web 0.1.5"
+	AppVersion    = "0.1.7"
+	BuildIdentity = "nginx-web 0.1.7"
 	NginxVersion  = "1.30.4"
-	SchemaVersion = 4
+	SchemaVersion = 5
 )
 
 type Settings struct {
@@ -58,6 +58,7 @@ type ProxyRule struct {
 	SendTimeoutSeconds    int               `json:"send_timeout_seconds"`
 	ClientMaxBodyMB       int               `json:"client_max_body_mb"`
 	UpstreamPoolID        string            `json:"upstream_pool_id,omitempty"`
+	RateLimitPolicyID     string            `json:"rate_limit_policy_id,omitempty"`
 	RateLimit             RateLimitSettings `json:"rate_limit"`
 	RootLocation          LocationSettings  `json:"root_location"`
 	Locations             []LocationRule    `json:"locations"`
@@ -79,16 +80,17 @@ type CertificateMeta struct {
 }
 
 type State struct {
-	SchemaVersion    int               `json:"schema_version"`
-	Settings         Settings          `json:"settings"`
-	Rules            []ProxyRule       `json:"rules"`
-	Certificates     []CertificateMeta `json:"certificates"`
-	UpstreamPools    []UpstreamPool    `json:"upstream_pools"`
-	StreamRules      []StreamRule      `json:"stream_rules"`
-	Dirty            bool              `json:"dirty"`
-	LastAppliedAt    *time.Time        `json:"last_applied_at,omitempty"`
-	LastApplyMessage string            `json:"last_apply_message,omitempty"`
-	UpdatedAt        time.Time         `json:"updated_at"`
+	SchemaVersion     int               `json:"schema_version"`
+	Settings          Settings          `json:"settings"`
+	Rules             []ProxyRule       `json:"rules"`
+	Certificates      []CertificateMeta `json:"certificates"`
+	UpstreamPools     []UpstreamPool    `json:"upstream_pools"`
+	RateLimitPolicies []RateLimitPolicy `json:"rate_limit_policies"`
+	StreamRules       []StreamRule      `json:"stream_rules"`
+	Dirty             bool              `json:"dirty"`
+	LastAppliedAt     *time.Time        `json:"last_applied_at,omitempty"`
+	LastApplyMessage  string            `json:"last_apply_message,omitempty"`
+	UpdatedAt         time.Time         `json:"updated_at"`
 }
 
 type Revision struct {
@@ -132,12 +134,13 @@ func DefaultState() State {
 			Logging:           defaultLoggingSettings(),
 			Routing:           DynamicRoutingSettings{Maps: []MapDefinition{}, Geos: []GeoDefinition{}, Splits: []SplitDefinition{}},
 		},
-		Rules:         []ProxyRule{},
-		Certificates:  []CertificateMeta{},
-		UpstreamPools: []UpstreamPool{},
-		StreamRules:   []StreamRule{},
-		Dirty:         true,
-		UpdatedAt:     now,
+		Rules:             []ProxyRule{},
+		Certificates:      []CertificateMeta{},
+		UpstreamPools:     []UpstreamPool{},
+		RateLimitPolicies: []RateLimitPolicy{},
+		StreamRules:       []StreamRule{},
+		Dirty:             true,
+		UpdatedAt:         now,
 	}
 }
 
@@ -158,6 +161,7 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 	rule.UpstreamHost = strings.TrimSpace(strings.Trim(rule.UpstreamHost, "[]"))
 	rule.CertificateID = strings.TrimSpace(rule.CertificateID)
 	rule.UpstreamPoolID = strings.TrimSpace(rule.UpstreamPoolID)
+	rule.RateLimitPolicyID = strings.TrimSpace(rule.RateLimitPolicyID)
 	if rule.Locations == nil {
 		rule.Locations = []LocationRule{}
 	}
@@ -257,14 +261,14 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if rule.UpstreamPoolID != "" {
 		pool, ok := poolMap[rule.UpstreamPoolID]
 		if !ok {
-			return errors.New("引用的目标服务池不存在")
+			return errors.New("引用的后端服务池不存在")
 		}
 		if pool.Protocol != "http" {
-			return errors.New("HTTP 规则只能引用 HTTP 目标服务池")
+			return errors.New("HTTP 规则只能引用 HTTP 后端服务池")
 		}
 	}
 	if rule.UpstreamScheme != "http" && rule.UpstreamScheme != "https" {
-		return errors.New("目标服务协议只能是 http 或 https")
+		return errors.New("后端服务协议只能是 http 或 https")
 	}
 	if rule.UpstreamPoolID == "" {
 		if err := validateHostName(rule.UpstreamHost, false); err != nil {
@@ -324,17 +328,33 @@ func ValidateState(state State) error {
 	poolNames := make(map[string]struct{}, len(state.UpstreamPools))
 	for _, pool := range state.UpstreamPools {
 		if err := ValidateUpstreamPool(pool); err != nil {
-			return fmt.Errorf("目标服务池 %q: %w", pool.Name, err)
+			return fmt.Errorf("后端服务池 %q: %w", pool.Name, err)
 		}
 		if _, exists := pools[pool.ID]; exists {
-			return errors.New("存在重复的目标服务池 ID")
+			return errors.New("存在重复的后端服务池 ID")
 		}
 		key := strings.ToLower(pool.Name)
 		if _, exists := poolNames[key]; exists {
-			return errors.New("存在重复的目标服务池名称")
+			return errors.New("存在重复的后端服务池名称")
 		}
 		pools[pool.ID] = pool
 		poolNames[key] = struct{}{}
+	}
+	policies := make(map[string]RateLimitPolicy, len(state.RateLimitPolicies))
+	policyNames := make(map[string]struct{}, len(state.RateLimitPolicies))
+	for _, policy := range state.RateLimitPolicies {
+		if err := ValidateRateLimitPolicy(policy); err != nil {
+			return fmt.Errorf("限流策略 %q: %w", policy.Name, err)
+		}
+		if _, exists := policies[policy.ID]; exists {
+			return errors.New("存在重复的限流策略 ID")
+		}
+		key := strings.ToLower(policy.Name)
+		if _, exists := policyNames[key]; exists {
+			return errors.New("存在重复的限流策略名称")
+		}
+		policies[policy.ID] = policy
+		policyNames[key] = struct{}{}
 	}
 
 	type portInfo struct {
@@ -350,6 +370,11 @@ func ValidateState(state State) error {
 			return errors.New("存在重复的规则 ID")
 		}
 		ids[rule.ID] = struct{}{}
+		if rule.RateLimitPolicyID != "" {
+			if _, exists := policies[rule.RateLimitPolicyID]; !exists {
+				return fmt.Errorf("规则 %q: 引用的限流策略不存在", rule.Name)
+			}
+		}
 		if err := ValidateRule(rule, certs, pools); err != nil {
 			return fmt.Errorf("规则 %q: %w", rule.Name, err)
 		}

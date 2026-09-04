@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; VERSION="${VERSION:-0.1.5}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"; VERSION="${VERSION:-0.1.7}"
 "$ROOT/scripts/build.sh" x86
 "$ROOT/scripts/build.sh" arm64
 "$ROOT/tests/integration.sh"

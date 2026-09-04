@@ -115,8 +115,15 @@ func TestRenderAdvancedRuntimePoolAndRateLimit(t *testing.T) {
 	streamPool := domain.UpstreamPool{ID: "111111111111", Name: "mqtt", Protocol: "stream", Strategy: "least_conn", Servers: []domain.UpstreamServer{{Host: "10.0.0.2", Port: 1883}}}
 	domain.NormalizeUpstreamPool(&streamPool)
 	state.UpstreamPools = append(state.UpstreamPools, streamPool)
-	state.Rules = []domain.ProxyRule{{ID: "abcdef012345", Name: "demo", Enabled: true, ListenPort: 19080, Domains: []string{"demo.test"}, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080, UpstreamPoolID: pool.ID, ConnectTimeoutSeconds: 10, ReadTimeoutSeconds: 60, SendTimeoutSeconds: 60, RateLimit: domain.RateLimitSettings{Enabled: true, RequestsPerSecond: 20, Burst: 40, NoDelay: true, Connections: 10, DownloadKBps: 1024}}}
+	state.RateLimitPolicies = []domain.RateLimitPolicy{{ID: "444444444444", Name: "公开接口", Settings: domain.RateLimitSettings{Enabled: true, RequestsPerSecond: 20, Burst: 40, NoDelay: true, Connections: 10, DownloadKBps: 1024}}}
+	state.Rules = []domain.ProxyRule{{ID: "abcdef012345", Name: "demo", Enabled: true, ListenPort: 19080, Domains: []string{"demo.test"}, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080, UpstreamPoolID: pool.ID, RateLimitPolicyID: "444444444444", ConnectTimeoutSeconds: 10, ReadTimeoutSeconds: 60, SendTimeoutSeconds: 60}}
 	domain.NormalizeRule(&state.Rules[0], state.Settings)
+	secondRule := state.Rules[0]
+	secondRule.ID = "abcdef012346"
+	secondRule.Name = "demo two"
+	secondRule.ListenPort = 19082
+	secondRule.Domains = []string{"demo-two.test"}
+	state.Rules = append(state.Rules, secondRule)
 	state.Rules[0].RootLocation.Cache.Enabled = true
 	state.Rules[0].RootLocation.Cache.SliceKB = 1024
 	state.Rules[0].RootLocation.Rewrites = []domain.RewriteRule{{Pattern: "^/old/(.*)$", Replacement: "/new/$1", Flag: "permanent"}}
@@ -142,6 +149,12 @@ func TestRenderAdvancedRuntimePoolAndRateLimit(t *testing.T) {
 	all := master
 	for _, content := range files {
 		all += content
+	}
+	if !strings.Contains(all, "zone=fnproxy_req_abcdef012345:1m rate=20r/s") {
+		t.Fatalf("expected policy values in a rule-scoped request zone:\n%s", all)
+	}
+	if !strings.Contains(all, "zone=fnproxy_req_abcdef012346:1m rate=20r/s") {
+		t.Fatalf("expected reused policy to create an independent request zone:\n%s", all)
 	}
 	for _, expected := range []string{"worker_processes 2", "worker_rlimit_nofile 4096", "worker_connections 2048", "thread_pool fnproxy threads=4 max_queue=1024", "aio threads=fnproxy", `log_format fnproxy "$remote_addr \"$request\" $status"`, "map $host $backend", "geo $remote_addr $network", `split_clients "$request_id" $variant`, "set_real_ip_from 10.0.0.0/8", "gzip on", "upstream fnproxy_up_0123456789ab", "least_conn", "keepalive 32", "limit_req_zone", "limit_conn_zone", "proxy_pass http://fnproxy_up_0123456789ab", "limit_rate 1024k", "proxy_cache_path", "proxy_cache fnproxy_cache_abcdef012345", "slice 1024k", `rewrite "^/old/(.*)$" "/new/$1" permanent`, "allow 192.168.0.0/16", "auth_request \"/_auth\"", "secure_link_md5", `proxy_set_header X-App "nginx-web"`, `add_header X-Frame-Options "DENY" always`, `sub_filter "old" "new"`, `location "/assets/"`, `root "/vol1/data/www"`, "stream {", "upstream fnproxy_stream_111111111111", "map $ssl_preread_server_name", "listen 0.0.0.0:19081", "ssl_preread on", "limit_conn fnproxy_stream_conn_222222222222 20", "stream.log"} {
 		if !strings.Contains(all, expected) {
