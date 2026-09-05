@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from "./AppSelect.vue";
 import { computed, ref, watch } from "vue";
 import {
   PhArrowLeft,
@@ -171,12 +172,12 @@ function date(value: string | null | undefined) {
           <p>{{ scopeName }} · {{ period }}</p>
         </div>
         <div class="details-controls">
-          <select v-model="selected" class="select" aria-label="错误统计规则">
+          <AppSelect v-model="selected" class="select" aria-label="错误统计规则">
             <option value="">全部 HTTP / HTTPS</option>
             <option v-for="rule in httpRules" :key="rule.id" :value="rule.id">
               {{ rule.name }}
             </option>
-          </select>
+          </AppSelect>
           <div class="range-buttons" aria-label="错误统计时间范围">
             <button
               v-for="range in trafficRanges"

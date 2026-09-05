@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import {
   PhArrowClockwise,
@@ -137,12 +138,12 @@ watch(
 <template>
   <div class="toolbar rule-filters" role="search" aria-label="TCP/UDP 规则筛选">
     <input v-model="search" class="input search-input" type="search" aria-label="搜索 TCP/UDP 规则" placeholder="搜索名称、监听地址、端口或目标" />
-    <select v-model="protocolFilter" class="select" aria-label="TCP/UDP 协议筛选">
+    <AppSelect v-model="protocolFilter" class="select" aria-label="TCP/UDP 协议筛选">
       <option value="all">全部协议</option><option value="tcp">TCP</option><option value="udp">UDP</option>
-    </select>
-    <select v-model="enabledFilter" class="select" aria-label="TCP/UDP 启用状态筛选">
+    </AppSelect>
+    <AppSelect v-model="enabledFilter" class="select" aria-label="TCP/UDP 启用状态筛选">
       <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
-    </select>
+    </AppSelect>
     <button class="button ghost" :disabled="!hasFilters" @click="resetFilters">重置筛选</button>
     <span class="filter-count">{{ filteredRules.length }} / {{ rules.length }} 条</span>
   </div>
@@ -209,7 +210,7 @@ watch(
             <td>
               {{
                 rule.upstream_pool_id
-                  ? "服务器池"
+                  ? "后端服务组"
                   : `${rule.upstream_host}:${rule.upstream_port}`
               }}
             </td>
@@ -244,10 +245,7 @@ watch(
     <div v-else class="empty-state">
       <div class="empty-icon">⇆</div>
       <h3>{{ rules.length ? "没有匹配的规则" : "还没有 TCP/UDP 代理" }}</h3>
-      <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单个后端服务或 Stream 后端服务池。" }}</p>
-      <button v-if="!rules.length" class="button primary" @click="show()">
-        <PhPlusCircle :size="17" aria-hidden="true" />添加规则
-      </button>
+      <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单个后端服务或 Stream 后端服务组。" }}</p>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
@@ -262,12 +260,12 @@ watch(
           <h2 id="stream-title">
             {{ editing ? "编辑" : "添加" }} TCP/UDP 规则
           </h2>
-          <p>支持 TLS 终止、SNI 透传、PROXY Protocol 和访问控制。</p>
+          <p>保存后立即应用；其他尚未应用的配置修改也会一并生效。</p>
         </div>
         <div class="rule-header-actions">
           <button type="button" class="button ghost" :disabled="busy" @click="open = false">取消</button>
           <button type="submit" form="stream-rule-form" class="button primary" :disabled="busy">
-            {{ busy ? "处理中…" : "保存 Stream 规则" }}
+            {{ busy ? "保存并应用中…" : "保存并应用" }}
           </button>
         </div>
         <button type="button" class="icon-button modal-close" aria-label="关闭" @click="open = false">
@@ -295,10 +293,10 @@ watch(
           <div class="form-section">监听入口</div>
           <div class="field">
             <label>协议</label
-            ><select v-model="form.protocol" class="select">
+            ><AppSelect v-model="form.protocol" class="select">
               <option value="tcp">TCP</option>
               <option value="udp">UDP</option>
-            </select>
+            </AppSelect>
           </div>
           <div class="field">
             <label>监听地址</label
@@ -342,8 +340,8 @@ watch(
           </div>
           <div class="form-section">后端服务</div>
           <div class="field full">
-            <label>Stream 后端服务池</label
-            ><select v-model="form.upstream_pool_id" class="select">
+            <label>Stream 后端服务组</label
+            ><AppSelect v-model="form.upstream_pool_id" class="select">
               <option value="">单个目标</option>
               <option
                 v-for="pool in pools.filter(
@@ -354,7 +352,7 @@ watch(
               >
                 {{ pool.name }}
               </option>
-            </select>
+            </AppSelect>
           </div>
           <template v-if="!form.upstream_pool_id"
             ><div class="field">
@@ -409,7 +407,7 @@ watch(
           <div class="form-section">TLS</div>
           <div class="field">
             <label>TLS 模式</label
-            ><select
+            ><AppSelect
               v-model="form.tls_mode"
               class="select"
               :disabled="form.protocol === 'udp'"
@@ -417,11 +415,11 @@ watch(
               <option value="off">关闭</option>
               <option value="terminate">TLS 终止</option>
               <option value="passthrough">SNI 透传</option>
-            </select>
+            </AppSelect>
           </div>
           <div v-if="form.tls_mode === 'terminate'" class="field">
             <label>证书</label
-            ><select v-model="form.certificate_id" class="select" required>
+            ><AppSelect v-model="form.certificate_id" class="select" required>
               <option value="">请选择</option>
               <option
                 v-for="cert in certificates"
@@ -430,7 +428,7 @@ watch(
               >
                 {{ cert.name }}
               </option>
-            </select>
+            </AppSelect>
           </div>
           <template v-if="form.tls_mode === 'passthrough'"
             ><div class="form-section">SNI 分流</div>
@@ -444,7 +442,7 @@ watch(
                 class="input"
                 required
                 placeholder="域名，多个用逗号分隔"
-              /><select v-model="route.upstream_pool_id" class="select">
+              /><AppSelect v-model="route.upstream_pool_id" class="select">
                 <option value="">单个目标</option>
                 <option
                   v-for="pool in pools.filter(
@@ -454,7 +452,7 @@ watch(
                   :value="pool.id"
                 >
                   {{ pool.name }}
-                </option></select
+                </option></AppSelect
               ><input
                 v-if="!route.upstream_pool_id"
                 v-model.trim="route.upstream_host"

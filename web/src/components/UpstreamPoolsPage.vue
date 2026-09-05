@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PoolPathExample from "./PoolPathExample.vue";
+import AppSelect from "./AppSelect.vue";
 import { reactive, ref, toRaw, watch } from "vue";
 import {
   PhArrowClockwise,
@@ -17,6 +19,20 @@ const emit = defineEmits<{
   refresh: [];
   apply: [];
 }>();
+const helpOpen = ref(false);
+const helpPosition = ref<Record<string, string>>({});
+function toggleHelp(event: MouseEvent) {
+  if (helpOpen.value) { helpOpen.value = false; return; }
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const width = Math.min(500, window.innerWidth - 32);
+  const fitsRight = rect.right + 8 + width <= window.innerWidth - 16;
+  helpPosition.value = {
+    width: `${width}px`,
+    left: `${fitsRight ? rect.right + 8 : Math.max(16, Math.min(rect.left, window.innerWidth - width - 16))}px`,
+    top: `${Math.max(16, Math.min(fitsRight ? rect.top : rect.bottom, window.innerHeight - width * 150 / 640 - 36))}px`,
+  };
+  helpOpen.value = true;
+}
 const editing = ref<UpstreamPool | null>(null),
   open = ref(false);
 const blankServer = (): UpstreamServer => ({
@@ -85,9 +101,13 @@ watch(
 </script>
 <template>
   <div class="toolbar">
-    <div class="notice">
-      服务器池可以被多个 HTTP 或 TCP/UDP
+    <div class="notice pool-description">
+      后端服务组可以被多个 HTTP 或 TCP/UDP
       规则复用，并统一配置负载均衡与故障恢复。
+      <span class="pool-help" @mouseleave="helpOpen = false" @focusout="helpOpen = false" @keydown.esc="helpOpen = false">
+        <button type="button" class="pool-help-button" aria-label="查看服务组访问路径示例" :aria-expanded="helpOpen" aria-controls="pool-help-content" @click="toggleHelp">?</button>
+        <div v-if="helpOpen" id="pool-help-content" class="pool-help-panel" :style="helpPosition"><PoolPathExample /></div>
+      </span>
     </div>
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
@@ -104,7 +124,7 @@ watch(
       }}
     </button>
     <button class="button primary" @click="show()">
-      <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务池
+      <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务组
     </button>
   </div>
   <article class="card">
@@ -158,13 +178,9 @@ watch(
         </tbody>
       </table>
     </div>
-    <div v-else class="empty-state">
-      <div class="empty-icon">⇶</div>
-      <h3>还没有后端服务池</h3>
-      <p>单节点规则可以继续直接填写主机和端口；多节点服务建议创建服务器池。</p>
-      <button class="button primary" @click="show()">
-        <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务池
-      </button>
+    <div v-else class="empty-state pool-empty">
+      <h3>还没有后端服务组</h3>
+      <PoolPathExample class="pool-empty-example" />
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
@@ -176,7 +192,7 @@ watch(
     >
       <header class="modal-header">
         <div>
-          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}后端服务池</h2>
+          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}后端服务组</h2>
           <p>结构化配置负载均衡、节点权重与连接复用。</p>
         </div>
         <button class="icon-button" aria-label="关闭" @click="open = false">
@@ -197,14 +213,14 @@ watch(
           </div>
           <div class="field">
             <label>协议用途</label
-            ><select v-model="form.protocol" class="select">
+            ><AppSelect v-model="form.protocol" class="select">
               <option value="http">HTTP/HTTPS</option>
               <option value="stream">TCP/UDP</option>
-            </select>
+            </AppSelect>
           </div>
           <div class="field">
             <label>负载均衡算法</label
-            ><select v-model="form.strategy" class="select">
+            ><AppSelect v-model="form.strategy" class="select">
               <option value="round_robin">轮询（Round Robin）</option>
               <option value="least_conn">最少连接（Least Connections）</option>
               <option value="ip_hash">IP 哈希（IP Hash）</option>
@@ -212,16 +228,16 @@ watch(
               <option value="random">
                 随机二选一最少连接（Random Two Least Conn）
               </option>
-            </select
+            </AppSelect
             ><span class="field-help">权重在下方每个服务器节点中单独设置。</span>
           </div>
           <div v-if="form.strategy === 'hash'" class="field">
             <label>Hash Key</label
-            ><select v-model="form.hash_key" class="select">
+            ><AppSelect v-model="form.hash_key" class="select">
               <option value="$request_uri">请求 URI</option>
               <option value="$remote_addr">客户端 IP</option>
               <option value="$host">Host</option>
-            </select>
+            </AppSelect>
           </div>
           <div class="form-section">服务器节点</div>
           <div class="full server-editor-head" aria-hidden="true">
@@ -339,7 +355,7 @@ watch(
             <button type="button" class="button ghost" @click="open = false">
               取消</button
             ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存后端服务池" }}
+              {{ busy ? "处理中…" : "保存后端服务组" }}
             </button>
           </footer>
         </form>
@@ -347,3 +363,17 @@ watch(
     </section>
   </div>
 </template>
+
+<style scoped>
+.pool-description { position: relative; }
+.pool-help { position: relative; display: inline-flex; vertical-align: middle; margin-left: 5px; }
+.pool-help::after { content: ""; position: absolute; left: 100%; top: 0; width: 10px; height: 100%; }
+.pool-help-button { width: 18px; height: 18px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); background: transparent; font-size: 12px; padding: 0; line-height: 16px; }
+.pool-help-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pool-help-panel { position: fixed; z-index: 50; padding: 9px; width: 500px; background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
+.pool-help-panel :deep(.example-path) { min-width: 0; }
+.pool-empty { padding: 36px 24px; }
+.pool-empty h3 { color: var(--text-muted); font-weight: 500; }
+.pool-empty-example { max-width: 640px; margin: 16px auto 20px; }
+.pool-help-panel { max-height: calc(100vh - 32px); overflow-y: auto; }
+</style>

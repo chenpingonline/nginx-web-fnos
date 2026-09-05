@@ -277,6 +277,7 @@ export interface StreamRule extends StreamRuleInput {
   updated_at: string;
 }
 export interface State {
+  draft_revision_id?: string;
   schema_version: number;
   settings: Settings;
   rules: ProxyRule[];
@@ -384,6 +385,9 @@ export interface LogResponse {
   lines: string[];
 }
 export interface CertificateInput {
+  method?: "file" | "path" | "pem";
+  certificate_path?: string;
+  private_key_path?: string;
   name: string;
   certificate: string;
   private_key: string;

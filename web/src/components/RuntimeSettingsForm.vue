@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref, toRaw, watch } from "vue";
+import AppSelect from "./AppSelect.vue";
+import { computed, reactive, ref, toRaw, watch } from "vue";
 import type { Settings } from "../types";
 const props = defineProps<{
   settings: Settings;
@@ -9,8 +10,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   save: [value: Settings];
   clearCache: [];
-  test: [];
-  apply: [];
+  test: [value: Settings];
+  apply: [value: Settings];
 }>();
 const form = reactive<Settings>(structuredClone(toRaw(props.settings)));
 const trusted = ref(""),
@@ -24,9 +25,9 @@ watch(
   },
   { immediate: true, deep: true },
 );
-function submit() {
-  emit("save", {
-    ...structuredClone(toRaw(form)),
+function formValue(): Settings {
+  return {
+    ...JSON.parse(JSON.stringify(form)),
     real_ip: {
       ...form.real_ip,
       trusted_proxies: trusted.value.split(/[\s,]+/).filter(Boolean),
@@ -35,7 +36,14 @@ function submit() {
       ...form.gzip,
       types: gzipTypes.value.split(/[\s,]+/).filter(Boolean),
     },
-  });
+  };
+}
+const hasChanges = computed(() => JSON.stringify(formValue()) !== JSON.stringify(props.settings));
+function submit(event: Event) {
+  const action = (event as SubmitEvent).submitter?.getAttribute("data-action");
+  if (action === "test") emit("test", formValue());
+  else if (action === "apply") emit("apply", formValue());
+  else emit("save", formValue());
 }
 function addMap() {
   form.routing.maps.push({ name: "Host 路由", source: "$host", variable: "$backend", hostnames: true, default: "default", entries: [] });
@@ -189,11 +197,11 @@ function addSplit() {
         </div>
         <div class="field">
           <label>来源 Header</label
-          ><select v-model="form.real_ip.header" class="select">
+          ><AppSelect v-model="form.real_ip.header" class="select">
             <option value="X-Forwarded-For">X-Forwarded-For</option>
             <option value="X-Real-IP">X-Real-IP</option>
             <option value="proxy_protocol">PROXY Protocol</option>
-          </select>
+          </AppSelect>
         </div>
         <div class="field full">
           <label>可信代理 IP / CIDR</label
@@ -297,7 +305,7 @@ function addSplit() {
           <label class="checkbox-row"><input v-model="form.tls.ocsp_stapling" type="checkbox" />启用 OCSP Stapling</label>
         </div>
         <div class="field">
-          <label>客户端证书校验</label><select v-model="form.tls.client_verify" class="select"><option value="off">关闭</option><option value="on">强制</option><option value="optional">可选并校验 CA</option><option value="optional_no_ca">可选且不校验 CA</option></select>
+          <label>客户端证书校验</label><AppSelect v-model="form.tls.client_verify" class="select"><option value="off">关闭</option><option value="on">强制</option><option value="optional">可选并校验 CA</option><option value="optional_no_ca">可选且不校验 CA</option></AppSelect>
           <template v-if="form.tls.client_verify !== 'off'"><label>客户端 CA 文件</label><input v-model.trim="form.tls.client_ca_file" class="input" placeholder="/vol1/.../client-ca.pem" required /><label>校验深度</label><input v-model.number="form.tls.client_verify_depth" class="input" type="number" min="1" max="10" /></template>
         </div>
         <div class="field">
@@ -325,7 +333,7 @@ function addSplit() {
         </div>
         <div class="field">
           <label>错误日志级别</label
-          ><select v-model="form.logging.error_level" class="select">
+          ><AppSelect v-model="form.logging.error_level" class="select">
             <option
               v-for="level in [
                 'debug',
@@ -341,29 +349,30 @@ function addSplit() {
             >
               {{ level }}
             </option>
-          </select>
+          </AppSelect>
         </div>
         <div class="field full"><label>自定义访问日志格式（可选）</label><input v-model="form.logging.custom_format" class="input" placeholder='$remote_addr [$time_local] "$request" $status' /><span class="field-help">留空使用内置 fnproxy 格式。</span></div>
         <div class="field"><label>日志轮转大小（MB）</label><input v-model.number="form.logging.rotate_size_mb" class="input" type="number" min="1" max="10240" /></div>
         <div class="field"><label>轮转文件保留数</label><input v-model.number="form.logging.rotate_keep" class="input" type="number" min="1" max="100" /></div>
       </div>
     </article>
-    <div class="sticky-actions">
+    <div class="settings-actions-shell"><div class="sticky-actions">
       <button class="button danger-ghost" type="button" :disabled="busy" @click="emit('clearCache')">清理代理缓存</button>
       <span class="spacer"></span>
-      <button class="button secondary" type="button" :disabled="busy" @click="emit('test')">校验配置</button>
-      <button class="button secondary" type="submit" :disabled="busy">
+      <button class="button secondary" type="submit" data-action="test" :disabled="busy" title="校验当前填写的设置，不保存、不应用">校验配置</button>
+      <button class="button secondary" type="submit" :disabled="busy || !hasChanges">
         {{ busy ? "处理中…" : "保存为草稿" }}
       </button>
       <button
         class="button"
-        :class="dirty ? 'primary' : 'secondary'"
-        type="button"
+        :class="hasChanges || dirty ? 'primary' : 'secondary'"
+        type="submit"
+        data-action="apply"
         :disabled="busy"
-        @click="emit('apply')"
+        :title="hasChanges || dirty ? '保存当前设置并应用全部草稿配置' : '重新应用已保存的配置'"
       >
-        {{ dirty ? "保存并应用" : "重新应用" }}
+        {{ hasChanges || dirty ? "保存并应用" : "重新应用" }}
       </button>
-    </div>
+    </div></div>
   </form>
 </template>

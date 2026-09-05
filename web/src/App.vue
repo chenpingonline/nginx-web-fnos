@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppSelect from "./components/AppSelect.vue";
+import RevisionPreview from "./components/RevisionPreview.vue";
 import {
   computed,
   nextTick,
@@ -20,6 +22,9 @@ import {
   PhXCircle,
 } from "@phosphor-icons/vue";
 import { errorMessage, jsonBody, request } from "./api";
+import { followSystemTheme } from "./theme";
+import { followScrollActivity } from "./scrollbars";
+import { highlightLog, searchLogLines } from "./logHighlight";
 const appVersion = __APP_VERSION__;
 import RuleForm from "./components/RuleForm.vue";
 import DashboardPage from "./components/DashboardPage.vue";
@@ -87,7 +92,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "upstreams",
     icon: "upstreams",
-    label: "目标服务池",
+    label: "后端服务组",
     subtitle: "管理负载均衡、节点健康参数与连接复用",
   },
   {
@@ -99,7 +104,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "certificates",
     icon: "certificate",
-    label: "HTTPS 证书",
+    label: "SSL/TLS 证书",
     subtitle: "导入并管理手动 TLS 证书",
   },
   {
@@ -132,6 +137,17 @@ const page = ref<Page>("dashboard"),
   state = ref<State | null>(null),
   revisions = ref<Revision[]>([]),
   config = ref<GeneratedConfig | null>(null);
+const restoredRevision = computed(() => state.value?.dirty && state.value.draft_revision_id
+  ? revisions.value.find(item => item.id === state.value!.draft_revision_id) : undefined);
+const showDraftPreview = ref(false);
+const draftPreview = computed<Revision | null>(() => state.value ? {
+  id: "当前草稿",
+  summary: state.value.dirty ? "待应用，以当前编辑内容为准" : "已同步",
+  created_at: state.value.updated_at,
+  rule_count: (state.value.rules?.length ?? 0) + (state.value.stream_rules?.length ?? 0),
+  enabled_count: 0,
+  state: state.value,
+} : null);
 const errorScope = ref({ minutes: 60, rule: "" });
 const ruleProtocol = ref<"all" | "http" | "https">("all");
 const ruleEnabled = ref<"all" | "enabled" | "disabled">("all");
@@ -140,12 +156,43 @@ const loading = ref(true),
   connectionError = ref(""),
   menuOpen = ref(false),
   ruleSearch = ref(""),
-  logType = ref<LogType>("error"),
+  logType = ref<LogType>("access"),
   logLines = ref<string[]>([]),
   logsLoading = ref(false),
   configTab = ref("master");
-document.documentElement.dataset.theme = "light";
-document.documentElement.style.colorScheme = "light";
+const previewRevisionID = ref<string | null>(null);
+const activePreview = computed(() => showDraftPreview.value ? draftPreview.value : revisions.value.find(item => item.id === previewRevisionID.value) ?? null);
+function closePreview() {
+  showDraftPreview.value = false;
+  previewRevisionID.value = null;
+}
+const logLineLimit = ref(500);
+const logSearch = ref("");
+const activeLogMatch = ref(0);
+const highlightedLogLines = computed(() => logLines.value.map(highlightLog));
+const searchedLogs = computed(() => searchLogLines(highlightedLogLines.value, logSearch.value));
+async function revealLogMatch() {
+  await nextTick();
+  const view = logView.value;
+  const target = view?.querySelector<HTMLElement>(`[data-log-match="${activeLogMatch.value}"]`);
+  if (view && target) {
+    view.scrollTop += target.getBoundingClientRect().top - view.getBoundingClientRect().top - view.clientHeight / 2;
+  }
+}
+function jumpLogMatch(direction: number) {
+  if (!searchedLogs.value.count) return;
+  activeLogMatch.value = (activeLogMatch.value + direction + searchedLogs.value.count) % searchedLogs.value.count;
+  void revealLogMatch();
+}
+watch(logSearch, (query) => {
+  activeLogMatch.value = 0;
+  if (query) {
+    stopLogs();
+    void revealLogMatch();
+  } else if (page.value === "logs") void loadLogs();
+});
+const stopTheme = followSystemTheme();
+const stopScrollActivity = followScrollActivity();
 const modal = ref<"rule" | "certificate" | null>(null),
   editingRule = ref<ProxyRule | null>(null),
   toasts = ref<Toast[]>([]),
@@ -187,8 +234,7 @@ function resetRuleFilters() {
   ruleProtocol.value = "all";
   ruleEnabled.value = "all";
 }
-function formatRuleEntry(rule: ProxyRule): string {
-  const domain = rule.domains[0];
+function formatRuleEntry(rule: ProxyRule, domain = rule.domains[0]): string {
   if (!domain) return `未配置域名:${rule.listen_port}`;
   if (domain === "*") return `所有域名:${rule.listen_port}`;
   return `${formatHost(domain)}:${rule.listen_port}`;
@@ -219,7 +265,7 @@ function setPage(value: Page) {
 function openErrorDetails(scope: { minutes: number; rule: string }) {
   errorScope.value = scope;
   setPage("errors");
-  window.scrollTo({ top: 0 });
+  document.querySelector(".workspace")?.scrollTo({ top: 0 });
 }
 async function loadCore(quiet = false) {
   if (!quiet) {
@@ -244,20 +290,47 @@ async function loadCore(quiet = false) {
     busy.value = false;
   }
 }
+let logTimer: ReturnType<typeof setTimeout> | undefined;
+let logController: AbortController | undefined;
+let logGeneration = 0;
+function stopLogs() {
+  clearTimeout(logTimer);
+  logController?.abort();
+  logGeneration++;
+  logsLoading.value = false;
+}
 async function loadLogs() {
+  clearTimeout(logTimer);
+  logController?.abort();
+  const generation = ++logGeneration;
+  logController = new AbortController();
   logsLoading.value = true;
   try {
     const result = await request<LogResponse>(
-      `/logs?type=${encodeURIComponent(logType.value)}&lines=500`,
+      `/logs?type=${encodeURIComponent(logType.value)}&lines=${logLineLimit.value}`,
+      { signal: logController.signal },
     );
+    if (generation !== logGeneration) return;
     logLines.value = result.lines ?? [];
-    await nextTick();
-    if (logView.value) logView.value.scrollTop = logView.value.scrollHeight;
   } catch (error) {
+    if (generation !== logGeneration) return;
     logLines.value = [`读取失败：${errorMessage(error)}`];
   } finally {
-    logsLoading.value = false;
+    if (generation === logGeneration) {
+      logsLoading.value = false;
+      await nextTick();
+      if (logSearch.value) {
+        activeLogMatch.value = Math.min(activeLogMatch.value, Math.max(0, searchedLogs.value.count - 1));
+        void revealLogMatch();
+      } else if (logView.value) logView.value.scrollTop = logView.value.scrollHeight;
+      if (page.value === "logs" && !logSearch.value) logTimer = setTimeout(() => void loadLogs(), 3000);
+    }
   }
+}
+function changeLogScope() {
+  activeLogMatch.value = 0;
+  logLines.value = [];
+  void loadLogs();
 }
 async function openDashboardRule(id: string) {
   await loadCore(true);
@@ -390,7 +463,7 @@ async function toggleRule(rule: ProxyRule, enabled: boolean) {
 async function deleteCertificate(id: string, name: string) {
   if (
     !(await ask(
-      "删除 HTTPS 证书",
+      "删除 SSL/TLS 证书",
       `确定删除“${name}”吗？该操作会同时删除本机保存的私钥，且无法恢复。`,
     ))
   )
@@ -419,7 +492,7 @@ async function revisionAction(
     !(await ask(
       restoring ? "恢复配置历史" : "删除配置历史",
       restoring
-        ? "历史版本会恢复为草稿，不会立刻影响当前代理。"
+        ? "历史版本的规则和设置将覆盖当前草稿（包括尚未应用的修改），不会立刻影响当前代理。"
         : "删除后不能再恢复该版本。",
     ))
   )
@@ -435,7 +508,14 @@ async function revisionAction(
       ),
     restoring ? "历史版本已恢复为草稿" : "配置历史已删除",
   );
-  if (ok !== undefined) await loadCore(true);
+  if (ok !== undefined) {
+    await loadCore(true);
+    if (restoring) {
+      closePreview();
+      await nextTick();
+      document.querySelector(".workspace")?.scrollTo({ top: 0 });
+    }
+  }
 }
 async function saveSettings(value: Settings) {
   const ok = await mutate(
@@ -444,13 +524,33 @@ async function saveSettings(value: Settings) {
   );
   if (ok !== undefined) await loadCore(true);
 }
+async function testSettings(value: Settings) {
+  const result = await mutate(() => request<ApplyResult>("/settings/test", {
+    method: "POST", body: jsonBody(value),
+  }));
+  if (result) toast(result.message, "success");
+}
+async function applySettings(value: Settings) {
+  if (busy.value) return;
+  busy.value = true;
+  let saved = false;
+  try {
+    await request("/settings", { method: "PUT", body: jsonBody(value) });
+    saved = true;
+    const result = await request<ApplyResult>("/apply", {
+      method: "POST", body: jsonBody({ summary: "保存并应用全局设置" }),
+    });
+    toast(result.message || "设置已保存并应用", "success");
+  } catch (error) {
+    toast((saved ? "设置已保存为草稿，但应用失败：" : "") + errorMessage(error), "error");
+  } finally {
+    if (saved) await loadCore(true);
+    busy.value = false;
+  }
+}
 async function clearCache() {
   if (!(await ask("清理代理缓存", "将删除 nginx-web 生成的全部 HTTP 缓存文件，正在处理的请求可能重新回源。"))) return;
   await mutate(() => request("/cache", { method: "DELETE" }), "代理缓存已清理");
-}
-async function rotateLogs() {
-  const ok = await mutate(() => request("/logs/rotate", { method: "POST", body: "{}" }), "日志已轮转");
-  if (ok !== undefined) await loadLogs();
 }
 async function saveUpstreamPool(value: UpstreamPoolInput, id: string) {
   const ok = await mutate(
@@ -459,21 +559,21 @@ async function saveUpstreamPool(value: UpstreamPoolInput, id: string) {
         method: id ? "PUT" : "POST",
         body: jsonBody(value),
       }),
-    id ? "后端服务池已更新" : "后端服务池已创建",
+    id ? "后端服务组已更新" : "后端服务组已创建",
   );
   if (ok !== undefined) await loadCore(true);
 }
 async function removeUpstreamPool(pool: UpstreamPool) {
   if (
     !(await ask(
-      "删除后端服务池",
-      `确定删除“${pool.name}”吗？正在使用的后端服务池不能删除。`,
+      "删除后端服务组",
+      `确定删除“${pool.name}”吗？正在使用的后端服务组不能删除。`,
     ))
   )
     return;
   const ok = await mutate(
     () => request(`/upstreams/${pool.id}`, { method: "DELETE" }),
-    "后端服务池已删除",
+    "后端服务组已删除",
   );
   if (ok !== undefined) await loadCore(true);
 }
@@ -503,15 +603,26 @@ async function removeRateLimitPolicy(policy: RateLimitPolicy) {
   if (ok !== undefined) await loadCore(true);
 }
 async function saveStreamRule(value: StreamRuleInput, id: string) {
-  const ok = await mutate(
-    () =>
-      request(id ? `/streams/${id}` : "/streams", {
+  let saved = false;
+  await mutate(
+    async () => {
+      await request(id ? `/streams/${id}` : "/streams", {
         method: id ? "PUT" : "POST",
         body: jsonBody(value),
-      }),
-    id ? "Stream 规则已更新" : "Stream 规则已创建",
+      });
+      saved = true;
+      try {
+        return await request<ApplyResult>("/apply", {
+          method: "POST",
+          body: jsonBody({ summary: "保存并应用 TCP/UDP 规则" }),
+        });
+      } catch (error) {
+        throw new Error(`规则已保存，但应用失败：${errorMessage(error)}。请修正后重新保存，或在列表中重新应用。`);
+      }
+    },
+    "TCP/UDP 规则已保存并应用",
   );
-  if (ok !== undefined) await loadCore(true);
+  if (saved) await loadCore(true);
 }
 async function removeStreamRule(rule: StreamRule) {
   if (!(await ask("删除 TCP/UDP 规则", `确定删除“${rule.name}”吗？`))) return;
@@ -554,12 +665,15 @@ function certificateState(notAfter: string) {
   };
 }
 watch(page, (value) => {
+  document.querySelector(".workspace")?.scrollTo({ top: 0 });
   if (value === "logs") void loadLogs();
+  else stopLogs();
   if (value === "config") void loadConfig();
 });
 watch(menuOpen, (value) => document.body.classList.toggle("menu-open", value));
 function keydown(event: KeyboardEvent) {
   if (event.key === "Escape") {
+    if (activePreview.value) return;
     if (confirmBox.open) answerConfirm(false);
     else closeModal();
   }
@@ -569,6 +683,9 @@ onMounted(() => {
   void loadCore();
 });
 onBeforeUnmount(() => {
+  stopTheme();
+  stopScrollActivity();
+  stopLogs();
   document.removeEventListener("keydown", keydown);
   document.body.classList.remove("menu-open");
 });
@@ -708,12 +825,12 @@ onBeforeUnmount(() => {
                 aria-label="搜索 HTTP/HTTPS 规则"
                 placeholder="搜索名称、域名、端口或目标"
               />
-              <select v-model="ruleProtocol" class="select" aria-label="HTTP/HTTPS 协议筛选">
+              <AppSelect v-model="ruleProtocol" class="select" aria-label="HTTP/HTTPS 协议筛选">
                 <option value="all">全部协议</option><option value="http">HTTP</option><option value="https">HTTPS</option>
-              </select>
-              <select v-model="ruleEnabled" class="select" aria-label="HTTP/HTTPS 启用状态筛选">
+              </AppSelect>
+              <AppSelect v-model="ruleEnabled" class="select" aria-label="HTTP/HTTPS 启用状态筛选">
                 <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
-              </select>
+              </AppSelect>
               <button class="button ghost" :disabled="!hasRuleFilters" @click="resetRuleFilters">重置筛选</button>
               <span class="filter-count">{{ filteredRules.length }} / {{ state.rules.length }} 条</span>
             </div>
@@ -745,7 +862,7 @@ onBeforeUnmount(() => {
                   <thead>
                     <tr>
                       <th>状态</th>
-                      <th>名称与域名</th>
+                      <th>名称</th>
                       <th>入口</th>
                       <th>后端服务</th>
                       <th class="hide-mobile">能力</th>
@@ -769,26 +886,20 @@ onBeforeUnmount(() => {
                       </td>
                       <td>
                         <div class="rule-name">{{ rule.name }}</div>
-                        <div class="domain-list rule-sub">
-                          <span
-                            v-for="domain in rule.domains"
-                            :key="domain"
-                            class="domain-chip"
-                            >{{ domain }}</span
-                          >
-                        </div>
                       </td>
                       <td>
-                        <span
-                          class="badge"
-                          :class="rule.tls ? 'success' : 'info'"
-                        >{{ rule.tls ? "HTTPS" : "HTTP" }}</span
-                        >
-                        <div class="rule-sub">
+                        <div v-for="domain in rule.domains" :key="domain">
+                          {{ formatRuleEntry(rule, domain) }}
+                        </div>
+                        <div v-if="!rule.domains.length">
                           {{ formatRuleEntry(rule) }}
-                          <template v-if="rule.domains.length > 1">
-                            · 另 {{ rule.domains.length - 1 }} 个域名
-                          </template>
+                        </div>
+                        <div class="rule-sub">
+                          <span
+                            class="badge"
+                            :class="rule.tls ? 'success' : 'info'"
+                          >{{ rule.tls ? "HTTPS" : "HTTP" }}</span
+                          >
                         </div>
                       </td>
                       <td>
@@ -846,17 +957,10 @@ onBeforeUnmount(() => {
                       : "添加第一条规则，将域名或端口转发到 NAS、Docker 或局域网服务。"
                   }}
                 </p>
-                <button
-                  v-if="!state.rules.length"
-                  class="button primary"
-                  @click="openRule()"
-                >
-                  <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
-                </button>
               </div>
             </article>
             <div class="notice section-gap">
-              第一版只允许监听 1024–65535 的非特权端口，默认 HTTP 端口为
+              只允许监听 1024–65535 的非特权端口，默认 HTTP 端口为
               {{ state.settings.default_http_port }}。这可以避免使用 root
               权限，也不会抢占飞牛系统的 80/443。
             </div></template
@@ -940,14 +1044,10 @@ onBeforeUnmount(() => {
               </div>
               <div v-else class="empty-state">
                 <div class="empty-icon">◇</div>
-                <h3>尚未导入 HTTPS 证书</h3>
+                <h3>尚未导入 SSL/TLS 证书</h3>
                 <p>
-                  第一版支持手动导入完整证书链和对应私钥。自动 ACME
-                  申请将在后续版本增加。
+                  支持上传证书文件、从服务器路径导入，或粘贴完整证书链和对应私钥。
                 </p>
-                <button class="button primary" @click="openCertificate">
-                  导入证书
-                </button>
               </div>
             </article></template
           >
@@ -956,37 +1056,66 @@ onBeforeUnmount(() => {
               <header class="card-header log-card-header">
                 <div>
                   <h2>实时日志</h2>
-                  <p>最多读取最近 2000 行，不会把整个大日志载入浏览器</p>
+                  <p>显示最近 {{ logLineLimit }} 行 · {{ logSearch ? "搜索中，自动刷新已暂停" : "每 3 秒刷新 · 自动滚动至最新日志" }}</p>
                 </div>
                 <span class="spacer"></span>
                 <div class="log-toolbar">
-                  <select v-model="logType" class="select" @change="loadLogs">
-                    <option value="error">Nginx 错误日志</option>
-                    <option value="access">Nginx 访问日志</option>
+                  <AppSelect v-model="logType" hide-check class="select" aria-label="日志类型" @change="changeLogScope">
+                    <option value="access">HTTP/HTTPS 访问日志</option>
                     <option value="stream">TCP/UDP Stream 日志</option>
-                    <option value="backend">nginx-web 管理日志</option></select
-                  ><button class="button ghost small" @click="rotateLogs">立即轮转</button
+                    <option value="backend">nginx-web 管理日志</option>
+                    <option value="error">Nginx 错误日志</option></AppSelect
                   ><button class="button ghost small" @click="loadLogs">
                     刷新
                   </button>
                 </div>
               </header>
-              <pre ref="logView" class="log-view">{{
-                logsLoading
-                  ? "正在读取…"
-                  : logLines.length
-                    ? logLines.join("\n")
-                    : "暂无日志。"
-              }}</pre>
+              <div class="log-search-toolbar" role="search" aria-label="搜索日志">
+                <AppSelect v-model="logLineLimit" hide-check class="select log-line-limit" aria-label="显示日志行数" @change="changeLogScope">
+                  <option v-for="limit in [100, 200, 500, 1000, 2000]" :key="limit" :value="limit">最近 {{ limit }} 行</option>
+                </AppSelect>
+                <input v-model="logSearch" class="input" type="search" :placeholder="`搜索最近 ${logLineLimit} 行日志…`" aria-label="搜索日志内容" @keydown.enter.prevent="jumpLogMatch($event.shiftKey ? -1 : 1)" @keydown.esc.prevent="logSearch = ''" />
+                <span class="log-search-count" aria-live="polite">{{ logSearch ? searchedLogs.count ? `${activeLogMatch + 1} / ${searchedLogs.count}` : '无匹配' : '' }}</span>
+                <button class="button ghost small" :disabled="!searchedLogs.count" aria-label="上一个匹配" title="上一个匹配（Shift+Enter）" @click="jumpLogMatch(-1)">↑</button>
+                <button class="button ghost small" :disabled="!searchedLogs.count" aria-label="下一个匹配" title="下一个匹配（Enter）" @click="jumpLogMatch(1)">↓</button>
+                <button v-if="logSearch" class="button ghost small" @click="logSearch = ''">清除</button>
+              </div>
+              <pre ref="logView" class="log-view"><template v-if="logLines.length"><template v-for="(line, lineIndex) in searchedLogs.lines" :key="lineIndex"><span v-for="(token, tokenIndex) in line" :key="tokenIndex" :data-log-match="token.matchIndex" :class="[token.tone ? `log-token-${token.tone}` : undefined, { 'log-search-hit': token.matchIndex !== undefined, 'log-search-current': token.matchIndex !== undefined && token.matchIndex === activeLogMatch }]">{{ token.text }}</span>{{ lineIndex < highlightedLogLines.length - 1 ? '\n' : '' }}</template></template><template v-else>{{ logsLoading ? "正在读取…" : "暂无日志。" }}</template></pre>
             </article></template
           >
           <template v-else-if="page === 'revisions'"
-            ><article class="card">
+            >
+            <article class="card" aria-label="当前草稿状态">
+              <header class="card-header">
+                <div aria-live="polite">
+                  <h2>当前草稿 <span class="badge" :class="state.dirty ? 'warning' : 'success'">{{ state.dirty ? '待应用' : '已同步' }}</span></h2>
+                  <template v-if="state.dirty && state.draft_revision_id">
+                    <p class="draft-restored-title">已恢复：{{ restoredRevision ? `${formatDate(restoredRevision.created_at)} · ${restoredRevision.summary || '配置快照'}` : state.draft_revision_id }}</p>
+                    <p>此版本已写入当前草稿，尚未应用到 Nginx。后续编辑会保留在草稿中。</p>
+                  </template>
+                  <p v-else>{{ state.dirty ? '当前有尚未应用的修改，运行配置尚未切换。' : '当前配置已同步，没有待应用的修改。' }}</p>
+                </div>
+                <span class="spacer"></span>
+                <button class="button ghost small" aria-haspopup="dialog" @click="showDraftPreview = true">查看当前草稿</button>
+                <button class="button ghost small" @click="page = 'rules'">编辑代理规则</button>
+                <button
+                  v-if="state.dirty"
+                  class="button primary small"
+                  :disabled="busy"
+                  title="将当前草稿应用到 Nginx，并生成新的历史版本"
+                  @click="applyConfiguration"
+                >
+                  <PhCheckCircle :size="14" aria-hidden="true" />应用当前草稿
+                </button>
+              </header>
+              <div v-if="state.last_apply_error" class="notice warning" role="alert">上次应用失败：{{ state.last_apply_error }}</div>
+            </article>
+            <article class="card section-gap">
               <header class="card-header">
                 <div>
                   <h2>已应用版本</h2>
                   <p>
-                    每次“保存并应用”后自动保留，当前上限
+                    每次应用成功后自动保留，可预览完整历史配置，当前上限
                     {{ state.settings.revision_limit }} 个
                   </p>
                 </div>
@@ -994,14 +1123,7 @@ onBeforeUnmount(() => {
                 <button class="button ghost small" :disabled="busy" @click="loadCore()">
                   <PhArrowClockwise :size="14" aria-hidden="true" />刷新
                 </button>
-                <button
-                  v-if="state.dirty"
-                  class="button primary small"
-                  :disabled="busy"
-                  @click="applyConfiguration"
-                >
-                  <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
-                </button>
+
               </header>
               <div v-if="revisions.length" class="table-wrap">
                 <table class="table">
@@ -1010,11 +1132,13 @@ onBeforeUnmount(() => {
                       <th>时间</th>
                       <th>说明</th>
                       <th>规则</th>
-                      <th></th>
+                      <th>草稿状态</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="revision in revisions" :key="revision.id">
+                    <template v-for="revision in revisions" :key="revision.id">
+                    <tr :class="{ 'revision-source-row': state.dirty && state.draft_revision_id === revision.id }">
                       <td>{{ formatDate(revision.created_at) }}</td>
                       <td>
                         <div class="rule-name">
@@ -1027,14 +1151,25 @@ onBeforeUnmount(() => {
                         {{ revision.rule_count }} 条启用
                       </td>
                       <td>
+                        <span v-if="state.dirty && state.draft_revision_id === revision.id" class="badge warning">当前草稿来源 · 待应用</span>
+                        <span v-else class="rule-sub">—</span>
+                      </td>
+                      <td>
                         <div class="table-actions">
+                          <button class="button ghost small"
+                            aria-haspopup="dialog"
+                            @click="showDraftPreview = false; previewRevisionID = revision.id">
+                            预览配置
+                          </button>
                           <button
                             class="button ghost small"
+                            :disabled="busy"
                             @click="revisionAction(revision, 'restore')"
                           >
                             恢复为草稿</button
                           ><button
                             class="button danger-ghost small"
+                            :disabled="busy"
                             @click="revisionAction(revision, 'delete')"
                           >
                             删除
@@ -1042,6 +1177,7 @@ onBeforeUnmount(() => {
                         </div>
                       </td>
                     </tr>
+                    </template>
                   </tbody>
                 </table>
               </div>
@@ -1052,8 +1188,7 @@ onBeforeUnmount(() => {
               </div>
             </article>
             <div class="notice warning section-gap">
-              恢复历史只会恢复规则和设置，不会立刻重载
-              Nginx。检查草稿后，再在本页点击“保存并应用”。
+              预览不会修改配置。恢复为草稿会覆盖当前草稿中的规则和设置，但不会立即影响运行中的 Nginx；检查草稿后，点击“应用当前草稿”才会生效。顶部按钮应用的是当前全部草稿，并非正在预览的历史版本。
             </div></template
           >
           <template v-else-if="page === 'config'"
@@ -1107,14 +1242,15 @@ onBeforeUnmount(() => {
               :dirty="state.dirty"
               @save="saveSettings"
               @clear-cache="clearCache"
-              @test="runNginxAction('test')"
-              @apply="applyConfiguration"
+              @test="testSettings"
+              @apply="applySettings"
             />
           </template>
         </template>
       </main>
     </div>
   </div>
+  <RevisionPreview v-if="activePreview" :revision="activePreview" :title="showDraftPreview ? '当前草稿预览' : '历史配置预览'" @close="closePreview" />
   <div
     v-if="modal"
     class="modal-backdrop"
@@ -1143,7 +1279,7 @@ onBeforeUnmount(() => {
                 ? editingRule
                   ? "编辑代理规则"
                   : "添加代理规则"
-                : "导入 HTTPS 证书"
+                : "导入 SSL/TLS 证书"
             }}
           </h2>
           <p>
@@ -1213,3 +1349,9 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.draft-restored-title { color: var(--text); font-weight: 600; }
+.table tr.revision-source-row > td { background: var(--warning-soft); }
+.table tr.revision-source-row > td:first-child { box-shadow: inset 3px 0 var(--warning); }
+</style>

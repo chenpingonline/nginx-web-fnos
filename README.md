@@ -38,7 +38,7 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 按 HTTP/HTTPS 协议、启用状态与名称/域名/端口/目标组合筛选，显示匹配数量并支持一键重置。
 - 配置规则名称、一个或多个域名/IP、监听端口及 `*` 默认站点。
 - 配置 HTTP 或 HTTPS 入口、手动选择证书及 HTTP/2。
-- 使用单个 HTTP/HTTPS 后端服务，或选择可复用的 HTTP 后端服务池。
+- 使用单个 HTTP/HTTPS 后端服务，或选择可复用的 HTTP 后端服务组。
 - 配置后端服务 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
 - 按客户端 IP 限制每秒请求数、突发请求、并发连接数和下载速度。
 - 为根路径和额外 Location 分别选择前缀、精确或正则匹配，并为每个路径配置不同处理方式。
@@ -54,26 +54,27 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 
 - 创建、编辑、启用、停用和删除 TCP/UDP 四层代理规则。
 - 支持 TCP/UDP 协议与启用状态组合筛选，按名称、监听地址、端口、目标服务或 SNI 域名搜索，显示匹配数量并支持一键重置。
-- 配置监听地址、监听端口、单个后端服务或 Stream 后端服务池。
+- 配置监听地址、监听端口、单个后端服务或 Stream 后端服务组。
 - 配置连接超时、会话超时和 UDP 响应次数。
 - 支持入口接收和向后端服务发送 PROXY Protocol，并配置可信代理地址。
 - TCP 支持关闭 TLS、TLS 终止和 TLS SNI 透传；TLS 终止可选择已导入证书。
-- SNI 透传可按多个域名分流到不同单节点后端服务或 Stream 后端服务池。
+- SNI 透传可按多个域名分流到不同单节点后端服务或 Stream 后端服务组。
 - 支持 Stream 访问日志、单 IP 最大连接数及 IP/CIDR 允许与拒绝。
 - 适用于 SSH、数据库、MQTT、游戏服务和 HTTPS 四层透传等场景。
 
-### 后端服务池
+### 后端服务组
 
-- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的服务器池，并在多个规则间复用。
+- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的后端服务组，并在多个规则间复用。
 - 管理多个服务器节点的主机、端口、权重、最大失败次数、故障恢复时间、备份和停用状态。
 - HTTP 池支持 Round Robin、Least Connections、IP Hash、Hash 和 Random Two Least Connections。
 - Stream 池支持 Round Robin、Least Connections、Hash 和 Random Two Least Connections。
 - 配置 Keepalive 数量、单连接最大请求数、单连接最长时间和空闲超时。
 - 删除前检查规则引用，避免留下无效配置。
 
-### HTTPS 证书
+### SSL/TLS 证书
 
-- 手动导入 PEM 证书链与私钥，并校验证书、私钥是否匹配。
+- 支持上传 PEM 证书链与私钥文件、从服务器绝对路径导入或粘贴 PEM，并校验证书与私钥是否匹配。
+- 路径导入会将证书复制到应用目录，源文件更新后需要重新导入。
 - 查看证书主体、SAN 域名/IP、序列号、有效期、状态和 SHA-256 指纹。
 - 私钥不会通过 API 返回浏览器；证书目录为 `0700`，私钥文件为 `0600`。
 - 删除前检查 HTTP 和 Stream 规则引用。
@@ -114,7 +115,7 @@ nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理
 - 页面顶部可随时刷新状态、运行 `nginx -t`，或保存并应用全部草稿。
 - 应用配置时先在隔离候选目录运行 `nginx -t`，通过后再原子替换正式配置。
 - 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
-- 校验重复域名、端口冲突、证书/后端服务池引用、IP/CIDR、路径和指令参数范围。
+- 校验重复域名、端口冲突、证书/后端服务组引用、IP/CIDR、路径和指令参数范围。
 - 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
 - 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
 - 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。
@@ -269,7 +270,7 @@ make release
 
 - 不支持 32 位 ARMv7。
 - 不直接监听 80/443，不申请 root 或 `CAP_NET_BIND_SERVICE`。
-- HTTPS 证书目前需要手动导入 PEM，尚未内置 ACME 自动申请和续签。
+- SSL/TLS 证书目前需要手动导入 PEM，尚未内置 ACME 自动申请和续签。
 - 不提供任意原始 Nginx 指令编辑，以避免配置注入和应用无法启动。
 - 当前二进制未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查及 Prometheus 模块；页面不会伪装提供这些功能。
 - 客户端 CA 与 Basic Auth 密码文件由用户维护并确保应用运行用户可读。
@@ -278,3 +279,7 @@ make release
 ## 许可证
 
 nginx-web 源码使用 MIT License。Nginx Open Source 和 ARM64/AMD64 静态构建所含组件的许可证见 `NGINX_LICENSE`、`NOTICE` 与 `THIRD_PARTY_LICENSES.md`。
+
+### 自动主题
+
+应用通过飞牛官方 `@trimjs/web-app` SDK 读取平台主题并监听 `os/theme`，无需手动设置。暗色侧栏与外框为 `#0C0C0D`，主内容区独立滚动，四周留边。平台主题 API 要求 fnOS 1.2.0401 / App 1.34.0 及以上；旧系统、独立浏览器或 SDK 不可用时跟随浏览器 `prefers-color-scheme`。移动 App 的 SDK 不支持主题变更事件，重新打开页面时读取当前主题。

@@ -84,3 +84,91 @@ func TestCreateRuleNormalizesInput(t *testing.T) {
 		t.Fatalf("rule was not normalized: %+v", rule)
 	}
 }
+
+func TestRestoredDraftSourcePersistsAcrossEditsAndReopen(t *testing.T) {
+	service := testService(t)
+	original := service.State()
+	if err := service.saveRevision(original, "first"); err != nil {
+		t.Fatal(err)
+	}
+	revisions, err := service.ListRevisions()
+	if err != nil || len(revisions) != 1 {
+		t.Fatalf("list revisions: %v, count %d", err, len(revisions))
+	}
+	id := revisions[0].ID
+	restored, err := service.RestoreRevision(id)
+	if err != nil || !restored.Dirty || restored.DraftRevisionID != id {
+		t.Fatalf("restore state: %+v, %v", restored, err)
+	}
+	settings := restored.Settings
+	settings.RevisionLimit = 30
+	if err := service.UpdateSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := New(service.paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reopened.State(); !got.Dirty || got.DraftRevisionID != id || got.Settings.RevisionLimit != 30 {
+		t.Fatalf("draft/source not retained after edit and reopen: %+v", got)
+	}
+	if _, err := reopened.RestoreRevision("missing"); err == nil {
+		t.Fatal("expected missing revision error")
+	}
+	if got := reopened.State(); got.DraftRevisionID != id || got.Settings.RevisionLimit != 30 {
+		t.Fatal("failed restore changed current draft")
+	}
+}
+
+func TestSettingsCandidateWithRealNginxDoesNotPersist(t *testing.T) {
+	binary := os.Getenv("NGINX_TEST_BIN")
+	if binary == "" {
+		t.Skip("set NGINX_TEST_BIN for real candidate validation")
+	}
+	service := testService(t)
+	if err := os.MkdirAll(filepath.Dir(service.paths.NginxBin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(binary, service.paths.NginxBin); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(service.paths.MimeTypes), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(service.paths.MimeTypes, []byte("types { text/html html; }"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(service.paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := []byte("# active config must remain untouched")
+	if err := os.WriteFile(service.paths.NginxMaster, marker, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	settings := service.State().Settings
+	settings.WorkerConnections = 2048
+	if _, err := service.TestSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	// A variable accepted by domain validation but rejected by nginx proves the submitted form is tested.
+	settings.Logging.CustomFormat = "$nonexistent_settings_test_variable"
+	if _, err := service.TestSettings(settings); err == nil {
+		t.Fatal("expected nginx to reject unknown variable")
+	}
+	after, err := os.ReadFile(service.paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("validation changed saved state")
+	}
+	active, err := os.ReadFile(service.paths.NginxMaster)
+	if err != nil || string(active) != string(marker) {
+		t.Fatal("validation changed active config", err)
+	}
+	candidates, err := filepath.Glob(filepath.Join(service.paths.TmpDir, "fnproxy-candidate-*"))
+	if err != nil || len(candidates) != 0 {
+		t.Fatal("candidate tree was not cleaned up", candidates, err)
+	}
+}

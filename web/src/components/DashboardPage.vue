@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from "./AppSelect.vue";
 import { computed, ref, watch } from "vue";
 import {
   PhArrowRight,
@@ -184,8 +185,8 @@ const issue = computed(() => {
         <h2>代理规则</h2>
         <div class="rules-filters">
           <label class="dashboard-search"><PhMagnifyingGlass :size="17" /><input v-model="search" type="search" aria-label="搜索规则名称、入口或目标" placeholder="搜索域名、路径或目标" /></label>
-          <select v-model="configFilter" class="select" aria-label="配置状态"><option value="all">全部状态</option><option v-for="(name, key) in configNames" :key="key" :value="key">{{ name }}</option></select>
-          <select v-model="sort" class="select" aria-label="规则排序"><option value="errors">按错误数</option><option value="requests">按请求数</option><option value="name">按名称</option></select>
+          <AppSelect v-model="configFilter" class="select" aria-label="配置状态"><option value="all">全部状态</option><option v-for="(name, key) in configNames" :key="key" :value="key">{{ name }}</option></AppSelect>
+          <AppSelect v-model="sort" class="select" aria-label="规则排序"><option value="errors">按错误数</option><option value="requests">按请求数</option><option value="name">按名称</option></AppSelect>
         </div>
       </header>
       <div class="protocol-tabs" aria-label="规则类型">
@@ -209,13 +210,13 @@ const issue = computed(() => {
         </table>
       </div>
       <div v-else-if="!data" class="empty-state" role="status"><h3>{{ error ? "暂时无法读取规则" : "正在读取规则…" }}</h3><p>{{ error ? "请重试加载首页数据" : "获取配置与访问统计" }}</p></div>
-      <div v-else class="empty-state"><h3>{{ rules.length ? "没有符合条件的规则" : "还没有代理规则" }}</h3><p>{{ rules.length ? "调整搜索条件或筛选后重试" : "添加代理规则并应用配置后，在这里查看运行情况" }}</p><button v-if="!rules.length" class="button primary" :disabled="busy" @click="emit('add')">添加代理规则</button></div>
+      <div v-else class="empty-state"><h3>{{ rules.length ? "没有符合条件的规则" : "还没有代理规则" }}</h3><p>{{ rules.length ? "调整搜索条件或筛选后重试" : "添加代理规则并应用配置后，在这里查看运行情况" }}</p></div>
       <footer class="dashboard-pagination">
         <span>共 {{ filtered.length }} 条</span>
         <div><button class="page-button" :disabled="page <= 1" aria-label="上一页" @click="page--"><PhCaretLeft :size="15" /></button>
           <button v-for="number in pageNumbers" :key="number" class="page-button" :class="{ active: page === number }" :aria-label="`第 ${number} 页`" :aria-current="page === number ? 'page' : undefined" @click="page = number">{{ number }}</button>
           <button class="page-button" :disabled="page >= pageCount" aria-label="下一页" @click="page++"><PhCaretRight :size="15" /></button>
-          <select v-model="pageSize" class="select page-size" aria-label="每页条数"><option :value="5">5 条/页</option><option :value="10">10 条/页</option><option :value="20">20 条/页</option></select>
+          <AppSelect v-model="pageSize" class="select page-size" aria-label="每页条数"><option :value="5">5 条/页</option><option :value="10">10 条/页</option><option :value="20">20 条/页</option></AppSelect>
         </div>
       </footer>
     </section>
@@ -261,7 +262,7 @@ h2 { font-size: 17px; font-weight: 570; }
 .range-buttons { display: flex; border: 1px solid var(--line); border-radius: 8px; }
 .range-buttons button { border: 1px solid transparent; background: transparent; color: #525d6c; padding: 7px 13px; border-radius: 7px; font-size: 13px; white-space: nowrap; }
 .range-buttons button + button { position: relative; }
-.range-buttons button + button::before { position: absolute; content: ''; height: 16px; width: 1px; background: var(--line); left: -1px; top: 8px; }
+.range-buttons button:not(.active) + button:not(.active)::before { position: absolute; content: ''; height: 16px; width: 1px; background: var(--line); left: -1px; top: 8px; }
 .range-buttons button.active { background: #f7fdf9; border-color: var(--accent); color: var(--accent-dark); }
 .row-action { display: inline-flex; align-items: center; justify-content: center; color: #55616f; border: 1px solid var(--line); border-radius: 7px; background: #fff; width: 34px; height: 34px; }
 .row-action:hover { color: var(--accent-dark); background: var(--accent-soft); }
@@ -280,17 +281,18 @@ h2 { font-size: 17px; font-weight: 570; }
 .errors-metric:hover .metric-arrow { transform: translateX(3px); }
 .traffic-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; color: #7a8490; font-size: 10px; }
 .selected-rule { display: flex; justify-content: space-between; align-items: center; margin: 10px 20px 0; color: var(--text-muted); font-size: 12px; }
-.rules-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 20px 0; }
-.rules-heading h2 { margin: 0; align-self: flex-start; line-height: 35px; }
-.rules-filters { display: flex; gap: 12px; align-items: center; }
+.rules-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 20px 0; flex-wrap: wrap; }
+.rules-heading h2 { margin: 0; flex-shrink: 0; align-self: flex-start; line-height: 35px; }
+.rules-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-width: 0; max-width: 100%; }
 .rules-filters .select { width: 134px; font-size: 13px; height: 35px; padding-block: 0; color: #526070; }
 .dashboard-search { display: flex; gap: 8px; align-items: center; width: 236px; height: 35px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: #707b88; background: #fff; }
+.dashboard-search > svg { flex-shrink: 0; }
 .dashboard-search input { border: 0; background: transparent; outline: 0; width: 100%; min-width: 0; color: var(--text); font-size: 13px; }
 .dashboard-search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
-.protocol-tabs { display: flex; width: max-content; max-width: calc(100% - 40px); margin: -3px 20px 6px; border: 1px solid var(--line); border-radius: 7px; overflow-x: auto; }
+.protocol-tabs { display: flex; width: max-content; max-width: calc(100% - 40px); margin: 12px 20px 12px; border: 1px solid var(--line); border-radius: 7px; overflow-x: auto; }
 .protocol-tabs button { position: relative; padding: 5px 14px; border: 1px solid transparent; background: transparent; color: #647180; border-radius: 6px; font-size: 12px; line-height: 16px; white-space: nowrap; }
 .protocol-tabs button.active { border-color: var(--accent); background: #f4fcf7; color: var(--accent-dark); }
-.protocol-tabs button + button::before { content: ''; position: absolute; left: -1px; height: 14px; width: 1px; top: 6px; background: var(--line); }
+.protocol-tabs button:not(.active) + button:not(.active)::before { content: ''; position: absolute; left: -1px; height: 14px; width: 1px; top: 6px; background: var(--line); }
 .dashboard-rules .table-wrap { margin: 0 19px; border: 1px solid var(--line); border-radius: 10px; }
 .dashboard-table { min-width: 960px; font-size: 12px; }
 .dashboard-table th { padding: 9px 14px; font-size: 12px; font-weight: 450; background: #f8fbfb; color: #4d5867; }

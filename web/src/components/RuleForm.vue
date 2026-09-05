@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from "./AppSelect.vue";
 import { reactive, ref, watch } from "vue";
 import type {
   CertificateMeta,
@@ -173,7 +174,6 @@ function addLocation() {
         required
         maxlength="80"
         autofocus
-        placeholder="例如：Jellyfin"
       />
     </div>
     <div class="field primary-field primary-right">
@@ -192,7 +192,7 @@ function addLocation() {
         v-model="domains"
         class="textarea"
         required
-        placeholder="jellyfin.example.com&#10;media.example.com"
+        placeholder="www.example.com&#10;media.example.com"
       ></textarea
       ><span class="field-help"
         >多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。</span
@@ -218,8 +218,8 @@ function addLocation() {
       >
     </div>
     <div v-if="form.tls" class="field section-content">
-      <label for="certificate">HTTPS 证书</label
-      ><select
+      <label for="certificate">SSL/TLS 证书</label
+      ><AppSelect
         id="certificate"
         v-model="form.certificate_id"
         class="select"
@@ -228,8 +228,8 @@ function addLocation() {
         <option value="">请选择证书</option>
         <option v-for="cert in certificates" :key="cert.id" :value="cert.id">
           {{ cert.name }} · {{ formatDate(cert.not_after, true) }}
-        </option></select
-      ><span class="field-help">没有证书时，请先到“HTTPS 证书”页面导入。</span>
+        </option></AppSelect
+      ><span class="field-help">没有证书时，请先到“SSL/TLS 证书”页面导入。</span>
     </div>
     <div v-if="form.tls" class="field section-content section-right">
       <label>HTTP/2</label
@@ -242,8 +242,8 @@ function addLocation() {
     </div>
     <div class="target-service-fields full section-content">
       <div class="field target-pool-field">
-        <label for="upstream-pool">后端服务池</label
-        ><select
+        <label for="upstream-pool">后端服务组</label
+        ><AppSelect
           id="upstream-pool"
           v-model="form.upstream_pool_id"
           class="select"
@@ -257,21 +257,21 @@ function addLocation() {
             :value="pool.id"
           >
             {{ pool.name }} · {{ pool.servers.length }} 个节点
-          </option></select
+          </option></AppSelect
         ><span class="field-help"
-          >服务器池支持权重、备份节点、故障恢复和负载均衡。</span
+          >后端服务组支持权重、备份节点、故障恢复和负载均衡。</span
         >
       </div>
       <div class="field">
         <label for="upstream-scheme">后端服务协议</label
-        ><select
+        ><AppSelect
           id="upstream-scheme"
           v-model="form.upstream_scheme"
           class="select"
         >
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
-        </select>
+        </AppSelect>
       </div>
       <div v-if="!form.upstream_pool_id" class="field target-host-field">
         <label for="upstream-host">目标主机</label
@@ -303,7 +303,7 @@ function addLocation() {
       <label>后端服务证书校验</label
       ><label class="checkbox-row"
         ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验后端服务
-        HTTPS 证书</label
+        SSL/TLS 证书</label
       >
     </div>
     <div class="form-section">
@@ -384,7 +384,7 @@ function addLocation() {
     </div>
     <div class="field full section-content entry-domain-field">
       <label for="rate-limit-policy">限流策略</label
-      ><select
+      ><AppSelect
         id="rate-limit-policy"
         v-model="form.rate_limit_policy_id"
         class="select"
@@ -396,7 +396,7 @@ function addLocation() {
           :value="policy.id"
         >
           {{ policy.name }} · {{ policy.settings.requests_per_second }} 请求/秒
-        </option></select
+        </option></AppSelect
       ><span class="field-help"
         >同一策略可供多条规则复用，但每条规则分别计数、互不占用额度。</span
       >
@@ -421,7 +421,7 @@ function addLocation() {
     <div v-for="(location, index) in form.locations" :key="location.id" class="location-card full section-content">
       <div class="location-head">
         <input v-model.trim="location.name" class="input" placeholder="名称" required maxlength="80" />
-        <select v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></select>
+        <AppSelect v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></AppSelect>
         <input v-model="location.path" class="input" placeholder="/api/" required />
         <label class="checkbox-row"><input v-model="location.enabled" type="checkbox" />启用</label>
         <button type="button" class="button danger compact" @click="form.locations.splice(index, 1)">删除</button>

@@ -191,6 +191,13 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		}
 		err := a.service.UpdateSettings(settings)
 		writeResult(w, http.StatusOK, a.service.State().Settings, err)
+	case apiPath == "/api/settings/test" && r.Method == http.MethodPost:
+		var settings domain.Settings
+		if !decodeJSON(w, r, &settings) {
+			return
+		}
+		result, err := a.service.TestSettings(settings)
+		writeResult(w, http.StatusOK, result, err)
 	case apiPath == "/api/cache" && r.Method == http.MethodDelete:
 		err := a.service.ClearCache()
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
@@ -265,7 +272,7 @@ func (a *API) handleRateLimitPolicy(w http.ResponseWriter, r *http.Request, id s
 
 func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id string) {
 	if strings.Contains(id, "/") || id == "" {
-		writeAPIError(w, http.StatusNotFound, "后端服务池不存在")
+		writeAPIError(w, http.StatusNotFound, "后端服务组不存在")
 		return
 	}
 	switch r.Method {
@@ -280,7 +287,7 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 		err := a.service.DeleteUpstreamPool(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	default:
-		writeAPIError(w, http.StatusMethodNotAllowed, "后端服务池接口不支持该请求方法")
+		writeAPIError(w, http.StatusMethodNotAllowed, "后端服务组接口不支持该请求方法")
 	}
 }
 

@@ -145,9 +145,6 @@ watch(
       <div class="empty-icon">⏱</div>
       <h3>还没有限流策略</h3>
       <p>先创建一组限流参数，再在代理规则中选择。未选择策略的规则不受限流影响。</p>
-      <button class="button primary" @click="show()">
-        <PhPlusCircle :size="17" aria-hidden="true" />添加限流策略
-      </button>
     </div>
   </article>
 

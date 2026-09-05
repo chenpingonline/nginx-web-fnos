@@ -63,9 +63,12 @@ type Overview struct {
 }
 
 type CertificateInput struct {
-	Name        string `json:"name"`
-	Certificate string `json:"certificate"`
-	PrivateKey  string `json:"private_key"`
+	Name            string `json:"name"`
+	Certificate     string `json:"certificate"`
+	PrivateKey      string `json:"private_key"`
+	Method          string `json:"method,omitempty"`
+	CertificatePath string `json:"certificate_path,omitempty"`
+	PrivateKeyPath  string `json:"private_key_path,omitempty"`
 }
 
 type ConfigSnapshot struct {
@@ -125,6 +128,21 @@ func (s *AppService) UpdateSettings(settings Settings) error {
 	})
 }
 
+// TestSettings validates the submitted form against the saved draft without persisting it.
+func (s *AppService) TestSettings(settings Settings) (ApplyResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.store.Snapshot()
+	candidate := State{Settings: settings}
+	domain.ApplyStateDefaults(&candidate)
+	state.Settings = candidate.Settings
+	output, err := s.nginx.TestState(state)
+	if err != nil {
+		return ApplyResult{}, err
+	}
+	return ApplyResult{Action: "test", Message: "当前设置校验通过（未保存、未应用）", Output: output}, nil
+}
+
 func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error) {
 	now := time.Now().UTC()
 	input.ID = domain.RandomID()
@@ -141,7 +159,7 @@ func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error
 
 func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (UpstreamPool, error) {
 	if !domain.ValidID(id) {
-		return UpstreamPool{}, errors.New("后端服务池 ID 不合法")
+		return UpstreamPool{}, errors.New("后端服务组 ID 不合法")
 	}
 	var updated UpstreamPool
 	err := s.store.Update(func(state *State) error {
@@ -158,28 +176,28 @@ func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (Upstream
 			updated = input
 			return nil
 		}
-		return errors.New("找不到指定后端服务池")
+		return errors.New("找不到指定后端服务组")
 	})
 	return updated, err
 }
 
 func (s *AppService) DeleteUpstreamPool(id string) error {
 	if !domain.ValidID(id) {
-		return errors.New("后端服务池 ID 不合法")
+		return errors.New("后端服务组 ID 不合法")
 	}
 	return s.store.Update(func(state *State) error {
 		for _, rule := range state.Rules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("后端服务池仍被规则 %q 使用", rule.Name)
+				return fmt.Errorf("后端服务组仍被规则 %q 使用", rule.Name)
 			}
 		}
 		for _, rule := range state.StreamRules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("后端服务池仍被 Stream 规则 %q 使用", rule.Name)
+				return fmt.Errorf("后端服务组仍被 Stream 规则 %q 使用", rule.Name)
 			}
 			for _, route := range rule.SNIRoutes {
 				if route.UpstreamPoolID == id {
-					return fmt.Errorf("后端服务池仍被 Stream SNI 规则 %q 使用", rule.Name)
+					return fmt.Errorf("后端服务组仍被 Stream SNI 规则 %q 使用", rule.Name)
 				}
 			}
 		}
@@ -190,7 +208,7 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 				return nil
 			}
 		}
-		return errors.New("找不到指定后端服务池")
+		return errors.New("找不到指定后端服务组")
 	})
 }
 
@@ -369,6 +387,24 @@ func (s *AppService) DeleteRule(id string) error {
 }
 
 func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta, error) {
+	if input.Method == "path" {
+		if input.Certificate != "" || input.PrivateKey != "" {
+			return CertificateMeta{}, errors.New("路径导入不能同时提交 PEM 内容")
+		}
+		var err error
+		input.Certificate, err = readCertificateFile(input.CertificatePath, 2*1024*1024)
+		if err != nil {
+			return CertificateMeta{}, fmt.Errorf("读取证书文件失败: %w", err)
+		}
+		input.PrivateKey, err = readCertificateFile(input.PrivateKeyPath, 512*1024)
+		if err != nil {
+			return CertificateMeta{}, fmt.Errorf("读取私钥文件失败: %w", err)
+		}
+	} else if input.Method != "" && input.Method != "pem" && input.Method != "file" {
+		return CertificateMeta{}, errors.New("不支持的证书导入方式")
+	} else if input.CertificatePath != "" || input.PrivateKeyPath != "" {
+		return CertificateMeta{}, errors.New("请使用路径导入方式")
+	}
 	input.Name = strings.TrimSpace(input.Name)
 	input.Certificate = strings.TrimSpace(input.Certificate)
 	input.PrivateKey = strings.TrimSpace(input.PrivateKey)
@@ -529,6 +565,7 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 	now := time.Now().UTC()
 	if err := s.store.Update(func(current *State) error {
 		current.Dirty = false
+		current.DraftRevisionID = ""
 		current.LastAppliedAt = &now
 		current.LastApplyMessage = result.Message
 		current.LastApplyError = ""
@@ -637,6 +674,8 @@ func (s *AppService) RestoreRevision(id string) (State, error) {
 	// revision must never silently delete certificates added later.
 	next.Certificates = current.Certificates
 	next.Dirty = true
+	next.DraftRevisionID = revision.ID
+	next.LastApplyError = ""
 	next.LastApplyMessage = "已从配置历史恢复为草稿，尚未应用"
 	next.LastAppliedAt = current.LastAppliedAt
 	if err := s.store.Replace(next); err != nil {

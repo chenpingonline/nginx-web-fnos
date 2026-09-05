@@ -544,7 +544,7 @@ func ValidateLocationSettings(settings LocationSettings, pools map[string]Upstre
 		if settings.UpstreamPoolID != "" {
 			pool, ok := pools[settings.UpstreamPoolID]
 			if !ok || pool.Protocol != "http" {
-				return errors.New("Location 引用的 HTTP 后端服务池不存在")
+				return errors.New("Location 引用的 HTTP 后端服务组不存在")
 			}
 		} else {
 			if err := validateHostName(settings.UpstreamHost, false); err != nil {
@@ -768,10 +768,10 @@ func validateStreamTarget(poolID, host string, port int, pools map[string]Upstre
 	if poolID != "" {
 		pool, ok := pools[poolID]
 		if !ok {
-			return errors.New("引用的 Stream 后端服务池不存在")
+			return errors.New("引用的 Stream 后端服务组不存在")
 		}
 		if pool.Protocol != "stream" {
-			return errors.New("Stream 规则只能引用 Stream 后端服务池")
+			return errors.New("Stream 规则只能引用 Stream 后端服务组")
 		}
 		return nil
 	}
@@ -821,26 +821,26 @@ func NormalizeUpstreamPool(pool *UpstreamPool) {
 
 func ValidateUpstreamPool(pool UpstreamPool) error {
 	if !idPattern.MatchString(pool.ID) {
-		return errors.New("后端服务池 ID 格式不正确")
+		return errors.New("后端服务组 ID 格式不正确")
 	}
 	if len([]rune(pool.Name)) < 1 || len([]rune(pool.Name)) > 80 {
-		return errors.New("后端服务池名称长度必须为 1 到 80 个字符")
+		return errors.New("后端服务组名称长度必须为 1 到 80 个字符")
 	}
 	if pool.Protocol != "http" && pool.Protocol != "stream" {
-		return errors.New("后端服务池协议只能是 http 或 stream")
+		return errors.New("后端服务组协议只能是 http 或 stream")
 	}
 	allowedStrategy := map[string]bool{"round_robin": true, "least_conn": true, "ip_hash": true, "hash": true, "random": true}
 	if !allowedStrategy[pool.Strategy] {
-		return errors.New("后端服务池负载均衡算法不支持")
+		return errors.New("后端服务组负载均衡算法不支持")
 	}
 	if pool.Protocol == "stream" && pool.Strategy == "ip_hash" {
-		return errors.New("Stream 后端服务池不支持 IP Hash")
+		return errors.New("Stream 后端服务组不支持 IP Hash")
 	}
 	if pool.Strategy == "hash" && !variablePattern.MatchString(pool.HashKey) {
 		return errors.New("Hash 算法必须使用安全的 Nginx 变量，例如 $request_uri")
 	}
 	if len(pool.Servers) == 0 || len(pool.Servers) > 64 {
-		return errors.New("后端服务池需要 1 到 64 个服务节点")
+		return errors.New("后端服务组需要 1 到 64 个服务节点")
 	}
 	if pool.Keepalive < 0 || pool.Keepalive > 4096 || pool.KeepaliveRequests < 1 || pool.KeepaliveRequests > 100000 || pool.KeepaliveTime < 1 || pool.KeepaliveTime > 86400 || pool.KeepaliveTimeout < 1 || pool.KeepaliveTimeout > 3600 {
 		return errors.New("后端服务连接池参数超出允许范围")

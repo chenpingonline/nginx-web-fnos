@@ -204,43 +204,58 @@ func (m *Manager) Apply(state State) (ApplyResult, error) {
 	return m.installStateUnlocked(state, true)
 }
 
-func (m *Manager) installStateUnlocked(state State, activate bool) (ApplyResult, error) {
+// TestState checks an isolated candidate without installing it.
+func (m *Manager) TestState(state State) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.testStateUnlocked(state)
+}
+
+func (m *Manager) testStateUnlocked(state State) (string, error) {
 	if err := domain.ValidateState(state); err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	if err := m.paths.Ensure(); err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	if err := m.CheckBinary(); err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 
 	// First validate a completely isolated candidate tree. This prevents a bad
 	// form value from touching the active configuration directory.
 	candidateRoot, err := os.MkdirTemp(m.paths.TmpDir, "fnproxy-candidate-")
 	if err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	defer os.RemoveAll(candidateRoot)
 	candidateConfD := filepath.Join(candidateRoot, "conf.d")
 	if err := os.MkdirAll(candidateConfD, 0o750); err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	candidateMaster, candidateFiles, err := m.render(state, candidateConfD)
 	if err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	candidateMasterPath := filepath.Join(candidateRoot, "nginx.conf")
 	if err := fileutil.WriteFileAtomic(candidateMasterPath, []byte(candidateMaster), 0o640); err != nil {
-		return ApplyResult{}, err
+		return "", err
 	}
 	for name, content := range candidateFiles {
 		if err := fileutil.WriteFileAtomic(filepath.Join(candidateConfD, name), []byte(content), 0o640); err != nil {
-			return ApplyResult{}, err
+			return "", err
 		}
 	}
-	if output, err := m.testConfigUnlocked(candidateMasterPath); err != nil {
-		return ApplyResult{}, fmt.Errorf("候选配置校验失败: %w\n%s", err, output)
+	output, err := m.testConfigUnlocked(candidateMasterPath)
+	if err != nil {
+		return "", fmt.Errorf("候选配置校验失败: %w\n%s", err, output)
+	}
+	return output, nil
+}
+
+func (m *Manager) installStateUnlocked(state State, activate bool) (ApplyResult, error) {
+	if _, err := m.testStateUnlocked(state); err != nil {
+		return ApplyResult{}, err
 	}
 
 	// Render again with the final include path, then swap the whole conf.d

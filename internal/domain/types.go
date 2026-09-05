@@ -93,6 +93,7 @@ type State struct {
 	RateLimitPolicies []RateLimitPolicy `json:"rate_limit_policies"`
 	StreamRules       []StreamRule      `json:"stream_rules"`
 	Dirty             bool              `json:"dirty"`
+	DraftRevisionID   string            `json:"draft_revision_id,omitempty"`
 	LastAppliedAt     *time.Time        `json:"last_applied_at,omitempty"`
 	LastApplyMessage  string            `json:"last_apply_message,omitempty"`
 	LastApplyError    string            `json:"last_apply_error,omitempty"`
@@ -260,7 +261,7 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 			return errors.New("HTTPS 规则引用的证书不存在")
 		}
 	} else if rule.CertificateID != "" {
-		return errors.New("HTTP 规则不能绑定 HTTPS 证书")
+		return errors.New("HTTP 规则不能绑定 SSL/TLS 证书")
 	}
 	poolMap := map[string]UpstreamPool{}
 	if len(pools) > 0 {
@@ -269,10 +270,10 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if rule.UpstreamPoolID != "" {
 		pool, ok := poolMap[rule.UpstreamPoolID]
 		if !ok {
-			return errors.New("引用的后端服务池不存在")
+			return errors.New("引用的后端服务组不存在")
 		}
 		if pool.Protocol != "http" {
-			return errors.New("HTTP 规则只能引用 HTTP 后端服务池")
+			return errors.New("HTTP 规则只能引用 HTTP 后端服务组")
 		}
 	}
 	if rule.UpstreamScheme != "http" && rule.UpstreamScheme != "https" {
@@ -336,14 +337,14 @@ func ValidateState(state State) error {
 	poolNames := make(map[string]struct{}, len(state.UpstreamPools))
 	for _, pool := range state.UpstreamPools {
 		if err := ValidateUpstreamPool(pool); err != nil {
-			return fmt.Errorf("后端服务池 %q: %w", pool.Name, err)
+			return fmt.Errorf("后端服务组 %q: %w", pool.Name, err)
 		}
 		if _, exists := pools[pool.ID]; exists {
-			return errors.New("存在重复的后端服务池 ID")
+			return errors.New("存在重复的后端服务组 ID")
 		}
 		key := strings.ToLower(pool.Name)
 		if _, exists := poolNames[key]; exists {
-			return errors.New("存在重复的后端服务池名称")
+			return errors.New("存在重复的后端服务组名称")
 		}
 		pools[pool.ID] = pool
 		poolNames[key] = struct{}{}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppSelect from "./AppSelect.vue";
 import type { LocationSettings, UpstreamPool } from "../types";
 
 const props = defineProps<{
@@ -29,7 +30,7 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
   <div class="location-settings">
     <div class="field">
       <label>处理方式</label>
-      <select v-model="model.backend_type" class="select" @change="changeBackend">
+      <AppSelect v-model="model.backend_type" class="select" @change="changeBackend">
         <option value="proxy">HTTP 反向代理</option>
         <option value="static">静态文件</option>
         <option value="return">固定返回 / 跳转</option>
@@ -39,7 +40,7 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
         <option value="scgi">SCGI</option>
         <option value="memcached">Memcached</option>
         <option value="status">连接状态</option>
-      </select>
+      </AppSelect>
     </div>
     <label v-if="root" class="checkbox-row field">
       <input v-model="model.redirect_to_https" type="checkbox" /> HTTP 永久跳转 HTTPS
@@ -47,15 +48,15 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
 
     <template v-if="!root && ['proxy', 'grpc', 'fastcgi', 'uwsgi', 'scgi', 'memcached'].includes(model.backend_type)">
       <div class="field">
-        <label>后端服务池</label>
-        <select v-model="model.upstream_pool_id" class="select">
+        <label>后端服务组</label>
+        <AppSelect v-model="model.upstream_pool_id" class="select">
           <option value="">单个服务器</option>
           <option v-for="pool in upstreamPools.filter((item) => item.protocol === 'http')" :key="pool.id" :value="pool.id">{{ pool.name }}</option>
-        </select>
+        </AppSelect>
       </div>
       <div v-if="model.backend_type === 'proxy' || model.backend_type === 'grpc'" class="field">
         <label>协议</label>
-        <select v-model="model.upstream_scheme" class="select"><option value="http">HTTP</option><option value="https">HTTPS</option></select>
+        <AppSelect v-model="model.upstream_scheme" class="select"><option value="http">HTTP</option><option value="https">HTTPS</option></AppSelect>
       </div>
       <template v-if="!model.upstream_pool_id">
         <div class="field"><label>目标主机</label><input v-model.trim="model.upstream_host" class="input" required /></div>
@@ -100,7 +101,7 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
         <div class="field"><label>拒绝 IP/CIDR</label><textarea class="textarea small" :value="model.deny.join('\n')" @change="setList('deny', $event)"></textarea></div>
         <div v-for="(item, index) in model.rewrites" :key="index" class="inline-editor full">
           <input v-model="item.pattern" class="input" placeholder="正则" /><input v-model="item.replacement" class="input" placeholder="目标" />
-          <select v-model="item.flag" class="select"><option value="last">last</option><option value="break">break</option><option value="redirect">302</option><option value="permanent">301</option></select>
+          <AppSelect v-model="item.flag" class="select"><option value="last">last</option><option value="break">break</option><option value="redirect">302</option><option value="permanent">301</option></AppSelect>
           <button type="button" class="button danger compact" @click="model.rewrites.splice(index, 1)">删除</button>
         </div>
         <button type="button" class="button ghost compact fit" @click="addRewrite">添加 Rewrite</button>

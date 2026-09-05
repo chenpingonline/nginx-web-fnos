@@ -263,10 +263,10 @@ func poolOrHost(id, host string, port int, state State) string {
 	if id != "" {
 		for _, pool := range state.UpstreamPools {
 			if pool.ID == id {
-				return pool.Name + "（服务池）"
+				return pool.Name + "（服务组）"
 			}
 		}
-		return "目标服务池"
+		return "后端服务组"
 	}
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"
