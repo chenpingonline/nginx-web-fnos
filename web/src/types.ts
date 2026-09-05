@@ -1,5 +1,6 @@
 export type Page =
   | "dashboard"
+  | "errors"
   | "rules"
   | "streams"
   | "upstreams"
@@ -286,6 +287,7 @@ export interface State {
   dirty: boolean;
   last_applied_at?: string;
   last_apply_message?: string;
+  last_apply_error?: string;
   updated_at: string;
 }
 export interface Revision {
@@ -299,6 +301,8 @@ export interface Revision {
 export interface NginxStatus {
   running: boolean;
   pid?: number;
+  uptime_seconds: number | null;
+  worker_processes: number | null;
   version: string;
   ports: number[];
   config_path: string;
@@ -313,6 +317,58 @@ export interface Overview {
   certificate_count: number;
   dirty: boolean;
   last_applied_at?: string;
+  last_apply_message?: string;
+  last_apply_error?: string;
+}
+
+export interface MetricCounts {
+  requests: number;
+  client_errors: number | null;
+  errors: number;
+  bytes: number;
+  last_seen?: string;
+}
+export interface MetricPoint {
+  time: string;
+  rps: number | null;
+  response_rps: number | null;
+  connections: number | null;
+  error_rate: number | null;
+  client_error_rate: number | null;
+  server_error_rate: number | null;
+  requests: number | null;
+}
+export interface DashboardRule {
+  id: string;
+  name: string;
+  protocol: string;
+  entry: string;
+  listen_address: string;
+  target: string;
+  config_state: "applied" | "pending" | "disabled" | "unknown" | "pending_delete";
+  enabled: boolean;
+  counts: MetricCounts | null;
+}
+export interface DashboardData {
+  overview: Overview;
+  monitoring_ready: boolean;
+  access_logging: boolean;
+  applied_known: boolean;
+  applied_count: number;
+  applied_ports: number[];
+  rules: DashboardRule[];
+  certificates: {
+    id: string; name: string; not_after: string; not_before: string;
+    days: number; severity: "warning" | "danger"; rules: string[];
+  }[];
+  metrics: {
+    since: string; sampled_at: string | null; available: boolean; logging: boolean;
+    issue?: string; history_issue?: string;
+    rps: number | null; response_rps: number | null; connections: number | null; counts: MetricCounts;
+    error_rate: number | null; client_error_rate: number | null;
+    server_error_rate: number | null; observed_seconds: number;
+    rules: Record<string, MetricCounts>; points: MetricPoint[];
+  };
 }
 export interface GeneratedConfig {
   master: string;

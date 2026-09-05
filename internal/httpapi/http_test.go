@@ -29,6 +29,26 @@ func TestAPIRequiresAdministratorHeaders(t *testing.T) {
 	}
 }
 
+func TestDashboardRequiresAdminAndBoundsHistoryRange(t *testing.T) {
+	t.Setenv("FNPROXY_DEV_ALLOW", "0")
+	api := New(nil, webassets.Assets)
+	r := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("unauthorized metrics request returned %d", w.Code)
+	}
+	for _, value := range []string{"bad", "0", "1000000", "-1"} {
+		r := httptest.NewRequest(http.MethodGet, "/api/dashboard?minutes="+value, nil)
+		r.Header.Set("X-Trim-Isadmin", "true")
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("invalid range %s returned %d", value, w.Code)
+		}
+	}
+}
+
 func TestAPIHealthAndEmbeddedIndex(t *testing.T) {
 	t.Setenv("FNPROXY_DEV_ALLOW", "0")
 	api := New(nil, webassets.Assets)

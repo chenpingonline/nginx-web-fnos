@@ -10,23 +10,20 @@ import {
 } from "vue";
 import {
   PhArrowClockwise,
-  PhArrowRight,
   PhArrowsLeftRight,
-  PhBroadcast,
   PhCertificate,
   PhCheckCircle,
-  PhGlobeHemisphereWest,
-  PhInfo,
   PhList,
   PhPlusCircle,
-  PhShieldCheck,
   PhShareNetwork,
-  PhWarningCircle,
+  PhX,
   PhXCircle,
 } from "@phosphor-icons/vue";
 import { errorMessage, jsonBody, request } from "./api";
-import brandIcon from "./assets/nginx-web.png";
+const appVersion = __APP_VERSION__;
 import RuleForm from "./components/RuleForm.vue";
+import DashboardPage from "./components/DashboardPage.vue";
+import ErrorDetailsPage from "./components/ErrorDetailsPage.vue";
 import CertificateForm from "./components/CertificateForm.vue";
 import UpstreamPoolsPage from "./components/UpstreamPoolsPage.vue";
 import RateLimitPoliciesPage from "./components/RateLimitPoliciesPage.vue";
@@ -78,7 +75,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "rules",
     icon: "http",
-    label: "HTTP/HTTPS 代理",
+    label: "代理 HTTP(S)",
     subtitle: "管理域名、监听端口与后端服务",
   },
   {
@@ -90,7 +87,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "upstreams",
     icon: "upstreams",
-    label: "后端服务池",
+    label: "目标服务池",
     subtitle: "管理负载均衡、节点健康参数与连接复用",
   },
   {
@@ -135,6 +132,9 @@ const page = ref<Page>("dashboard"),
   state = ref<State | null>(null),
   revisions = ref<Revision[]>([]),
   config = ref<GeneratedConfig | null>(null);
+const errorScope = ref({ minutes: 60, rule: "" });
+const ruleProtocol = ref<"all" | "http" | "https">("all");
+const ruleEnabled = ref<"all" | "enabled" | "disabled">("all");
 const loading = ref(true),
   busy = ref(false),
   connectionError = ref(""),
@@ -144,17 +144,8 @@ const loading = ref(true),
   logLines = ref<string[]>([]),
   logsLoading = ref(false),
   configTab = ref("master");
-type Theme = "light" | "dark";
-const systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-function applySystemTheme(matches = systemThemeQuery.matches) {
-  const theme: Theme = matches ? "dark" : "light";
-  document.documentElement.dataset.theme = theme;
-  document.documentElement.style.colorScheme = theme;
-}
-function systemThemeChanged(event: MediaQueryListEvent) {
-  applySystemTheme(event.matches);
-}
-applySystemTheme();
+document.documentElement.dataset.theme = "light";
+document.documentElement.style.colorScheme = "light";
 const modal = ref<"rule" | "certificate" | null>(null),
   editingRule = ref<ProxyRule | null>(null),
   toasts = ref<Toast[]>([]),
@@ -167,28 +158,35 @@ const confirmBox = reactive({
   resolve: null as ((value: boolean) => void) | null,
 });
 const currentPage = computed(
-  () => pages.find((item) => item.id === page.value) ?? pages[0]!,
+  () => page.value === "errors" ? { ...pages[0]!, label: "错误率详情" } : pages.find((item) => item.id === page.value) ?? pages[0]!,
 );
 const filteredRules = computed(() => {
   const rules = state.value?.rules ?? [],
     term = ruleSearch.value.trim().toLowerCase();
+  const poolNames = new Map((state.value?.upstream_pools ?? []).map(pool => [pool.id, pool.name]));
   return rules.filter(
     (rule) =>
-      !term ||
+      (ruleProtocol.value === "all" || (rule.tls ? "https" : "http") === ruleProtocol.value) &&
+      (ruleEnabled.value === "all" || rule.enabled === (ruleEnabled.value === "enabled")) &&
+      (!term ||
       [
         rule.name,
-        ...rule.domains,
-        rule.upstream_host,
-        String(rule.upstream_port),
+        ...(rule.domains ?? []).map(domain => `${domain}:${rule.listen_port}`),
+        String(rule.listen_port),
+        `${rule.upstream_host}:${rule.upstream_port}`,
+        poolNames.get(rule.upstream_pool_id),
       ]
         .join(" ")
         .toLowerCase()
-        .includes(term),
+        .includes(term)),
   );
 });
-const activeRules = computed(() =>
-  (state.value?.rules ?? []).filter((rule) => rule.enabled),
-);
+const hasRuleFilters = computed(() => Boolean(ruleSearch.value || ruleProtocol.value !== "all" || ruleEnabled.value !== "all"));
+function resetRuleFilters() {
+  ruleSearch.value = "";
+  ruleProtocol.value = "all";
+  ruleEnabled.value = "all";
+}
 function formatRuleEntry(rule: ProxyRule): string {
   const domain = rule.domains[0];
   if (!domain) return `未配置域名:${rule.listen_port}`;
@@ -204,55 +202,7 @@ const configText = computed(() =>
     ? (config.value?.master ?? "")
     : (config.value?.files[configTab.value] ?? ""),
 );
-const ports = computed(() =>
-  overview.value?.nginx.ports.length
-    ? overview.value.nginx.ports.join(", ")
-    : "—",
-);
-const dashboardMetrics = computed(() => [
-  {
-    label: "HTTP/HTTPS 代理",
-    value: overview.value?.rule_count ?? 0,
-    foot: `${overview.value?.enabled_count ?? 0} 条已启用`,
-    icon: PhGlobeHemisphereWest,
-    tone: "green",
-  },
-  {
-    label: "TCP/UDP 代理",
-    value: state.value?.stream_rules.length ?? 0,
-    foot: `${state.value?.stream_rules.filter((rule) => rule.enabled).length ?? 0} 条已启用`,
-    icon: PhBroadcast,
-    tone: "cyan",
-  },
-  {
-    label: "HTTPS 证书",
-    value: overview.value?.certificate_count ?? 0,
-    foot: certificateFoot(),
-    icon: PhShieldCheck,
-    tone: "green",
-  },
-]);
-const recentEvents = computed(() => {
-  const events = (state.value?.rules ?? []).map((rule) => ({
-    id: rule.id,
-    title: rule.enabled ? `代理已启用 · ${rule.name}` : `代理已保存 · ${rule.name}`,
-    detail: rule.domains.join(", ") || `${formatHost(rule.upstream_host)}:${rule.upstream_port}`,
-    time: rule.updated_at,
-    tone: rule.enabled ? "success" : "neutral",
-  }));
-  if (state.value?.last_applied_at) {
-    events.push({
-      id: "last-applied",
-      title: "配置已校验并应用",
-      detail: state.value.last_apply_message || "独立 Nginx 已平滑重载",
-      time: state.value.last_applied_at,
-      tone: "success",
-    });
-  }
-  return events
-    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    .slice(0, 5);
-});
+
 
 function toast(message: string, type: Toast["type"] = "") {
   const id = ++toastID.value;
@@ -265,6 +215,11 @@ function toast(message: string, type: Toast["type"] = "") {
 function setPage(value: Page) {
   page.value = value;
   menuOpen.value = false;
+}
+function openErrorDetails(scope: { minutes: number; rule: string }) {
+  errorScope.value = scope;
+  setPage("errors");
+  window.scrollTo({ top: 0 });
 }
 async function loadCore(quiet = false) {
   if (!quiet) {
@@ -303,6 +258,13 @@ async function loadLogs() {
   } finally {
     logsLoading.value = false;
   }
+}
+async function openDashboardRule(id: string) {
+  await loadCore(true);
+  if (connectionError.value) return;
+  const rule = state.value?.rules.find(item => item.id === id);
+  if (rule) openRule(rule);
+  else toast("该规则已不存在，请刷新列表", "error");
 }
 async function loadConfig() {
   try {
@@ -591,12 +553,6 @@ function certificateState(notAfter: string) {
     className: expired ? "danger" : soon ? "warning" : "success",
   };
 }
-function certificateFoot() {
-  const certs = state.value?.certificates ?? [];
-  return certs.length
-    ? `${certs.filter((cert) => new Date(cert.not_after).getTime() > Date.now()).length} 张仍在有效期`
-    : "尚未导入证书";
-}
 watch(page, (value) => {
   if (value === "logs") void loadLogs();
   if (value === "config") void loadConfig();
@@ -609,13 +565,10 @@ function keydown(event: KeyboardEvent) {
   }
 }
 onMounted(() => {
-  window.localStorage.removeItem("nginx-web-theme");
-  systemThemeQuery.addEventListener("change", systemThemeChanged);
   document.addEventListener("keydown", keydown);
   void loadCore();
 });
 onBeforeUnmount(() => {
-  systemThemeQuery.removeEventListener("change", systemThemeChanged);
   document.removeEventListener("keydown", keydown);
   document.body.classList.remove("menu-open");
 });
@@ -624,21 +577,17 @@ onBeforeUnmount(() => {
 <template>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand">
-        <img class="brand-mark" :src="brandIcon" alt="" />
-        <div><strong>nginx-web</strong><small>Nginx 管理中心</small></div>
-      </div>
       <nav class="nav" aria-label="主导航">
         <button
           v-for="item in pages"
           :key="item.id"
           type="button"
           class="nav-item"
-          :class="{ active: page === item.id }"
+          :class="{ active: page === item.id || (page === 'errors' && item.id === 'dashboard') }"
           @click="setPage(item.id)"
         >
           <SidebarIcon :name="item.icon" class="nav-icon" />
-          ><span>{{ item.label }}</span>
+          <span>{{ item.label }}</span>
         </button>
       </nav>
       <div class="sidebar-footer">
@@ -670,7 +619,7 @@ onBeforeUnmount(() => {
           }}</span>
         </div>
         <div class="version-row">
-          <span>v{{ overview?.app_version ?? "0.1.7" }}</span
+          <span>v{{ overview?.app_version ?? appVersion }}</span
           ><span>Nginx {{ overview?.nginx_version ?? "1.30.4" }}</span>
         </div>
       </div>
@@ -701,180 +650,20 @@ onBeforeUnmount(() => {
           </button>
         </article>
         <template v-else-if="overview && state">
-          <template v-if="page === 'dashboard'">
-            <section
-              class="status-banner"
-              :class="{ offline: !overview.nginx.running }"
-            >
-              <div class="status-orb">
-                <PhCheckCircle v-if="overview.nginx.running" :size="30" weight="fill" aria-hidden="true" />
-                <PhWarningCircle v-else :size="30" weight="fill" aria-hidden="true" />
-              </div>
-              <div class="status-copy">
-                <div class="status-heading-row">
-                  <h2>
-                    {{
-                      overview.nginx.running
-                        ? "独立 Nginx 正常运行"
-                        : "独立 Nginx 当前已停止"
-                    }}
-                  </h2>
-                  <span
-                    class="status-config-badge"
-                    :class="{ pending: overview.dirty }"
-                  >
-                    {{ overview.dirty ? "配置待应用" : "配置已同步" }}
-                  </span>
-                </div>
-                <p>
-                  {{
-                    overview.nginx.running
-                      ? `服务运行稳定 · 反向代理工作正常 · 不使用飞牛系统 Nginx`
-                      : "管理页面仍可使用，可以先校验配置再启动服务。"
-                  }}
-                </p>
-                <span v-if="overview.nginx.running" class="status-pid">
-                  PID {{ overview.nginx.pid }}
-                </span>
-              </div>
-              <dl v-if="overview.nginx.running" class="status-facts">
-                <div><dt>版本</dt><dd>{{ overview.nginx.version || overview.nginx_version }}</dd></div>
-                <div><dt>监听端口</dt><dd>{{ ports }}</dd></div>
-              </dl>
-              <div class="status-banner-actions">
-                <button
-                  class="button ghost small"
-                  :disabled="busy"
-                  @click="loadCore()"
-                >
-                  <PhArrowClockwise :size="14" aria-hidden="true" />刷新状态
-                </button>
-                <template v-if="overview.nginx.running"
-                  ><button
-                    class="button secondary small"
-                    @click="runNginxAction('reload')"
-                  >
-                    平滑重载</button
-                  ><button class="button danger-ghost small" @click="stopNginx">
-                    停止
-                  </button></template
-                ><button
-                  v-else
-                  class="button primary small"
-                  @click="runNginxAction('start')"
-                >
-                  启动 Nginx
-                </button>
-              </div>
-            </section>
-            <section class="grid metric-grid section-gap">
-              <article
-                v-for="metric in dashboardMetrics"
-                :key="metric.label"
-                class="card metric-card"
-                :class="`metric-${metric.tone}`"
-              >
-                <div class="metric-label">
-                  <span>{{ metric.label }}</span
-                  ><span class="metric-icon"><component :is="metric.icon" :size="23" weight="regular" aria-hidden="true" /></span>
-                </div>
-                <div class="metric-value">{{ metric.value }}</div>
-                <div class="metric-foot">{{ metric.foot }}</div>
-              </article>
-            </section>
-            <section
-              v-if="overview.dirty"
-              class="notice configuration-notice section-gap warning"
-            >
-              <div>
-                <strong>配置等待应用</strong>
-                <span>草稿与运行配置不一致</span>
-              </div>
-              <div class="configuration-actions">
-                <button
-                  class="button secondary small"
-                  :disabled="busy"
-                  @click="runNginxAction('test')"
-                >
-                  <PhCheckCircle :size="14" aria-hidden="true" />校验配置
-                </button>
-                <button
-                  class="button primary small"
-                  :disabled="busy"
-                  @click="applyConfiguration"
-                >
-                  {{ busy ? "处理中…" : "保存并应用" }}
-                </button>
-              </div>
-            </section>
-            <section class="section-gap">
-              <article class="card">
-                <header class="card-header">
-                  <div>
-                    <h2>当前代理</h2>
-                    <p>已启用规则会被写入独立 Nginx 配置</p>
-                  </div>
-                  <span class="spacer"></span
-                  ><button class="button ghost small" @click="setPage('rules')">
-                    查看全部
-                  </button>
-                </header>
-                <div class="card-body">
-                  <div v-if="activeRules.length" class="proxy-list-head" aria-hidden="true">
-                    <span>名称 / 域名</span><span>协议</span><span>后端服务</span><span>状态</span>
-                  </div>
-                  <div
-                    v-for="rule in activeRules.slice(0, 6)"
-                    :key="rule.id"
-                    class="detail-row proxy-row"
-                  >
-                    <div class="proxy-identity">
-                      <strong>{{ rule.name }}</strong>
-                      <div class="rule-sub">{{ rule.domains.join(", ") }}</div>
-                    </div>
-                    <div class="proxy-protocol">{{ rule.tls ? "HTTPS" : "HTTP" }} :{{ rule.listen_port }}</div>
-                    <div class="proxy-upstream">{{ rule.upstream_scheme }}://{{ formatHost(rule.upstream_host) }}:{{ rule.upstream_port }}</div>
-                    <div class="proxy-state"><span class="event-dot success"></span>正常<PhArrowRight :size="14" aria-hidden="true" /></div>
-                  </div>
-                  <div
-                    v-if="!activeRules.length"
-                    class="empty-state"
-                    style="padding: 24px"
-                  >
-                    <h3>还没有启用的代理规则</h3>
-                    <p>添加规则后，保存并应用即可开始转发。</p>
-                  </div>
-                </div>
-              </article>
-            </section>
-            <section class="card recent-events section-gap">
-              <header class="card-header">
-                <div>
-                  <h2>最近事件</h2>
-                  <p>配置变更与代理状态记录</p>
-                </div>
-                <span class="spacer"></span>
-                <button class="button ghost small" @click="setPage('logs')">查看日志</button>
-              </header>
-              <div v-if="recentEvents.length" class="event-list">
-                <div v-for="event in recentEvents" :key="event.id" class="event-row">
-                  <span class="event-dot" :class="event.tone"></span>
-                  <div class="event-copy"><strong>{{ event.title }}</strong><span>{{ event.detail }}</span></div>
-                  <time :datetime="event.time">{{ formatDate(event.time) }}</time>
-                </div>
-              </div>
-              <div v-else class="event-empty">
-                <PhInfo :size="18" aria-hidden="true" /> 首次保存或应用配置后，事件会显示在这里。
-              </div>
-            </section>
-            <section
-              v-if="overview.nginx.last_error"
-              class="notice warning section-gap"
-            >
-              <strong>最近一条 Nginx 错误：</strong>
-              {{ overview.nginx.last_error }}
-            </section>
-          </template>
+          <DashboardPage v-if="page === 'dashboard'"
+            :overview="overview" :busy="busy" :updated-at="state.updated_at"
+            :initial-minutes="errorScope.minutes" :initial-rule="errorScope.rule"
+            @overview="overview = $event" @add="openRule()" @apply="applyConfiguration"
+            @test="runNginxAction('test')" @reload="runNginxAction('reload')" @start="runNginxAction('start')"
+            @edit="openDashboardRule"
+            @errors="openErrorDetails"
+            @navigate="setPage"
+          />
+          <ErrorDetailsPage v-else-if="page === 'errors'"
+            :overview="overview" :busy="busy" :updated-at="state.updated_at"
+            :initial-minutes="errorScope.minutes" :initial-rule="errorScope.rule"
+            @overview="overview = $event" @back="setPage('dashboard')" @edit="openDashboardRule"
+          />
           <template v-else-if="page === 'streams'">
             <StreamRulesPage
               :rules="state.stream_rules"
@@ -911,13 +700,24 @@ onBeforeUnmount(() => {
               @apply="applyConfiguration"
           /></template>
           <template v-else-if="page === 'rules'"
-            ><div class="toolbar">
+            ><div class="toolbar rule-filters" role="search" aria-label="HTTP/HTTPS 规则筛选">
               <input
                 v-model="ruleSearch"
                 class="input search-input"
                 type="search"
-                placeholder="搜索名称、域名或后端服务"
-              /><span
+                aria-label="搜索 HTTP/HTTPS 规则"
+                placeholder="搜索名称、域名、端口或目标"
+              />
+              <select v-model="ruleProtocol" class="select" aria-label="HTTP/HTTPS 协议筛选">
+                <option value="all">全部协议</option><option value="http">HTTP</option><option value="https">HTTPS</option>
+              </select>
+              <select v-model="ruleEnabled" class="select" aria-label="HTTP/HTTPS 启用状态筛选">
+                <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
+              </select>
+              <button class="button ghost" :disabled="!hasRuleFilters" @click="resetRuleFilters">重置筛选</button>
+              <span class="filter-count">{{ filteredRules.length }} / {{ state.rules.length }} 条</span>
+            </div>
+            <div class="toolbar"><span
                 class="badge"
                 :class="state.dirty ? 'warning' : 'success'"
                 >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span
@@ -935,11 +735,11 @@ onBeforeUnmount(() => {
                   state.dirty ? "保存并应用" : "重新应用"
                 }}
               </button>
-              ><button class="button primary" @click="openRule()">
+              <button class="button primary" @click="openRule()">
                 <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
               </button>
             </div>
-            <article class="card">
+            <article class="card proxy-rule-card">
               <div v-if="filteredRules.length" class="table-wrap">
                 <table class="table">
                   <thead>
@@ -1042,7 +842,7 @@ onBeforeUnmount(() => {
                 <p>
                   {{
                     state.rules.length
-                      ? "换一个关键词再试。"
+                      ? "调整关键词、协议或启用状态后重试。"
                       : "添加第一条规则，将域名或端口转发到 NAS、Docker 或局域网服务。"
                   }}
                 </p>
@@ -1354,8 +1154,14 @@ onBeforeUnmount(() => {
             }}
           </p>
         </div>
-        <button class="icon-button" aria-label="关闭" @click="closeModal">
-          ×
+        <div v-if="modal === 'rule'" class="rule-header-actions">
+          <button type="button" class="button ghost" :disabled="busy" @click="closeModal">取消</button>
+          <button type="submit" form="proxy-rule-form" class="button primary" :disabled="busy">
+            {{ busy ? "处理中…" : editingRule ? "保存修改" : "创建规则" }}
+          </button>
+        </div>
+        <button type="button" class="icon-button modal-close" aria-label="关闭" @click="closeModal">
+          <PhX :size="20" aria-hidden="true" />
         </button>
       </header>
       <div class="modal-body">
@@ -1368,7 +1174,6 @@ onBeforeUnmount(() => {
           :rate-limit-policies="state!.rate_limit_policies"
           :busy="busy"
           @save="saveRule"
-          @cancel="closeModal"
         /><CertificateForm
           v-else
           :busy="busy"

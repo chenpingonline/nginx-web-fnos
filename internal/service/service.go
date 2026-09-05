@@ -19,6 +19,7 @@ import (
 
 	"github.com/chenpingonline/fn-nginx-web/internal/domain"
 	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
 	nginxmanager "github.com/chenpingonline/fn-nginx-web/internal/nginx"
 	"github.com/chenpingonline/fn-nginx-web/internal/platform"
 	storepkg "github.com/chenpingonline/fn-nginx-web/internal/store"
@@ -39,10 +40,11 @@ type NginxStatus = domain.NginxStatus
 type ApplyResult = domain.ApplyResult
 
 type AppService struct {
-	paths Paths
-	store *Store
-	nginx *NginxManager
-	mu    sync.Mutex
+	paths   Paths
+	store   *Store
+	nginx   *NginxManager
+	mu      sync.Mutex
+	metrics *metrics.Collector
 }
 
 type Overview struct {
@@ -56,6 +58,7 @@ type Overview struct {
 	Dirty            bool        `json:"dirty"`
 	LastAppliedAt    *time.Time  `json:"last_applied_at,omitempty"`
 	LastApplyMessage string      `json:"last_apply_message,omitempty"`
+	LastApplyError   string      `json:"last_apply_error,omitempty"`
 	Settings         Settings    `json:"settings"`
 }
 
@@ -76,9 +79,10 @@ func New(paths Paths) (*AppService, error) {
 		return nil, fmt.Errorf("加载应用数据失败: %w", err)
 	}
 	return &AppService{
-		paths: paths,
-		store: store,
-		nginx: nginxmanager.New(paths),
+		paths:   paths,
+		store:   store,
+		nginx:   nginxmanager.New(paths),
+		metrics: metrics.New(paths.MetricsLog(), paths.MetricsHistory(), time.Now()),
 	}, nil
 }
 
@@ -102,6 +106,7 @@ func (s *AppService) Overview() Overview {
 		Dirty:            state.Dirty,
 		LastAppliedAt:    state.LastAppliedAt,
 		LastApplyMessage: state.LastApplyMessage,
+		LastApplyError:   state.LastApplyError,
 		Settings:         state.Settings,
 	}
 }
@@ -516,6 +521,7 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 	if err != nil {
 		_ = s.store.Update(func(current *State) error {
 			current.LastApplyMessage = err.Error()
+			current.LastApplyError = err.Error()
 			return nil
 		})
 		return ApplyResult{}, err
@@ -525,11 +531,17 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 		current.Dirty = false
 		current.LastAppliedAt = &now
 		current.LastApplyMessage = result.Message
+		current.LastApplyError = ""
 		return nil
 	}); err != nil {
 		return result, fmt.Errorf("Nginx 已应用，但保存应用状态失败: %w", err)
 	}
 	applied := s.store.Snapshot()
+	if data, marshalErr := json.Marshal(applied); marshalErr == nil {
+		if persistErr := fileutil.WriteFileAtomic(s.paths.AppliedState(), data, 0o600); persistErr != nil {
+			result.Message += "；首页生效配置记录保存失败"
+		}
+	}
 	if strings.TrimSpace(summary) == "" {
 		summary = "保存并应用配置"
 	}
@@ -693,7 +705,7 @@ func (s *AppService) RotateLogs(force bool) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	settings := s.store.Snapshot().Settings.Logging
-	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog}
+	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog, s.paths.MetricsLog()}
 	rotated := false
 	for _, logPath := range paths {
 		info, err := os.Stat(logPath)

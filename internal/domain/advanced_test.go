@@ -1,9 +1,50 @@
 package domain
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
+
+func TestNormalizeStreamRuleSerializesEmptyListsAsArrays(t *testing.T) {
+	for _, input := range []string{
+		`{"name":"legacy","protocol":"tcp"}`,
+		`{"name":"legacy","protocol":"udp","trusted_proxies":null,"allow":null,"deny":null,"sni_routes":null}`,
+	} {
+		var rule StreamRule
+		if err := json.Unmarshal([]byte(input), &rule); err != nil {
+			t.Fatal(err)
+		}
+		NormalizeStreamRule(&rule)
+		encoded, err := json.Marshal(rule)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(encoded, &fields); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"trusted_proxies", "allow", "deny", "sni_routes"} {
+			if string(fields[field]) != "[]" {
+				t.Errorf("%s must be an empty JSON array, got %s", field, fields[field])
+			}
+		}
+	}
+}
+
+func TestNormalizeStreamRulePreservesListsAndInitializesRouteNames(t *testing.T) {
+	rule := StreamRule{
+		TrustedProxies: []string{"127.0.0.1"}, Allow: []string{"10.0.0.0/8"}, Deny: []string{"all"},
+		SNIRoutes: []SNIRoute{{ServerNames: []string{" EXAMPLE.TEST "}, UpstreamHost: "127.0.0.1", UpstreamPort: 443}, {}},
+	}
+	NormalizeStreamRule(&rule)
+	if len(rule.TrustedProxies) != 1 || rule.TrustedProxies[0] != "127.0.0.1" || len(rule.Allow) != 1 || rule.Allow[0] != "10.0.0.0/8" || len(rule.Deny) != 1 || rule.Deny[0] != "all" {
+		t.Fatal("normalization changed configured access lists")
+	}
+	if len(rule.SNIRoutes) != 2 || rule.SNIRoutes[0].ServerNames[0] != "example.test" || rule.SNIRoutes[0].UpstreamPort != 443 || rule.SNIRoutes[1].ServerNames == nil {
+		t.Fatalf("unexpected normalized SNI routes: %+v", rule.SNIRoutes)
+	}
+}
 
 func TestValidateStateAcceptsAdvancedRuntimeAndUpstreamPool(t *testing.T) {
 	state := DefaultState()

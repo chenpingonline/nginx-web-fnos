@@ -78,13 +78,20 @@ func (m *Manager) Status(state State) NginxStatus {
 	pid, running := m.runningPID()
 	version, _ := m.Version()
 	lines, _ := fileutil.TailLines(m.paths.NginxErrorLog, 80)
+	var uptime *int64
+	var workers *int
+	if running {
+		uptime, workers = processStats(pid)
+	}
 	return NginxStatus{
-		Running:    running,
-		PID:        pid,
-		Version:    version,
-		Ports:      domain.ActivePorts(state),
-		ConfigPath: m.paths.NginxMaster,
-		LastError:  lastNginxError(lines),
+		Running:         running,
+		PID:             pid,
+		UptimeSeconds:   uptime,
+		WorkerProcesses: workers,
+		Version:         version,
+		Ports:           domain.ActivePorts(state),
+		ConfigPath:      m.paths.NginxMaster,
+		LastError:       lastNginxError(lines),
 	}
 }
 
@@ -455,6 +462,14 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	sort.Ints(ports)
 
 	files := make(map[string]string)
+	files["000-monitoring.conf"] = fmt.Sprintf(`server {
+    listen %s;
+    server_name localhost;
+    access_log off;
+    location = /status { stub_status; }
+    location / { return 404; }
+}
+`, nginxQuote("unix:"+m.paths.StatusSocket()))
 	if prelude := renderHTTPPrelude(state, m.paths.NginxCacheDir); prelude != "" {
 		files["001-runtime-and-upstreams.conf"] = prelude
 	}
@@ -513,6 +528,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	accessLog := "access_log off;"
 	if state.Settings.Logging.AccessEnabled {
 		accessLog = fmt.Sprintf("access_log %s fnproxy buffer=%dk flush=%ds;", nginxQuote(m.paths.NginxAccessLog), state.Settings.Logging.AccessBufferKB, state.Settings.Logging.AccessFlushSec)
+		accessLog += fmt.Sprintf("\n    access_log %s fnproxy_metrics buffer=32k flush=1s;", nginxQuote(m.paths.MetricsLog()))
 	}
 	logFormat := `log_format fnproxy '$remote_addr - $remote_user [$time_local] "$request" '
                        '$status $body_bytes_sent "$http_referer" '
@@ -521,6 +537,11 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	if state.Settings.Logging.CustomFormat != "" {
 		logFormat = "log_format fnproxy " + nginxDirectiveQuote(state.Settings.Logging.CustomFormat) + ";"
 	}
+	// A separate, fixed format keeps aggregation independent of custom access logs.
+	// No client address, URL, cookies or credentials are recorded here.
+	logFormat += `
+    map $host $fnproxy_rule_id { default "default"; }
+    log_format fnproxy_metrics escape=json '{"time":$msec,"rule":"$fnproxy_rule_id","status":$status,"bytes":$body_bytes_sent}';`
 	aio := "off"
 	if state.Settings.FileAIO {
 		aio = "on"
@@ -959,6 +980,7 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 		serverNames = []string{"_"}
 	}
 	fmt.Fprintf(&builder, "    server_name %s;\n", strings.Join(serverNames, " "))
+	fmt.Fprintf(&builder, "    set $fnproxy_rule_id %s;\n", nginxQuote(rule.ID))
 
 	if rule.TLS {
 		cert, ok := certs[rule.CertificateID]

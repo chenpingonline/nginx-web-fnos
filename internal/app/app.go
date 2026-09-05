@@ -31,14 +31,20 @@ func New(paths platform.Paths, service *service.AppService, web fs.FS) *App {
 }
 
 func (a *App) Serve() error {
-	maintenanceContext, stopMaintenance := context.WithCancel(context.Background())
-	defer stopMaintenance()
-	go a.service.MaintainLogs(maintenanceContext)
-	if _, err := os.Stat(a.paths.NginxMaster); errors.Is(err, os.ErrNotExist) {
-		if _, prepareErr := a.service.Prepare(); prepareErr != nil {
-			log.Printf("初始 Nginx 配置生成失败，管理页面仍将启动: %v", prepareErr)
-		}
+	if err := a.service.Initialize(); err != nil {
+		log.Printf("初始 Nginx 配置初始化失败，管理页面仍将启动: %v", err)
 	}
+	maintenanceContext, stopMaintenance := context.WithCancel(context.Background())
+	go a.service.MaintainLogs(maintenanceContext)
+	metricsDone := make(chan struct{})
+	go func() {
+		defer close(metricsDone)
+		a.service.MaintainMetrics(maintenanceContext)
+	}()
+	defer func() {
+		stopMaintenance()
+		<-metricsDone // Flush the last minute before exiting.
+	}()
 	if err := os.MkdirAll(filepath.Dir(a.paths.SocketPath), 0o750); err != nil {
 		return err
 	}

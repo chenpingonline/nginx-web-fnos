@@ -21,7 +21,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   save: [value: ProxyRuleInput, applyAfter: boolean];
-  cancel: [];
 }>();
 const applyAfter = ref(true);
 const domains = ref("");
@@ -164,7 +163,7 @@ function addLocation() {
 }
 </script>
 <template>
-  <form class="form-grid modal-form-grid rule-form-grid" @submit.prevent="submit">
+  <form id="proxy-rule-form" class="form-grid modal-form-grid rule-form-grid" @submit.prevent="submit">
     <div class="field primary-field primary-left">
       <label for="rule-name">规则名称</label
       ><input
@@ -429,17 +428,5 @@ function addLocation() {
       </div>
       <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" />
     </div>
-    <footer class="modal-footer full">
-      <button
-        type="button"
-        class="button ghost"
-        :disabled="busy"
-        @click="emit('cancel')"
-      >
-        取消</button
-      ><button type="submit" class="button primary" :disabled="busy">
-        {{ busy ? "处理中…" : rule ? "保存修改" : "创建规则" }}
-      </button>
-    </footer>
   </form>
 </template>

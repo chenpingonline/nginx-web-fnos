@@ -9,14 +9,19 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/chenpingonline/fn-nginx-web/packaging/fnos"
 )
 
 const (
 	AppName       = "nginx-web"
-	AppVersion    = "0.1.7"
-	BuildIdentity = "nginx-web 0.1.7"
 	NginxVersion  = "1.30.4"
 	SchemaVersion = 5
+)
+
+var (
+	AppVersion    = fnos.Version
+	BuildIdentity = AppName + " " + AppVersion
 )
 
 type Settings struct {
@@ -90,6 +95,7 @@ type State struct {
 	Dirty             bool              `json:"dirty"`
 	LastAppliedAt     *time.Time        `json:"last_applied_at,omitempty"`
 	LastApplyMessage  string            `json:"last_apply_message,omitempty"`
+	LastApplyError    string            `json:"last_apply_error,omitempty"`
 	UpdatedAt         time.Time         `json:"updated_at"`
 }
 
@@ -103,12 +109,14 @@ type Revision struct {
 }
 
 type NginxStatus struct {
-	Running    bool   `json:"running"`
-	PID        int    `json:"pid,omitempty"`
-	Version    string `json:"version"`
-	Ports      []int  `json:"ports"`
-	ConfigPath string `json:"config_path"`
-	LastError  string `json:"last_error,omitempty"`
+	Running         bool   `json:"running"`
+	PID             int    `json:"pid,omitempty"`
+	UptimeSeconds   *int64 `json:"uptime_seconds"`
+	WorkerProcesses *int   `json:"worker_processes"`
+	Version         string `json:"version"`
+	Ports           []int  `json:"ports"`
+	ConfigPath      string `json:"config_path"`
+	LastError       string `json:"last_error,omitempty"`
 }
 
 type ApplyResult struct {

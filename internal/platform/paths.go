@@ -32,6 +32,12 @@ type Paths struct {
 	BackendLog     string
 }
 
+// Monitoring stays inside this application's private runtime and data directories.
+func (p Paths) StatusSocket() string   { return filepath.Join(p.NginxRunDir, "status.sock") }
+func (p Paths) MetricsLog() string     { return filepath.Join(p.NginxLogDir, "http-metrics.log") }
+func (p Paths) MetricsHistory() string { return filepath.Join(p.VarDir, "metrics", "history.json") }
+func (p Paths) AppliedState() string   { return filepath.Join(p.VarDir, "applied-state.json") }
+
 func LoadPaths() (Paths, error) {
 	appDest := firstNonEmpty(os.Getenv("FNPROXY_APPDEST"), os.Getenv("TRIM_APPDEST"))
 	etcDir := firstNonEmpty(os.Getenv("FNPROXY_ETC"), os.Getenv("TRIM_PKGETC"))
@@ -107,7 +113,7 @@ func (p Paths) Ensure() error {
 		{p.EtcDir, 0o750}, {p.VarDir, 0o750}, {p.TmpDir, 0o750},
 		{p.CertificateDir, 0o700}, {p.RevisionDir, 0o700},
 		{p.NginxPrefix, 0o750}, {p.NginxConfigDir, 0o750}, {p.NginxConfD, 0o750},
-		{p.NginxRunDir, 0o750}, {p.NginxLogDir, 0o750}, {p.NginxTempDir, 0o750},
+		{p.NginxRunDir, 0o700}, {p.NginxLogDir, 0o750}, {p.NginxTempDir, 0o750},
 		// Nginx opens its compile-time default error log before reading -c.
 		// Keep these private compatibility directories even though the active
 		// configuration writes logs and temp files elsewhere.

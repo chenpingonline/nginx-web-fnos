@@ -46,7 +46,8 @@ start_backend() {
   echo "$pid" > "$PID_FILE"
 
   local count=0
-  while [ "$count" -lt 10 ]; do
+  # 首次启动需先校验并应用默认配置，再开放管理页面。
+  while [ "$count" -lt 60 ]; do
     if [ -S "$SOCKET" ] && kill -0 "$pid" 2>/dev/null; then
       return 0
     fi

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref, toRaw, watch } from "vue";
+import { computed, reactive, ref, toRaw, watch } from "vue";
 import {
   PhArrowClockwise,
   PhCheckCircle,
   PhPlusCircle,
+  PhX,
 } from "@phosphor-icons/vue";
 import type {
   CertificateMeta,
@@ -26,6 +27,26 @@ const emit = defineEmits<{
   refresh: [];
   apply: [];
 }>();
+const search = ref("");
+const protocolFilter = ref<"all" | "tcp" | "udp">("all");
+const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
+const hasFilters = computed(() => Boolean(search.value || protocolFilter.value !== "all" || enabledFilter.value !== "all"));
+const filteredRules = computed(() => {
+  const term = search.value.trim().toLowerCase();
+  const poolNames = new Map(props.pools.map(pool => [pool.id, pool.name]));
+  return props.rules.filter(rule =>
+    (protocolFilter.value === "all" || rule.protocol === protocolFilter.value) &&
+    (enabledFilter.value === "all" || rule.enabled === (enabledFilter.value === "enabled")) &&
+    (!term || [rule.name, `${rule.listen_address}:${rule.listen_port}`, `${rule.upstream_host}:${rule.upstream_port}`, poolNames.get(rule.upstream_pool_id),
+      ...(rule.sni_routes ?? []).flatMap(route => [...(route.server_names ?? []), `${route.upstream_host}:${route.upstream_port}`, poolNames.get(route.upstream_pool_id)]),
+    ].join(" ").toLowerCase().includes(term)),
+  );
+});
+function resetFilters() {
+  search.value = "";
+  protocolFilter.value = "all";
+  enabledFilter.value = "all";
+}
 const open = ref(false),
   editing = ref<StreamRule | null>(null),
   trustedText = ref(""),
@@ -64,12 +85,16 @@ const form = reactive<StreamRuleInput>(blank());
 const routeNames = ref<string[]>([]);
 function show(rule: StreamRule | null = null) {
   editing.value = rule;
-  Object.assign(form, rule ? structuredClone(rule) : blank());
+  Object.assign(form, blank(), rule ? structuredClone(toRaw(rule)) : {});
+  form.trusted_proxies ??= [];
+  form.allow ??= [];
+  form.deny ??= [];
+  form.sni_routes ??= [];
   trustedText.value = form.trusted_proxies.join("\n");
   allowText.value = form.allow.join("\n");
   denyText.value = form.deny.join("\n");
   routeNames.value = form.sni_routes.map((route) =>
-    route.server_names.join(", "),
+    (route.server_names ?? []).join(", "),
   );
   open.value = true;
 }
@@ -110,6 +135,17 @@ watch(
 );
 </script>
 <template>
+  <div class="toolbar rule-filters" role="search" aria-label="TCP/UDP 规则筛选">
+    <input v-model="search" class="input search-input" type="search" aria-label="搜索 TCP/UDP 规则" placeholder="搜索名称、监听地址、端口或目标" />
+    <select v-model="protocolFilter" class="select" aria-label="TCP/UDP 协议筛选">
+      <option value="all">全部协议</option><option value="tcp">TCP</option><option value="udp">UDP</option>
+    </select>
+    <select v-model="enabledFilter" class="select" aria-label="TCP/UDP 启用状态筛选">
+      <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
+    </select>
+    <button class="button ghost" :disabled="!hasFilters" @click="resetFilters">重置筛选</button>
+    <span class="filter-count">{{ filteredRules.length }} / {{ rules.length }} 条</span>
+  </div>
   <div class="toolbar">
     <div class="notice">
       四层代理独立于 HTTP 规则，适用于 SSH、数据库、MQTT、游戏服务和 HTTPS SNI
@@ -133,8 +169,8 @@ watch(
       <PhPlusCircle :size="17" aria-hidden="true" />添加 TCP/UDP 规则
     </button>
   </div>
-  <article class="card">
-    <div v-if="rules.length" class="table-wrap">
+  <article class="card proxy-rule-card">
+    <div v-if="filteredRules.length" class="table-wrap">
       <table class="table">
         <thead>
           <tr>
@@ -147,7 +183,7 @@ watch(
           </tr>
         </thead>
         <tbody>
-          <tr v-for="rule in rules" :key="rule.id">
+          <tr v-for="rule in filteredRules" :key="rule.id">
             <td>
               <label class="switch"
                 ><input
@@ -184,7 +220,7 @@ watch(
                   >接收 PROXY</span
                 ><span v-if="rule.proxy_protocol" class="badge neutral"
                   >发送 PROXY</span
-                ><span v-if="rule.sni_routes.length" class="badge neutral"
+                ><span v-if="rule.sni_routes?.length" class="badge neutral"
                   >SNI {{ rule.sni_routes.length }}</span
                 >
               </div>
@@ -207,16 +243,16 @@ watch(
     </div>
     <div v-else class="empty-state">
       <div class="empty-icon">⇆</div>
-      <h3>还没有 TCP/UDP 代理</h3>
-      <p>创建独立监听端口并转发到单个后端服务或 Stream 后端服务池。</p>
-      <button class="button primary" @click="show()">
+      <h3>{{ rules.length ? "没有匹配的规则" : "还没有 TCP/UDP 代理" }}</h3>
+      <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单个后端服务或 Stream 后端服务池。" }}</p>
+      <button v-if="!rules.length" class="button primary" @click="show()">
         <PhPlusCircle :size="17" aria-hidden="true" />添加规则
       </button>
     </div>
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
     <section
-      class="modal"
+      class="modal stream-modal"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stream-title"
@@ -228,12 +264,18 @@ watch(
           </h2>
           <p>支持 TLS 终止、SNI 透传、PROXY Protocol 和访问控制。</p>
         </div>
-        <button class="icon-button" aria-label="关闭" @click="open = false">
-          ×
+        <div class="rule-header-actions">
+          <button type="button" class="button ghost" :disabled="busy" @click="open = false">取消</button>
+          <button type="submit" form="stream-rule-form" class="button primary" :disabled="busy">
+            {{ busy ? "处理中…" : "保存 Stream 规则" }}
+          </button>
+        </div>
+        <button type="button" class="icon-button modal-close" aria-label="关闭" @click="open = false">
+          <PhX :size="20" aria-hidden="true" />
         </button>
       </header>
       <div class="modal-body">
-        <form class="form-grid modal-form-grid" @submit.prevent="submit">
+        <form id="stream-rule-form" class="form-grid modal-form-grid" @submit.prevent="submit">
           <div class="field">
             <label>名称</label
             ><input
@@ -467,13 +509,6 @@ watch(
             <label>拒绝 IP / CIDR</label
             ><textarea v-model="denyText" class="textarea"></textarea>
           </div>
-          <footer class="modal-footer full">
-            <button type="button" class="button ghost" @click="open = false">
-              取消</button
-            ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存 Stream 规则" }}
-            </button>
-          </footer>
         </form>
       </div>
     </section>

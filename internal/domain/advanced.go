@@ -400,8 +400,23 @@ func NormalizeStreamRule(rule *StreamRule) {
 	if rule.TLSMode == "" {
 		rule.TLSMode = "off"
 	}
+	if rule.TrustedProxies == nil {
+		rule.TrustedProxies = []string{}
+	}
+	if rule.Allow == nil {
+		rule.Allow = []string{}
+	}
+	if rule.Deny == nil {
+		rule.Deny = []string{}
+	}
+	if rule.SNIRoutes == nil {
+		rule.SNIRoutes = []SNIRoute{}
+	}
 	for routeIndex := range rule.SNIRoutes {
 		route := &rule.SNIRoutes[routeIndex]
+		if route.ServerNames == nil {
+			route.ServerNames = []string{}
+		}
 		route.UpstreamPoolID = strings.TrimSpace(route.UpstreamPoolID)
 		route.UpstreamHost = strings.TrimSpace(strings.Trim(route.UpstreamHost, "[]"))
 		for index := range route.ServerNames {

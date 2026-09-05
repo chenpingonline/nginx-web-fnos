@@ -1,198 +1,71 @@
-# Design QA
-
-## Evidence
-
-- Source visual truth: `/Users/chenping/.codex/generated_images/01a06652-fe87-7443-a47a-a117b6f794b4/exec-a617dd9c-bc87-4c1e-83cc-d9fa7615fe58.png`
-- Implementation screenshot: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-implementation.png`
-- Normalized comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-comparison.png`
-- Source pixels: 1408 x 1117
-- Implementation capture pixels: 1408 x 792
-- CSS viewport: 1408 x 1120 at device pixel ratio 1
-- Normalization: the source was cropped to its top 1408 x 792 region and placed beside the implementation capture without scaling.
-- State: dark theme, HTTP/HTTPS proxy page, new-rule modal open, default form values.
-
-## Findings
-
-- No actionable P0, P1, or P2 differences remain in the compared region.
-- Fonts and typography: the implementation uses the existing macOS system-font stack and matches the reference hierarchy for modal title, section title, description, labels, controls, and help text.
-- Spacing and layout rhythm: the modal frame, header spacing, two-column field grid, control heights, and section rhythm match the selected direction. The section divider now begins after the description instead of sitting below the entire heading row.
-- Colors and visual tokens: dark surfaces use neutral graphite values without a blue cast; green remains limited to focus, enabled state, title icon, and section accents.
-- Image and icon fidelity: the title uses the existing Phosphor icon library rather than a custom-drawn asset. The reference contains no raster content requiring generation.
-- Copy and content: labels, descriptions, defaults, and helper text match the selected design and existing product behavior. The removed `基本信息` heading remains absent.
-
-## Interaction Verification
-
-- Opened the HTTP/HTTPS proxy page and the new-rule modal.
-- Enabled HTTPS and confirmed certificate fields appeared.
-- Disabled HTTPS and confirmed conditional fields disappeared.
-- Checked the browser console: no errors.
-
-## Comparison History
-
-- Before the final comparison, user feedback identified that section dividers were below the whole heading row. The bottom border was removed and replaced with a flexible line after the section description.
-- The post-fix normalized comparison shows the divider in the intended trailing position with no remaining P0/P1/P2 issue.
-
-## Follow-up Polish
-
-- P3: browser surface height limited the normalized side-by-side evidence to the upper 792 px; lower sections retain the same shared section and field styles.
-
-## Help Text Fidelity Check — 2026-09-04
-
-- Source visual truth: `/var/folders/sp/90pk0ss17bj66n2wcc3fgx1h0000gn/T/codex-clipboard-5d960657-fe21-4f2b-b541-277f89ff1118.png`
-- Implementation screenshot: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-helptext-implementation.png`
-- Source pixels: 1300 x 178
-- Implementation capture pixels: 1280 x 720
-- CSS viewport and density: 1280 x 720 at device pixel ratio 1
-- State: dark theme, HTTP/HTTPS proxy page, new-rule modal open.
-- Full-view evidence: the restored helper appears directly below the domain textarea without shifting the surrounding entry fields.
-- Focused comparison evidence: the supplied focused crop and the browser-rendered modal were presented together; the wording, muted color, single-line treatment, and textarea-to-helper spacing match the requested reference.
-- Fonts and typography: unchanged existing system-font stack, size, weight, line height, and antialiasing.
-- Spacing and layout rhythm: unchanged; only the helper copy was replaced.
-- Colors and visual tokens: unchanged muted helper-text token.
-- Image quality and asset fidelity: no image assets are involved in this text-only adjustment.
-- Copy and content: restored to `多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。`
-- Interaction verification: opened the proxy page and new-rule modal; exact helper text is visible.
-- Comparison history: the abbreviated copy was replaced with the full source wording; the post-fix comparison found no P0, P1, or P2 differences in the requested region.
-
-## Target Host Width Check — 2026-09-04
-
-- Source visual truth: `/var/folders/sp/90pk0ss17bj66n2wcc3fgx1h0000gn/T/codex-clipboard-f41a340f-a7ea-4dc8-87da-f2226c96015d.png`
-- Implementation screenshot: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-target-host-width.png`
-- Source pixels: 1768 x 464
-- Implementation capture pixels: 1280 x 720
-- CSS viewport and density: 1280 x 720 at device pixel ratio 1
-- State: dark theme, HTTP/HTTPS proxy page, new-rule modal open, single backend service selected.
-- Full-view evidence: the backend-service section retains its existing two-column grid and surrounding section rhythm.
-- Focused comparison evidence: the supplied backend-service crop and browser-rendered modal were presented together; the target-host input now uses the same content width as the backend-service-pool select above it.
-- Fonts and typography: unchanged.
-- Spacing and layout rhythm: left edges and right edges of the two left-column controls align; labels and row gaps are unchanged.
-- Colors and visual tokens: unchanged.
-- Image quality and asset fidelity: no image assets are involved.
-- Copy and content: unchanged.
-- Interaction verification: opened the proxy page and new-rule modal; the single-backend-service fields render normally.
-- Comparison history: the target-host input previously inherited the 50% text-input width; a scoped override changed only this input to 100%, with no remaining P0, P1, or P2 issue in the requested region.
+# 首页浅色复刻验收
 
 final result: passed
 
-## Smoked Glass Button System — 2026-09-04
+规则管理页后续修正：HTTP/HTTPS 与 TCP/UDP 表格卡片增加圆角裁切，防止表头背景盖住顶部圆角；两页新增关键词、协议、启用状态的组合筛选、匹配数量与重置。已验证 HTTP 筛选 1/5、组合无结果 0/5、重置 5/5；TCP 协议/状态无结果 0/1、目标地址匹配 1/1、重置 1/1。390px 窄屏控件正常换行、整页不溢出，表格保留内部横向滚动。构建与 diff 检查通过；截图保存在同一证据目录的 `http-filters-corners.jpg` 和 `tcp-filters-corners.jpg`。
 
-### Evidence
+最新调整：按用户后续标注，移除首页顶部“总览 / 添加代理规则 / 刷新配置 / 校验配置”整栏。1444 × 1089 下运行状态卡上边距从 82px 上移到 23px，错误率与图表逻辑未改动。已通过构建、diff 检查和浏览器 DOM/渲染检查。最新截图为 `/Users/chenping/.codex/visualizations/2026/09/05/01a06f15-3d84-72a2-a700-19766b72f0d8/dashboard-no-header.jpg`。下文保留此前完整复刻验收记录。
 
-- Source visual truth: `/Users/chenping/.codex/generated_images/01a06b44-3cbd-7b91-8e4f-f472bcfb351d/exec-92a3136b-45e1-431a-ad6c-87921c5f9da6.png`
-- Browser-rendered implementation: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-implementation.png`
-- Normalized source: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-source.png`
-- Full-view comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-comparison.png`
-- Focused button comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-focused-comparison.png`
-- Narrow-screen evidence: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-button-style-3-narrow.png`
-- Source pixels: 1672 x 941; normalized to 1440 x 810 with no crop.
-- Implementation pixels and CSS viewport: 1440 x 810 at device pixel ratio 1.
-- State: dark theme, TCP/UDP proxy empty state, complete local management service connected through its Unix socket.
+日期：2026-09-05。范围：现有 nginx-web 首页、侧栏、请求/响应叠加图表；错误率计算和详情范围保持原逻辑。
 
-### Findings
+## 对照依据与证据
 
-- No actionable P0, P1, or P2 differences remain for the selected button direction.
-- Fonts and typography: the existing system-font stack, compact 12 px button labels, weights, and line heights remain intact. Icons use the installed Phosphor set and align optically with the labels.
-- Spacing and layout rhythm: primary toolbar buttons render at 38 px high with 9 px radii, 7 px icon gaps, close shadows, and the existing toolbar spacing. The generated source's altered content proportions were not copied because the request scoped the change to the button system.
-- Colors and visual tokens: dark buttons use translucent graphite centers, cool-silver borders, restrained inner highlights, and a muted cobalt icon accent. The former mint dark-theme accent is replaced by slate blue; offline and destructive states remain semantic red.
-- Image and icon fidelity: all action glyphs use the existing Phosphor icon library. No raster placeholders, custom SVGs, CSS drawings, or generated icon assets were introduced.
-- Copy and content: all visible action labels remain unchanged; decorative full-width plus characters were replaced by accessible leading `PlusCircle` icons.
-- Responsive behavior: at 720 x 900, toolbar actions wrap without horizontal overflow; document and body scroll widths both equal the 720 px viewport.
+- 图 1：`/var/folders/sp/90pk0ss17bj66n2wcc3fgx1h0000gn/T/codex-clipboard-39337a5b-b8ec-491c-91a5-d856a57206cb.png`，1444 × 1089 PNG。
+- 图 2：`/var/folders/sp/90pk0ss17bj66n2wcc3fgx1h0000gn/T/codex-clipboard-022acfaa-75ca-4ba4-8599-113bd7f528bc.png`，872 × 198 PNG，仅作为多线和短横线图例参考。
+- 实现：<http://127.0.0.1:18417/>，隔离 Colima Linux / Nginx 1.30.4 实例。
+- 最终全页截图：`/Users/chenping/.codex/visualizations/2026/09/05/01a06f15-3d84-72a2-a700-19766b72f0d8/dashboard-final.jpg`。
+- 中间对照：同目录 `dashboard-desktop-pass2.jpg`。
+- 响应式证据：同目录 `dashboard-1280.jpg`、`dashboard-1024.jpg`、`dashboard-mobile-top.jpg`、`dashboard-mobile-bottom.jpg`。
+- 错误详情：同目录 `errors-desktop.jpg`。
+- 预览运行、重启和停止说明：同目录 `dashboard-preview/README.md`。临时预览代码及二进制已移出项目目录。
 
-### Interaction Verification
+最终 CSS viewport 为 1444 × 1089，devicePixelRatio = 1；最终截图为 1444 × 1089，与图 1 原始像素尺寸一致，无设备边框或浏览器工具栏，无缩放处理。参考图 1、图 2 与实现截图在同一次图像输入中共同检查。图 2 是局部参考，未作为整页尺寸依据。
 
-- Opened the TCP/UDP page and activated `添加 TCP/UDP 规则`; the complete rule modal opened.
-- Closed the modal and used keyboard navigation; the focused navigation button showed the two-ring slate-blue focus treatment.
-- Verified the primary action's computed geometry and paint: 38 px height, 9 px radius, translucent graphite background, cool-silver border, and compact layered shadow.
-- Checked the browser console after navigation and modal interaction; no errors or warnings were reported.
+附加 viewport 为 1280 × 720、1024 × 768、390 × 844。浏览器工具输出分别为 1265 × 712、1009 × 757、375 × 812，属于浏览器截图裁切/输出差异；响应式布局尺寸以实时 DOM 矩形和 scrollWidth 为依据，不对这些截图作逐像素匹配判断。
 
-### Comparison History
+状态：Nginx 运行、配置同步、6 条测试规则、首页显示 5 行、1 个将到期证书、全局 HTTP、最近 15 分钟、两条曲线都可见。示例规则明确标记“预览”，请求/响应/错误数据通过真实 HTTP 请求采集。图 1 的数值与域名是设计样例；未为接近样例伪造历史或运行数据。
 
-- First normalized full-view and focused comparisons found no actionable P0, P1, or P2 mismatch within the button-only scope, so no visual correction loop was required.
+全图的标题、表格小字、图标和图例均可直接辨认，逐项检查了这些区域，不需要另行裁切放大来判断。同步读取 DOM 字号和矩形，辅助区分截图压缩与真实布局差异。
 
-### Follow-up Polish
+## 对照与修正记录
 
-- P3: hover and pressed depth can be tuned further after subjective review, but both states are implemented and keyboard focus is visibly distinct.
+1. 初次对照：状态卡 136px、流量卡 427.5px、规则卡 415px，证书区落到首屏外，属于 P2 密度偏差。缩小状态卡上下内边距，删除重复单位行，收紧图例、图表和表格行距。
+2. 第二次对照：状态 130px、流量 370px、规则 390px、证书 77px；仍有少量页面纵向溢出。规则行高再缩小 1px，证书区缩小 3px，调整页面底部留白。
+3. 交互发现 P1：图例隐藏状态与全局 `.hidden` 类冲突，隐藏后图例自身消失。改为独立 `series-muted` 类；验证可恢复，且不能隐藏最后一条曲线。
+4. 字体对照发现实时流量标题受全局样式覆盖成 15px/690，已显式修正为 17px/570；运行标题调整为 30px，与参考层级接近。
+5. 窄屏检查：侧栏导航增加内部滚动，页脚仍可访问；手机侧栏关闭后隐藏其可聚焦控件，打开菜单后正常恢复。移动端表格与协议选项在各自容器内横向滚动，不扩大整页宽度。
+6. 最终同尺寸对照及 DOM 测量：侧栏 260px、主内容 1132px、状态卡 y=82 / h=130、流量卡 y=224 / h=370、规则卡 y=604 / h=385、证书区 y=1002 / h=74。图 1 对应为状态 y=82 / h=130、流量 y=224 / h=370、规则 y≈603 / h≈385、证书 y≈1003 / h≈74。页面没有横向或纵向溢出，无未解决的 P0/P1/P2 问题。
 
-final result: passed
+## 五项视觉检查
 
-## Hand-drawn Sidebar Icon Refinement — 2026-09-04
+- **字体**：复用系统 SF/PingFang 字体栈；总览 28px、运行标题 30px、区域标题 17px、表格 12px。检查标题字重、标签/数值层级、图例基线、数字单位及截断。手机端指标换行后没有相互覆盖。
+- **间距和布局**：标题/操作、独立状态卡、流量卡、规则卡、证书条顺序与图 1 一致；白色卡片、13px 圆角、浅边框和轻阴影。核心区域尺寸如上，1–2px 坐标差异为可接受细节。
+- **颜色**：页面 `#fcfefe`，侧栏 `#f5fbf9`，卡片 `#fff`，选中 `#e7f6ef`，主色 `#00a653`，边框 `#e5ebee`。请求绿、响应蓝与图 2 图例对应；错误、证书提醒沿用语义橙色。截图中的压缩/颜色呈现不作为零色差承诺，CSS 色值按参考取样方向设定。
+- **图像与图标**：保留项目实际品牌 PNG 和现有 SidebarIcon，操作/运行状态使用 Phosphor 图标。没有新画品牌图或将截图切成不可交互界面。品牌图标与参考图的图案不完全一致，作为现有产品身份保留；状态徽章采用图标和圆形 UI 边框。未新增照片、插画或占位素材。
+- **文案**：保留“错误率 → 详情”，显示配置状态而非虚构服务健康。使用实际支持的 15 分钟/1 小时/24 小时范围；缺失数据为“—”。目前没有可靠即时带宽，指标和表格均不展示带宽。用已有排序控件代替未实现的分组控件，不增加不可用选项。
 
-- Source visual truth: `/Users/chenping/.codex/generated_images/01a06b45-8b4a-7452-9e72-3fd9d1d0c27c/exec-0fbbc702-e0ad-4581-90b3-bf58e85a8e8d.png`
-- Browser-rendered implementation: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-handdrawn.png`
-- Focused implementation crop: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-handdrawn-crop.png`
-- Normalized comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-handdrawn-comparison.png`
-- Source pixels: 825 x 1907.
-- Implementation pixels: 1440 x 1024, CSS viewport 1440 x 1024 at device pixel ratio 1.
-- Focused comparison: source scaled proportionally to 220 x 509 and padded to 220 x 520; implementation cropped to the same 220 x 520 sidebar region.
-- State: dark theme, `Nginx 配置` selected, complete local management service connected.
+## 行为与数据验证
 
-### Findings
+- 请求/响应两线同时显示；图例显隐、恢复、至少保留一线、展开/收起正常。
+- 键盘 End/方向键与 Escape 可查看/关闭同一采样点的多项提示；实际观察到请求 2 req/s、响应 1.74 req/s，数据来源独立。
+- 错误率仍为 `(4xx + 5xx) / 完成请求数`。浏览器实例 199 次 4xx + 75 次 5xx = 274 次错误，274 / 3146 = 8.71%；详情正常切换 5xx 趋势。
+- 首页错误箭头保留最近 15 分钟范围；规则行箭头保留接口服务规则 ID。返回后保留范围，单条规则只画可采集的响应速率，避免将完成请求冒充独立接收请求。
+- 协议筛选、已停用状态筛选、名称排序、分页、无搜索结果及清空恢复均验证。
+- 添加规则打开原有表单，取消正常；校验配置返回“配置校验通过”，刷新配置返回“已平滑重载”。
+- 手机菜单展开/关闭正常，关闭后不暴露屏外导航焦点；短屏菜单可滚动，页脚保持可见。
+- 浏览器控制台 error/warn 为空。
+- `go test ./...`、前端 typecheck/build、`git diff --check` 通过。新增后端指标还经过 metrics/nginx/service race 检查和 Colima 内真实 Nginx 集成检查，覆盖运行时长、worker 数、响应速率、规则归属、轮转及原有错误统计。
 
-- No actionable P0, P1, or P2 differences remain for the user-requested hand-drawn icon refinement.
-- Fonts and typography: unchanged from the existing product UI.
-- Spacing and layout rhythm: every SVG measures 20 x 20 CSS pixels in the browser and remains optically centered in the existing navigation slot.
-- Colors and visual tokens: all paths use `currentColor`; inactive, hover, focus, and selected colors continue to come from the existing navigation states.
-- Image and icon fidelity: the ten icons now use one purpose-built 1.75 px monoline system with matching rounded caps and joins. The hand-drawn variant recreates the reference's four-cell overview, paired HTTP arrows, five-node stream topology, stacked server pool, gauge, certificate seal, terminal, revision clock, code brackets, and sliders. This custom SVG treatment is intentional because the user explicitly requested manual drawing after rejecting the closest library matches.
-- Copy and content: unchanged.
+## 结论与剩余差异
 
-### Interaction Verification
+没有待修复的 P0/P1/P2 项目。P3 可接受差异为现有品牌图标、系统字体渲染、部分按钮/状态徽章的细微阴影，以及真实业务数据与设计样例的差异。此次未执行 fnOS 实机安装或重新打包发布。
 
-- Selected `Nginx 配置` through the sidebar and confirmed the custom code icon inherits the mint active color.
-- Confirmed all ten icons remain visible at the compact production sidebar density.
-- The complete-service page reported no console errors or warnings for `127.0.0.1:4174`.
+实施清单：布局与配色已完成；多线图和图例已完成；错误率回归通过；桌面/窄屏检查通过；构建通过；隔离预览保持可用。
 
-### Comparison History
 
-- The first library-based implementation retained noticeable shape differences.
-- Replaced the navigation icon mapping with a dedicated SVG component, then enlarged the internal drawing viewport and redrew the slider tracks so the final 20 px rendering more closely matches the source.
-- The post-fix normalized comparison contains no remaining actionable P0, P1, or P2 issue.
+## 流量时间范围扩展（2026-09-05）
 
-### Follow-up Polish
-
-- P3: the generated source uses an enlarged presentation scale and omits the real product brand/footer; the implementation intentionally retains the established 220 px production sidebar.
-
-final result: passed
-
-## Sidebar Icon Direction 1 — 2026-09-04
-
-- Source visual truth: `/Users/chenping/.codex/generated_images/01a06b45-8b4a-7452-9e72-3fd9d1d0c27c/exec-0fbbc702-e0ad-4581-90b3-bf58e85a8e8d.png`
-- Browser-rendered implementation: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-implementation.png`
-- Focused implementation crop: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-crop.png`
-- Normalized comparison: `/Users/chenping/Project/codex/fnos/fn-nginx-web/design-qa-sidebar-icons-comparison.png`
-- Source pixels: 825 x 1907.
-- Implementation pixels: 1440 x 1024, CSS viewport 1440 x 1024 at device pixel ratio 1.
-- Focused comparison dimensions: source scaled proportionally to 220 x 509 and padded to 220 x 520; implementation sidebar cropped to 220 x 520; combined evidence is 440 x 520.
-- State: dark theme, `Nginx 配置` selected, complete local Go management service connected through its Unix socket.
-
-### Findings
-
-- No actionable P0, P1, or P2 differences remain for the requested icon-only change.
-- Fonts and typography: the existing product font stack, label sizes, weights, and line heights were intentionally preserved.
-- Spacing and layout rhythm: the existing 20 px icon slot, row height, padding, chevrons, brand block, and footer were preserved. The generated concept exaggerates the sidebar scale, so the implementation correctly follows the existing product density instead of copying that artifact.
-- Colors and visual tokens: the dark neutral background, muted blue-gray inactive color, mint active color, and translucent green selected row remain unchanged.
-- Image and icon fidelity: standard UI icons use the existing Phosphor library. Direction 1 is represented by `SquaresFour`, `ArrowsLeftRight`, `ShareNetwork`, `HardDrives`, `Gauge`, `Certificate`, `TerminalWindow`, `ClockCounterClockwise`, `Code`, and `SlidersHorizontal`; no custom SVG, CSS drawing, raster placeholder, or new dependency was introduced.
-- Copy and content: all ten navigation labels and ordering are unchanged.
-
-### Interaction Verification
-
-- Opened the full local management service at a desktop viewport and selected `Nginx 配置`.
-- Confirmed the selected row, generated-config page, sidebar footer status, and all ten navigation icons render together.
-- Console entries for the full-service URL contained no errors or warnings. Earlier errors were isolated to the API-less Vite-only preview and are not present in the complete app runtime.
-
-### Comparison History
-
-- First normalized side-by-side comparison found no actionable P0, P1, or P2 issue. No visual correction loop was required.
-
-### Follow-up Polish
-
-- P3: the generated concept uses a larger presentation scale than the production sidebar; the implementation intentionally keeps the product's established compact 220 px sidebar.
-
-final result: passed
-
-## Current Build Gate — Smoked Glass Buttons
-
-- Latest evaluated change: smoked-glass button system.
-- Full and focused evidence: `design-qa-button-style-3-comparison.png` and `design-qa-button-style-3-focused-comparison.png`.
-- Browser interaction, keyboard focus, console, desktop viewport, and 720 px responsive checks passed.
-
-final result: passed
+- 总览与错误详情统一提供 15 分钟、1 小时、5 小时、1 天、7 天、1 月；1 月指最近 30 天。总览进入错误详情保留当前选择。
+- 历史保留 30 天，按原有分钟桶保存；日、周、月曲线分别按 5 分钟、1 小时、3 小时汇总，最多 300 个绘图点。请求速率按覆盖时长加权，错误率仍由错误次数除以完成请求数计算；缺失历史不补零。
+- Go 回归覆盖全部范围、30 天保存与重启恢复、过期清理、全局及单规则汇总和缺失历史。`go test ./...`、`go test -race ./internal/metrics`、前端类型检查与生产构建通过。
+- 隔离真实 Nginx 预览逐个请求六种范围均成功，绘图点数依次为 15、60、300、288、168、240。1444px 桌面与 390px 手机视口检查通过，月份日期刻度及错误详情范围传递正常，无页面横向溢出。现有真实历史从 09/05 10:39 开始，未构造过去 30 天的数据。

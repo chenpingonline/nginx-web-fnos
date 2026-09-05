@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
 	appservice "github.com/chenpingonline/fn-nginx-web/internal/service"
 )
 
@@ -106,6 +107,22 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 	}
 
 	switch {
+	case apiPath == "/api/dashboard" && r.Method == http.MethodGet:
+		minutes := 60
+		rawMinutes := r.URL.Query().Get("minutes")
+		if rawMinutes != "" {
+			parsed, err := strconv.Atoi(rawMinutes)
+			if err != nil {
+				writeAPIError(w, http.StatusBadRequest, "时间范围必须为 15 分钟、1 小时、5 小时、1 天、7 天或 1 月（30 天）")
+				return
+			}
+			minutes = parsed
+		}
+		if !metrics.ValidRange(minutes) {
+			writeAPIError(w, http.StatusBadRequest, "时间范围必须为 15 分钟、1 小时、5 小时、1 天、7 天或 1 月（30 天）")
+			return
+		}
+		writeJSON(w, http.StatusOK, a.service.Dashboard(minutes, r.URL.Query().Get("rule")))
 	case apiPath == "/api/overview" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.Overview())
 	case apiPath == "/api/state" && r.Method == http.MethodGet:
