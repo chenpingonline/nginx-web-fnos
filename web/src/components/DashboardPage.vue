@@ -117,6 +117,7 @@ const issue = computed(() => {
           <p>{{ overview.last_apply_error ? "最近配置应用失败" : overview.dirty ? "有待应用的配置变更" : "配置已同步" }}</p>
           <button v-if="overview.nginx.running" class="button danger-ghost small" :disabled="busy" @click="emit('stop')">停止 Nginx</button>
           <button v-else class="button secondary small" :disabled="busy" @click="emit('start')">启动 Nginx</button>
+          <button v-if="overview.nginx.running" class="button secondary small" :disabled="busy" title="重新加载已应用的配置，不应用草稿修改" @click="emit('reload')">重载配置</button>
         </div>
       </div>
       <dl class="service-facts">
@@ -136,7 +137,7 @@ const issue = computed(() => {
     </div>
     <div v-if="issue || overview.dirty" class="notice warning dashboard-notice">
       <PhWarningCircle :size="18" /><span>{{ issue || "当前草稿尚未应用，正在转发的服务仍使用上次生效配置。" }}</span>
-      <button v-if="!data?.monitoring_ready || overview.dirty" class="button secondary small" :disabled="busy" @click="emit('apply')">保存并应用</button>
+      <button v-if="overview.dirty" class="button secondary small" :disabled="busy" @click="emit('apply')">保存并应用</button>
     </div>
 
     <section class="card traffic-card" :aria-busy="fetching">

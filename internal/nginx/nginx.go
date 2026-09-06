@@ -622,6 +622,11 @@ http {
     gzip_static %s;
     gunzip %s;
 
+    map $http_host $fnproxy_client_host {
+        default $http_host;
+        ''      $host;
+    }
+
     map $http_upgrade $connection_upgrade {
         default upgrade;
         ''      close;
@@ -1217,14 +1222,14 @@ func renderHTTPBackend(settings domain.LocationSettings, scheme string) string {
 func (m *Manager) renderProxySettings(builder *strings.Builder, rule ProxyRule, settings domain.LocationSettings, cacheID string) {
 	builder.WriteString("        proxy_http_version 1.1;\n")
 	if rule.PreserveHost {
-		builder.WriteString("        proxy_set_header Host $host;\n")
+		builder.WriteString("        proxy_set_header Host $fnproxy_client_host;\n")
 	} else {
 		builder.WriteString("        proxy_set_header Host $proxy_host;\n")
 	}
 	builder.WriteString("        proxy_set_header X-Real-IP $remote_addr;\n")
 	builder.WriteString("        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n")
 	builder.WriteString("        proxy_set_header X-Forwarded-Proto $scheme;\n")
-	builder.WriteString("        proxy_set_header X-Forwarded-Host $host;\n")
+	builder.WriteString("        proxy_set_header X-Forwarded-Host $fnproxy_client_host;\n")
 	builder.WriteString("        proxy_set_header X-Forwarded-Port $server_port;\n")
 	if rule.WebSocket {
 		builder.WriteString("        proxy_set_header Upgrade $http_upgrade;\n")

@@ -364,14 +364,14 @@ function addSplit() {
         {{ busy ? "处理中…" : "保存为草稿" }}
       </button>
       <button
-        class="button"
-        :class="hasChanges || dirty ? 'primary' : 'secondary'"
+        v-if="hasChanges || dirty"
+        class="button primary"
         type="submit"
         data-action="apply"
         :disabled="busy"
-        :title="hasChanges || dirty ? '保存当前设置并应用全部草稿配置' : '重新应用已保存的配置'"
+        title="保存当前设置并应用全部草稿配置"
       >
-        {{ hasChanges || dirty ? "保存并应用" : "重新应用" }}
+        保存并应用
       </button>
     </div></div>
   </form>

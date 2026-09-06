@@ -880,14 +880,12 @@ onBeforeUnmount(() => {
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新
               </button>
               <button
-                class="button"
-                :class="state.dirty ? 'primary' : 'secondary'"
+                v-if="state.dirty"
+                class="button primary"
                 :disabled="busy"
                 @click="applyConfiguration"
               >
-                <PhCheckCircle :size="16" aria-hidden="true" />{{
-                  state.dirty ? "保存并应用" : "重新应用"
-                }}
+                <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
               </button>
               <button class="button primary" @click="openRule()">
                 <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
@@ -1133,7 +1131,7 @@ onBeforeUnmount(() => {
                   title="将当前草稿应用到 Nginx，并生成新的历史版本"
                   @click="applyConfiguration"
                 >
-                  <PhCheckCircle :size="14" aria-hidden="true" />应用当前草稿
+                  <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
                 </button>
               </header>
               <div v-if="state.last_apply_error" class="notice warning" role="alert">上次应用失败：{{ state.last_apply_error }}</div>
@@ -1216,7 +1214,7 @@ onBeforeUnmount(() => {
               </div>
             </article>
             <div class="notice warning section-gap">
-              预览不会修改配置。恢复为草稿会覆盖当前草稿中的规则和设置，但不会立即影响运行中的 Nginx；检查草稿后，点击“应用当前草稿”才会生效。顶部按钮应用的是当前全部草稿，并非正在预览的历史版本。
+              预览不会修改配置。恢复为草稿会覆盖当前草稿中的规则和设置，但不会立即影响运行中的 Nginx；检查草稿后，点击“保存并应用”才会生效。顶部按钮应用的是当前全部草稿，并非正在预览的历史版本。
             </div></template
           >
           <template v-else-if="page === 'config'"
@@ -1234,14 +1232,12 @@ onBeforeUnmount(() => {
                   <PhCheckCircle :size="14" aria-hidden="true" />校验配置
                 </button>
                 <button
-                  class="button small"
-                  :class="state.dirty ? 'primary' : 'secondary'"
+                  v-if="state.dirty"
+                  class="button primary small"
                   :disabled="busy"
                   @click="applyConfiguration"
                 >
-                  <PhCheckCircle :size="14" aria-hidden="true" />{{
-                    state.dirty ? "保存并应用" : "重新应用"
-                  }}
+                  <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
                 </button>
                 <button class="button ghost small" @click="copyConfig">
                   复制当前文件

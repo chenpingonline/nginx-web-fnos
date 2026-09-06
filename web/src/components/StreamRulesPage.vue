@@ -157,14 +157,12 @@ watch(
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
     <button
-      class="button"
-      :class="dirty ? 'primary' : 'secondary'"
+      v-if="dirty"
+      class="button primary"
       :disabled="busy"
       @click="emit('apply')"
     >
-      <PhCheckCircle :size="16" aria-hidden="true" />{{
-        dirty ? "保存并应用" : "重新应用"
-      }}
+      <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
     </button>
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加 TCP/UDP 规则
