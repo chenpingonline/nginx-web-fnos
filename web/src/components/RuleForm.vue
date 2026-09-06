@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import AppSelect from "./AppSelect.vue";
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import type {
   CertificateMeta,
+  RuleGroup,
+  GroupField,
   ProxyRule,
   ProxyRuleInput,
   RateLimitPolicy,
@@ -14,6 +16,8 @@ import LocationSettingsEditor from "./LocationSettingsEditor.vue";
 import type { LocationSettings } from "../types";
 const props = defineProps<{
   rule: ProxyRule | null;
+  groups: RuleGroup[];
+  initialGroup: string;
   settings: Settings;
   certificates: CertificateMeta[];
   upstreamPools: UpstreamPool[];
@@ -69,6 +73,28 @@ const form = reactive<ProxyRuleInput>({
   root_location: defaultLocation(),
   locations: [],
 });
+const inheritanceOptions: { key: GroupField; label: string }[] = [
+  { key: "tls", label: "入口协议" }, { key: "listen_port", label: "监听端口" },
+  { key: "certificate_id", label: "证书" }, { key: "http2", label: "HTTP/2" },
+];
+const selectedGroup = computed(() => props.groups.find(g => g.id === form.group_id));
+const inherits = (field: GroupField) => Boolean(selectedGroup.value && form.inherit_fields?.includes(field));
+function syncInherited() {
+  const group = selectedGroup.value;
+  if (!group) return;
+  if (inherits("tls")) form.tls = group.tls;
+  if (inherits("listen_port")) form.listen_port = group.listen_port;
+  if (inherits("certificate_id")) form.certificate_id = group.certificate_id;
+  if (inherits("http2")) form.http2 = group.http2;
+  if (!form.tls) form.certificate_id = "";
+}
+function changeGroup(id: string) {
+  if (id === form.group_id) return;
+  form.group_id = id;
+  form.inherit_fields = form.group_id && !props.rule ? inheritanceOptions.map(o => o.key) : [];
+  syncInherited();
+}
+watch(() => [form.inherit_fields, props.groups], syncInherited, { deep: true });
 watch(
   () => props.rule,
   (rule) => {
@@ -122,21 +148,25 @@ watch(
     form.locations = rule?.locations
       ? JSON.parse(JSON.stringify(rule.locations))
       : [];
+    form.group_id = rule?.group_id ?? (rule ? "" : props.initialGroup);
+    form.inherit_fields = rule ? [...(rule.inherit_fields ?? [])] : form.group_id ? inheritanceOptions.map(o => o.key) : [];
+    syncInherited();
     domains.value = (rule?.domains ?? []).join("\n");
   },
   { immediate: true },
 );
 function changeTLS() {
   if (
-    !props.rule ||
+    !inherits("listen_port") && (!props.rule ||
     [
       props.settings.default_http_port,
       props.settings.default_https_port,
-    ].includes(form.listen_port)
+    ].includes(form.listen_port))
   )
     form.listen_port = form.tls
       ? props.settings.default_https_port
       : props.settings.default_http_port;
+  syncInherited();
   if (!form.tls) form.certificate_id = "";
 }
 function submit() {
@@ -165,6 +195,17 @@ function addLocation() {
 </script>
 <template>
   <form id="proxy-rule-form" class="form-grid modal-form-grid rule-form-grid" @submit.prevent="submit">
+    <div class="field full">
+      <label for="rule-group">所属分组</label>
+      <AppSelect id="rule-group" :model-value="form.group_id || ''" class="select" @update:model-value="changeGroup">
+        <option value="">未分组</option><option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
+      </AppSelect>
+      <div v-if="selectedGroup" class="field-help group-inheritance">
+        <span>继承分组设置（取消勾选可自定义）：</span>
+        <label v-for="option in inheritanceOptions" :key="option.key" class="checkbox-row"><input v-model="form.inherit_fields" type="checkbox" :value="option.key" />{{ option.label }}</label>
+        <span v-if="rule">移动分组时保留原配置，勾选后才使用分组默认值。</span>
+      </div>
+    </div>
     <div class="field primary-field primary-left">
       <label for="rule-name">规则名称</label
       ><input
@@ -201,6 +242,7 @@ function addLocation() {
     <div class="field section-content section-left">
       <label for="listen-port">监听端口</label
       ><input
+        :disabled="inherits('listen_port')"
         id="listen-port"
         v-model.number="form.listen_port"
         class="input"
@@ -213,13 +255,14 @@ function addLocation() {
     <div class="field section-content section-right">
       <label>入口协议</label
       ><label class="checkbox-row"
-        ><input v-model="form.tls" type="checkbox" @change="changeTLS" /> 启用
+        ><input v-model="form.tls" :disabled="inherits('tls')" type="checkbox" @change="changeTLS" /> 启用
         HTTPS</label
       >
     </div>
     <div v-if="form.tls" class="field section-content">
       <label for="certificate">SSL/TLS 证书</label
       ><AppSelect
+        :disabled="inherits('certificate_id')"
         id="certificate"
         v-model="form.certificate_id"
         class="select"
@@ -234,7 +277,7 @@ function addLocation() {
     <div v-if="form.tls" class="field section-content section-right">
       <label>HTTP/2</label
       ><label class="checkbox-row"
-        ><input v-model="form.http2" type="checkbox" /> 启用 HTTP/2</label
+        ><input v-model="form.http2" :disabled="inherits('http2')" type="checkbox" /> 启用 HTTP/2</label
       >
     </div>
     <div class="form-section">
@@ -430,3 +473,9 @@ function addLocation() {
     </div>
   </form>
 </template>
+
+<style scoped>
+.group-inheritance { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+.group-inheritance .checkbox-row { font-size: 12px; font-weight: 400; }
+.group-inheritance > span:last-child { flex-basis: 100%; }
+</style>

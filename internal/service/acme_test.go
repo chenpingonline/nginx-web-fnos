@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/go-acme/lego/v5/certificate"
 )
 

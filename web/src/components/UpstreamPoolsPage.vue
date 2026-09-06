@@ -1,23 +1,20 @@
 <script setup lang="ts">
 import PoolPathExample from "./PoolPathExample.vue";
 import AppSelect from "./AppSelect.vue";
-import { reactive, ref, toRaw, watch } from "vue";
+import { reactive, ref, toRaw } from "vue";
 import {
   PhArrowClockwise,
-  PhCheckCircle,
   PhPlusCircle,
 } from "@phosphor-icons/vue";
 import type { UpstreamPool, UpstreamPoolInput, UpstreamServer } from "../types";
 const props = defineProps<{
   pools: UpstreamPool[];
   busy: boolean;
-  dirty: boolean;
 }>();
 const emit = defineEmits<{
-  save: [value: UpstreamPoolInput, id: string];
+  save: [value: UpstreamPoolInput, id: string, done: (saved?: UpstreamPool, error?: string) => void];
   remove: [pool: UpstreamPool];
   refresh: [];
-  apply: [];
 }>();
 const helpOpen = ref(false);
 const helpPosition = ref<Record<string, string>>({});
@@ -56,11 +53,12 @@ const form = reactive<UpstreamPoolInput>({
   servers: [blankServer()],
 });
 function show(pool: UpstreamPool | null = null) {
+  saveError.value = "";
   editing.value = pool;
   Object.assign(
     form,
     pool
-      ? structuredClone(pool)
+      ? structuredClone(toRaw(pool))
       : {
           name: "",
           protocol: "http",
@@ -82,22 +80,16 @@ function removeServer(index: number) {
   if (form.servers.length > 1) form.servers.splice(index, 1);
 }
 function submit() {
-  emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "");
+  if (props.busy) return;
+  saveError.value = "";
+  emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "", savedResult);
 }
-watch(
-  () => props.pools,
-  () => {
-    if (
-      open.value &&
-      props.pools.some(
-        (pool) =>
-          pool.id === editing.value?.id ||
-          (!editing.value && pool.name === form.name),
-      )
-    )
-      open.value = false;
-  },
-);
+const saveError = ref("");
+function savedResult(saved?: UpstreamPool, error?: string) {
+  if (saved) editing.value = saved;
+  saveError.value = error ?? "";
+  if (saved && !error) open.value = false;
+}
 </script>
 <template>
   <div class="toolbar">
@@ -112,14 +104,6 @@ watch(
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
-    </button>
-    <button
-      v-if="dirty"
-      class="button primary"
-      :disabled="busy"
-      @click="emit('apply')"
-    >
-      <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
     </button>
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务组
@@ -181,9 +165,10 @@ watch(
       <PoolPathExample class="pool-empty-example" />
     </div>
   </article>
-  <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
+  <Teleport to="body">
+  <div v-if="open" class="modal-backdrop" @mousedown.self="!busy && (open = false)">
     <section
-      class="modal"
+      class="modal pool-modal"
       role="dialog"
       aria-modal="true"
       aria-labelledby="pool-title"
@@ -191,14 +176,21 @@ watch(
       <header class="modal-header">
         <div>
           <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}后端服务组</h2>
-          <p>结构化配置负载均衡、节点权重与连接复用。</p>
+          <p>保存后立即应用，其他尚未应用的配置修改也会一并生效。</p>
         </div>
-        <button class="icon-button" aria-label="关闭" @click="open = false">
+        <div class="rule-header-actions">
+          <button type="button" class="button ghost" :disabled="busy" @click="open = false">取消</button>
+          <button type="submit" form="pool-form" class="button primary" :disabled="busy">
+            {{ busy ? "保存并应用中…" : "保存并应用" }}
+          </button>
+        </div>
+        <button class="icon-button modal-close" aria-label="关闭" :disabled="busy" @click="open = false">
           ×
         </button>
       </header>
       <div class="modal-body">
-        <form class="form-grid modal-form-grid" @submit.prevent="submit">
+        <div v-if="saveError" class="notice danger" role="alert">{{ saveError }}</div>
+        <form id="pool-form" class="form-grid modal-form-grid" @submit.prevent="submit">
           <div class="field">
             <label>名称</label
             ><input
@@ -349,17 +341,12 @@ watch(
               max="3600"
             />
           </div>
-          <footer class="modal-footer full">
-            <button type="button" class="button ghost" @click="open = false">
-              取消</button
-            ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存后端服务组" }}
-            </button>
-          </footer>
+
         </form>
       </div>
     </section>
   </div>
+  </Teleport>
 </template>
 
 <style scoped>

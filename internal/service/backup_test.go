@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 )
 
 func TestBackupRoundTripPreservesActiveFilesAndRemapsCertificates(t *testing.T) {
@@ -16,7 +16,11 @@ func TestBackupRoundTripPreservesActiveFilesAndRemapsCertificates(t *testing.T) 
 	if _, err := source.deployACME(id, "backup certificate", original); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.CreateRule(ProxyRule{Name: "secure", Enabled: true, ListenPort: 19443, Domains: []string{"example.com"}, TLS: true, CertificateID: id, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080}); err != nil {
+	group, err := source.SaveRuleGroup("", domain.RuleGroup{Name: "secure group", TLS: true, ListenPort: 19443, CertificateID: id, HTTP2: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.CreateRule(ProxyRule{GroupID: group.ID, InheritFields: []string{"certificate_id", "http2", "tls", "listen_port"}, Name: "secure", Enabled: true, ListenPort: 19443, Domains: []string{"example.com"}, TLS: true, CertificateID: id, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080}); err != nil {
 		t.Fatal(err)
 	}
 	backup, err := source.ExportBackup()
@@ -43,6 +47,9 @@ func TestBackupRoundTripPreservesActiveFilesAndRemapsCertificates(t *testing.T) 
 	}
 	if !restored.Dirty || len(restored.Rules) != 1 || restored.Rules[0].CertificateID == id {
 		t.Fatal("expected remapped draft", restored)
+	}
+	if len(restored.RuleGroups) != 1 || restored.RuleGroups[0].CertificateID != restored.Rules[0].CertificateID || restored.Rules[0].GroupID != group.ID || len(restored.Rules[0].InheritFields) != 4 {
+		t.Fatal("group inheritance or certificate remapping lost", restored.RuleGroups)
 	}
 	old, _ := os.ReadFile(filepath.Join(target.paths.CertificateDir, id, "fullchain.pem"))
 	if string(old) != string(changed.Certificate) {

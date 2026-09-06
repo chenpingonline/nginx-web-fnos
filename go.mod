@@ -1,4 +1,4 @@
-module github.com/chenpingonline/fn-nginx-web
+module github.com/chenpingonline/nginx-web-fnos
 
 go 1.26.0
 

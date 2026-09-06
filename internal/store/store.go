@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
 )
 
 type Store struct {

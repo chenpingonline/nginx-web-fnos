@@ -4,10 +4,14 @@
 .cache/
 dist/
 web/node_modules/
-!web/dist/
-!web/dist/**
+/web/dist/
 *.fpk
 *.fpk.sha256
+
+# Local design and research output
+/design-qa*.png
+/design-qa.md
+/output/
 
 # Local runtime/test data
 .fnproxy-dev/

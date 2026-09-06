@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
-	acmemanager "github.com/chenpingonline/fn-nginx-web/internal/acme"
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
-	appservice "github.com/chenpingonline/fn-nginx-web/internal/service"
+	acmemanager "github.com/chenpingonline/nginx-web-fnos/internal/acme"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/metrics"
+	appservice "github.com/chenpingonline/nginx-web-fnos/internal/service"
 )
 
 const gatewayPrefix = "/app/nginx-web"
@@ -128,6 +128,28 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeJSON(w, http.StatusOK, a.service.Overview())
 	case apiPath == "/api/state" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State())
+	case apiPath == "/api/rule-groups" && r.Method == http.MethodPost:
+		var input domain.RuleGroup
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		group, err := a.service.SaveRuleGroup("", input)
+		writeResult(w, http.StatusCreated, group, err)
+	case strings.HasPrefix(apiPath, "/api/rule-groups/"):
+		id := strings.TrimPrefix(apiPath, "/api/rule-groups/")
+		if r.Method == http.MethodPut {
+			var input domain.RuleGroup
+			if !decodeJSON(w, r, &input) {
+				return
+			}
+			group, err := a.service.SaveRuleGroup(id, input)
+			writeResult(w, http.StatusOK, group, err)
+		} else if r.Method == http.MethodDelete {
+			err := a.service.DeleteRuleGroup(id)
+			writeResult(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	case apiPath == "/api/rules" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().Rules)
 	case apiPath == "/api/upstreams" && r.Method == http.MethodGet:

@@ -3,7 +3,7 @@ package app
 import (
 	"os"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 )
 
 func (a *App) Doctor() map[string]any {

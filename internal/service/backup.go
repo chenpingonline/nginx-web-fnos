@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
 )
 
 const MaxBackupBytes = 64 * 1024 * 1024
@@ -165,6 +165,11 @@ func (s *AppService) RestoreBackup(backup Backup) (State, error) {
 			next.Rules[i].CertificateID = remap[id]
 		}
 	}
+	for i := range next.RuleGroups {
+		if id := next.RuleGroups[i].CertificateID; id != "" {
+			next.RuleGroups[i].CertificateID = remap[id]
+		}
+	}
 	for i := range next.StreamRules {
 		if id := next.StreamRules[i].CertificateID; id != "" {
 			next.StreamRules[i].CertificateID = remap[id]
@@ -175,6 +180,7 @@ func (s *AppService) RestoreBackup(backup Backup) (State, error) {
 	}
 	err := s.store.Update(func(state *State) error {
 		state.Settings = next.Settings
+		state.RuleGroups = next.RuleGroups
 		state.Rules = next.Rules
 		state.StreamRules = next.StreamRules
 		state.UpstreamPools = next.UpstreamPools

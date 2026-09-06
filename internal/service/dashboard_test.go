@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 )
 
 func TestDashboardSeparatesDraftFromAppliedRules(t *testing.T) {

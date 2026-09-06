@@ -176,7 +176,13 @@ export interface LocationRule {
   match: "prefix" | "exact" | "regex";
   settings: LocationSettings;
 }
+export type GroupField = "listen_port" | "tls" | "certificate_id" | "http2";
+export interface RuleGroup {
+ id: string; name: string; listen_port: number; tls: boolean; http2: boolean; certificate_id: string;
+}
 export interface ProxyRuleInput {
+  group_id?: string;
+  inherit_fields?: GroupField[];
   name: string;
   enabled: boolean;
   listen_port: number;
@@ -278,6 +284,7 @@ export interface StreamRule extends StreamRuleInput {
   updated_at: string;
 }
 export interface State {
+  rule_groups?: RuleGroup[];
   draft_revision_id?: string;
   schema_version: number;
   settings: Settings;

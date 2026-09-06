@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/platform"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
 )
 
 func testService(t *testing.T) *AppService {

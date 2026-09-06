@@ -28,6 +28,8 @@ import { followSystemTheme } from "./theme";
 import { followScrollActivity } from "./scrollbars";
 import { highlightLog, searchLogLines } from "./logHighlight";
 const appVersion = __APP_VERSION__;
+import RuleGroups from "./components/RuleGroups.vue";
+import type { RuleGroup } from "./types";
 import RuleForm from "./components/RuleForm.vue";
 import DashboardPage from "./components/DashboardPage.vue";
 import ErrorDetailsPage from "./components/ErrorDetailsPage.vue";
@@ -214,12 +216,53 @@ const confirmBox = reactive({
 const currentPage = computed(
   () => pages.find((item) => item.id === page.value) ?? pages[0]!,
 );
+const selectedGroup = ref("all");
+const groupPanel = ref<InstanceType<typeof RuleGroups>>();
+const ruleGroups = computed(() => state.value?.rule_groups ?? []);
+async function saveRuleGroup(value: RuleGroup): Promise<{ group: RuleGroup; error?: string }> {
+  if (busy.value) throw new Error("请等待当前操作完成");
+  busy.value = true;
+  let saved = false;
+  try {
+    const group = await request<RuleGroup>(value.id ? `/rule-groups/${value.id}` : "/rule-groups", {
+      method: value.id ? "PUT" : "POST", body: jsonBody(value),
+    });
+    saved = true;
+    try {
+      await request("/apply", { method: "POST", body: jsonBody({ summary: `保存分组：${group.name}` }) });
+      toast("分组已保存并应用", "success");
+      return { group };
+    } catch (e) { return { group, error: `分组已保存，但应用失败：${errorMessage(e)}。修正后可再次保存并应用。` }; }
+  } finally {
+    if (saved) await loadCore(true);
+    busy.value = false;
+  }
+}
+async function deleteRuleGroup(id: string): Promise<boolean> {
+  if (busy.value) return false;
+  if (!(await ask("删除分组", "组内规则将移至未分组并保留当前访问配置。删除后会应用所有尚未应用的修改，是否继续？"))) return false;
+  busy.value = true;
+  let deleted = false;
+  try {
+    await request(`/rule-groups/${id}`, { method: "DELETE" });
+    deleted = true;
+    try {
+      await request("/apply", { method: "POST", body: jsonBody({ summary: "删除代理分组" }) });
+      toast("分组已删除，规则配置已保留", "success");
+    } catch (e) { toast(`分组已删除，但应用失败：${errorMessage(e)}，请到“Nginx 配置”页面重试保存并应用。`, "error"); }
+    return true;
+  } finally {
+    if (deleted) await loadCore(true);
+    busy.value = false;
+  }
+}
 const filteredRules = computed(() => {
   const rules = state.value?.rules ?? [],
     term = ruleSearch.value.trim().toLowerCase();
   const poolNames = new Map((state.value?.upstream_pools ?? []).map(pool => [pool.id, pool.name]));
   return rules.filter(
     (rule) =>
+      (selectedGroup.value === "all" || (rule.group_id || "") === selectedGroup.value) &&
       (ruleProtocol.value === "all" || (rule.tls ? "https" : "http") === ruleProtocol.value) &&
       (ruleEnabled.value === "all" || rule.enabled === (ruleEnabled.value === "enabled")) &&
       (!term ||
@@ -235,8 +278,9 @@ const filteredRules = computed(() => {
         .includes(term)),
   );
 });
-const hasRuleFilters = computed(() => Boolean(ruleSearch.value || ruleProtocol.value !== "all" || ruleEnabled.value !== "all"));
+const hasRuleFilters = computed(() => Boolean(selectedGroup.value !== "all" || ruleSearch.value || ruleProtocol.value !== "all" || ruleEnabled.value !== "all"));
 function resetRuleFilters() {
+  selectedGroup.value = "all";
   ruleSearch.value = "";
   ruleProtocol.value = "all";
   ruleEnabled.value = "all";
@@ -403,25 +447,29 @@ function closeModal() {
 }
 async function saveRule(value: ProxyRuleInput, applyAfter: boolean) {
   const id = editingRule.value?.id;
+  let persisted = false;
   const saved = await mutate(async () => {
-    await request(id ? `/rules/${id}` : "/rules", {
+    const rule = await request<ProxyRule>(id ? `/rules/${id}` : "/rules", {
       method: id ? "PUT" : "POST",
       body: jsonBody(value),
     });
-    if (applyAfter)
-      await request("/apply", {
-        method: "POST",
-        body: jsonBody({
-          summary: `${id ? "修改" : "新增"}规则：${value.name}`,
-        }),
-      });
+    persisted = true;
+    editingRule.value = rule;
+    if (applyAfter) {
+      try {
+        await request("/apply", {
+          method: "POST",
+          body: jsonBody({ summary: `${id ? "修改" : "新增"}规则：${value.name}` }),
+        });
+      } catch (e) { throw new Error(`规则已保存，但应用失败：${errorMessage(e)}。修正后可再次保存并应用。`); }
+    }
     return true;
   });
   if (saved) {
     modal.value = null;
     toast(applyAfter ? "规则已保存并应用" : "规则已保存为草稿", "success");
-    await loadCore(true);
   }
+  if (persisted) await loadCore(true);
 }
 async function importCertificate(value: CertificateInput) {
   const saved = await mutate(() =>
@@ -588,16 +636,26 @@ async function clearCache() {
   if (!(await ask("清理代理缓存", "将删除 nginx-web 生成的全部 HTTP 缓存文件，正在处理的请求可能重新回源。"))) return;
   await mutate(() => request("/cache", { method: "DELETE" }), "代理缓存已清理");
 }
-async function saveUpstreamPool(value: UpstreamPoolInput, id: string) {
-  const ok = await mutate(
-    () =>
-      request(id ? `/upstreams/${id}` : "/upstreams", {
-        method: id ? "PUT" : "POST",
-        body: jsonBody(value),
-      }),
-    id ? "后端服务组已更新" : "后端服务组已创建",
-  );
-  if (ok !== undefined) await loadCore(true);
+async function saveAndApplyResource<T>(path: string, value: unknown, id: string, label: string, done: (saved?: T, error?: string) => void) {
+  if (busy.value) return;
+  busy.value = true;
+  let saved: T | undefined;
+  try {
+    saved = await request<T>(id ? `${path}/${id}` : path, {
+      method: id ? "PUT" : "POST", body: jsonBody(value),
+    });
+    await request("/apply", { method: "POST", body: jsonBody({ summary: `保存并应用${label}` }) });
+    done(saved);
+    toast(`${label}已保存并应用`, "success");
+  } catch (error) {
+    done(saved, saved ? `${label}已保存，但应用失败：${errorMessage(error)}。修正后可再次保存并应用。` : errorMessage(error));
+  } finally {
+    if (saved) await loadCore(true);
+    busy.value = false;
+  }
+}
+async function saveUpstreamPool(value: UpstreamPoolInput, id: string, done: (saved?: UpstreamPool, error?: string) => void) {
+  await saveAndApplyResource("/upstreams", value, id, "后端服务组", done);
 }
 async function removeUpstreamPool(pool: UpstreamPool) {
   if (
@@ -613,16 +671,8 @@ async function removeUpstreamPool(pool: UpstreamPool) {
   );
   if (ok !== undefined) await loadCore(true);
 }
-async function saveRateLimitPolicy(value: RateLimitPolicyInput, id: string) {
-  const ok = await mutate(
-    () =>
-      request(id ? `/rate-limit-policies/${id}` : "/rate-limit-policies", {
-        method: id ? "PUT" : "POST",
-        body: jsonBody(value),
-      }),
-    id ? "限流策略已更新" : "限流策略已创建",
-  );
-  if (ok !== undefined) await loadCore(true);
+async function saveRateLimitPolicy(value: RateLimitPolicyInput, id: string, done: (saved?: RateLimitPolicy, error?: string) => void) {
+  await saveAndApplyResource("/rate-limit-policies", value, id, "限流策略", done);
 }
 async function removeRateLimitPolicy(policy: RateLimitPolicy) {
   if (
@@ -653,7 +703,7 @@ async function saveStreamRule(value: StreamRuleInput, id: string) {
           body: jsonBody({ summary: "保存并应用 TCP/UDP 规则" }),
         });
       } catch (error) {
-        throw new Error(`规则已保存，但应用失败：${errorMessage(error)}。请修正后重新保存，或在列表中重新应用。`);
+        throw new Error(`规则已保存，但应用失败：${errorMessage(error)}。请修正后重新保存，或到“Nginx 配置”页面重新应用。`);
       }
     },
     "TCP/UDP 规则已保存并应用",
@@ -824,34 +874,28 @@ onBeforeUnmount(() => {
               :pools="state.upstream_pools"
               :certificates="state.certificates"
               :busy="busy"
-              :dirty="state.dirty"
               @save="saveStreamRule"
               @remove="removeStreamRule"
               @toggle="toggleStreamRule"
               @refresh="loadCore()"
-              @apply="applyConfiguration"
             />
           </template>
           <template v-else-if="page === 'upstreams'"
             ><UpstreamPoolsPage
               :pools="state.upstream_pools"
               :busy="busy"
-              :dirty="state.dirty"
               @save="saveUpstreamPool"
               @remove="removeUpstreamPool"
               @refresh="loadCore()"
-              @apply="applyConfiguration"
           /></template>
           <template v-else-if="page === 'rate-limits'"
             ><RateLimitPoliciesPage
               :policies="state.rate_limit_policies"
               :rules="state.rules"
               :busy="busy"
-              :dirty="state.dirty"
               @save="saveRateLimitPolicy"
               @remove="removeRateLimitPolicy"
               @refresh="loadCore()"
-              @apply="applyConfiguration"
           /></template>
           <template v-else-if="page === 'rules'"
             ><div class="toolbar rule-filters" role="search" aria-label="HTTP/HTTPS 规则筛选">
@@ -871,6 +915,9 @@ onBeforeUnmount(() => {
               <button class="button ghost" :disabled="!hasRuleFilters" @click="resetRuleFilters">重置筛选</button>
               <span class="filter-count">{{ filteredRules.length }} / {{ state.rules.length }} 条</span>
             </div>
+            <RuleGroups ref="groupPanel" :groups="ruleGroups" :rules="state.rules" :certificates="state.certificates"
+              :selected="selectedGroup" :busy="busy" :default-port="state.settings.default_http_port"
+              :save="saveRuleGroup" :remove="deleteRuleGroup" @select="selectedGroup = $event" />
             <div class="toolbar"><span
                 class="badge"
                 :class="state.dirty ? 'warning' : 'success'"
@@ -879,14 +926,7 @@ onBeforeUnmount(() => {
               ><button class="button ghost" :disabled="busy" @click="loadCore()">
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新
               </button>
-              <button
-                v-if="state.dirty"
-                class="button primary"
-                :disabled="busy"
-                @click="applyConfiguration"
-              >
-                <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
-              </button>
+              <button class="button ghost" :disabled="busy" @click="groupPanel?.show()"><PhPlusCircle :size="17" aria-hidden="true" />新建分组</button>
               <button class="button primary" @click="openRule()">
                 <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
               </button>
@@ -983,7 +1023,7 @@ onBeforeUnmount(() => {
               <div v-else class="empty-state">
                 <div class="empty-icon">⇄</div>
                 <h3>
-                  {{ state.rules.length ? "没有匹配的规则" : "还没有代理规则" }}
+                  {{ selectedGroup !== 'all' ? "此分组暂无匹配的规则" : state.rules.length ? "没有匹配的规则" : "还没有代理规则" }}
                 </h3>
                 <p>
                   {{
@@ -1328,6 +1368,8 @@ onBeforeUnmount(() => {
         <RuleForm
           v-if="modal === 'rule'"
           :rule="editingRule"
+          :groups="ruleGroups"
+          :initial-group="selectedGroup === 'all' ? '' : selectedGroup"
           :settings="state!.settings"
           :certificates="state!.certificates"
           :upstream-pools="state!.upstream_pools"

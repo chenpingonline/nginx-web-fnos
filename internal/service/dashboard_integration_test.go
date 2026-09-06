@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
-	nginxmanager "github.com/chenpingonline/fn-nginx-web/internal/nginx"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/metrics"
+	nginxmanager "github.com/chenpingonline/nginx-web-fnos/internal/nginx"
 )
 
 func TestDashboardWithRealNginx(t *testing.T) {

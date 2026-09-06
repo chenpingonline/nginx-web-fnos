@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { reactive, ref, toRaw, watch } from "vue";
+import { reactive, ref, toRaw } from "vue";
 import {
   PhArrowClockwise,
-  PhCheckCircle,
   PhPlusCircle,
 } from "@phosphor-icons/vue";
 import type {
@@ -15,13 +14,11 @@ const props = defineProps<{
   policies: RateLimitPolicy[];
   rules: ProxyRule[];
   busy: boolean;
-  dirty: boolean;
 }>();
 const emit = defineEmits<{
-  save: [value: RateLimitPolicyInput, id: string];
+  save: [value: RateLimitPolicyInput, id: string, done: (saved?: RateLimitPolicy, error?: string) => void];
   remove: [policy: RateLimitPolicy];
   refresh: [];
-  apply: [];
 }>();
 const editing = ref<RateLimitPolicy | null>(null);
 const open = ref(false);
@@ -39,13 +36,16 @@ const blank = (): RateLimitPolicyInput => ({
 const form = reactive<RateLimitPolicyInput>(blank());
 
 function show(policy: RateLimitPolicy | null = null) {
+  saveError.value = "";
   editing.value = policy;
-  Object.assign(form, policy ? structuredClone(policy) : blank());
+  Object.assign(form, policy ? structuredClone(toRaw(policy)) : blank());
   open.value = true;
 }
 function submit() {
+  if (props.busy) return;
+  saveError.value = "";
   form.settings.enabled = true;
-  emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "");
+  emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "", savedResult);
 }
 function usageCount(id: string) {
   return props.rules.filter((rule) => rule.rate_limit_policy_id === id).length;
@@ -59,20 +59,12 @@ function limitSummary(policy: RateLimitPolicy) {
     items.push(`${policy.settings.download_kbps} KB/s`);
   return items.join(" · ");
 }
-watch(
-  () => props.policies,
-  () => {
-    if (
-      open.value &&
-      props.policies.some(
-        (policy) =>
-          policy.id === editing.value?.id ||
-          (!editing.value && policy.name === form.name),
-      )
-    )
-      open.value = false;
-  },
-);
+const saveError = ref("");
+function savedResult(saved?: RateLimitPolicy, error?: string) {
+  if (saved) editing.value = saved;
+  saveError.value = error ?? "";
+  if (saved && !error) open.value = false;
+}
 </script>
 
 <template>
@@ -83,14 +75,6 @@ watch(
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
-    </button>
-    <button
-      v-if="dirty"
-      class="button primary"
-      :disabled="busy"
-      @click="emit('apply')"
-    >
-      <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
     </button>
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加限流策略
@@ -146,7 +130,8 @@ watch(
     </div>
   </article>
 
-  <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
+  <Teleport to="body">
+  <div v-if="open" class="modal-backdrop" @mousedown.self="!busy && (open = false)">
     <section
       class="modal policy-modal"
       role="dialog"
@@ -156,14 +141,21 @@ watch(
       <header class="modal-header">
         <div>
           <h2 id="policy-title">{{ editing ? "编辑" : "添加" }}限流策略</h2>
-          <p>参数可以复用，Nginx 会为每条代理规则创建独立计数区。</p>
+          <p>保存后立即应用，其他尚未应用的配置修改也会一并生效。</p>
         </div>
-        <button class="icon-button" aria-label="关闭" @click="open = false">
+        <div class="rule-header-actions">
+          <button type="button" class="button ghost" :disabled="busy" @click="open = false">取消</button>
+          <button type="submit" form="policy-form" class="button primary" :disabled="busy">
+            {{ busy ? "保存并应用中…" : "保存并应用" }}
+          </button>
+        </div>
+        <button class="icon-button modal-close" aria-label="关闭" :disabled="busy" @click="open = false">
           ×
         </button>
       </header>
       <div class="modal-body">
-        <form class="form-grid modal-form-grid" @submit.prevent="submit">
+        <div v-if="saveError" class="notice danger" role="alert">{{ saveError }}</div>
+        <form id="policy-form" class="form-grid modal-form-grid" @submit.prevent="submit">
           <div class="field full">
             <label for="policy-name">策略名称</label
             ><input
@@ -207,7 +199,7 @@ watch(
             <label class="checkbox-row"
               ><input v-model="form.settings.no_delay" type="checkbox" />
               不延迟突发请求</label
-            ><span class="field-help"
+            ><span class="field-help policy-burst-help"
               >关闭后，突发请求会在允许范围内排队处理。</span
             >
           </div>
@@ -236,15 +228,10 @@ watch(
               max="1048576"
             />
           </div>
-          <footer class="modal-footer full">
-            <button type="button" class="button ghost" @click="open = false">
-              取消</button
-            ><button type="submit" class="button primary" :disabled="busy">
-              {{ busy ? "处理中…" : "保存限流策略" }}
-            </button>
-          </footer>
+
         </form>
       </div>
     </section>
   </div>
+  </Teleport>
 </template>

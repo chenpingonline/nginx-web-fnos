@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	acmemanager "github.com/chenpingonline/fn-nginx-web/internal/acme"
+	acmemanager "github.com/chenpingonline/nginx-web-fnos/internal/acme"
 	"github.com/go-acme/lego/v5/certificate"
 )
 

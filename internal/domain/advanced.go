@@ -321,6 +321,7 @@ func ApplyStateDefaults(state *State) {
 		policyNames[strings.ToLower(state.RateLimitPolicies[index].Name)] = struct{}{}
 	}
 	for index := range state.Rules {
+		ResolveRuleGroup(&state.Rules[index], state.RuleGroups)
 		NormalizeRule(&state.Rules[index], state.Settings)
 		rule := &state.Rules[index]
 		if rule.RateLimitPolicyID == "" && rule.RateLimit.Enabled {

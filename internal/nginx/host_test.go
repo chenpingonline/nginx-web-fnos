@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 )
 
 func TestPreservedHostWithRealNginx(t *testing.T) {
@@ -37,6 +37,12 @@ func TestPreservedHostWithRealNginx(t *testing.T) {
 	}
 	mapping := master[start : start+strings.Index(master[start:], "}")+1]
 	root := t.TempDir()
+	// Match the bundled Nginx core's relative log and temporary paths.
+	for _, dir := range []string{"logs", "temp/body", "temp/proxy", "temp/fastcgi", "temp/scgi", "temp/uwsgi"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

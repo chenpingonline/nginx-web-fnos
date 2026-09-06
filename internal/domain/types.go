@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/packaging/fnos"
+	"github.com/chenpingonline/nginx-web-fnos/packaging/fnos"
 )
 
 const (
@@ -43,6 +43,8 @@ type Settings struct {
 }
 
 type ProxyRule struct {
+	GroupID               string            `json:"group_id,omitempty"`
+	InheritFields         []string          `json:"inherit_fields,omitempty"`
 	ID                    string            `json:"id"`
 	Name                  string            `json:"name"`
 	Enabled               bool              `json:"enabled"`
@@ -85,6 +87,7 @@ type CertificateMeta struct {
 }
 
 type State struct {
+	RuleGroups        []RuleGroup       `json:"rule_groups"`
 	SchemaVersion     int               `json:"schema_version"`
 	Settings          Settings          `json:"settings"`
 	Rules             []ProxyRule       `json:"rules"`
@@ -310,6 +313,9 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 
 func ValidateState(state State) error {
 	ApplyStateDefaults(&state)
+	if err := ValidateRuleGroups(state); err != nil {
+		return err
+	}
 	if state.Settings.DefaultHTTPPort < 1024 || state.Settings.DefaultHTTPPort > 65535 {
 		return errors.New("默认 HTTP 端口不合法")
 	}

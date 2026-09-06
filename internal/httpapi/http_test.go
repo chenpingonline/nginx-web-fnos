@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	webassets "github.com/chenpingonline/fn-nginx-web/web"
+	webassets "github.com/chenpingonline/nginx-web-fnos/web"
 )
 
 func TestAPIRequiresAdministratorHeaders(t *testing.T) {

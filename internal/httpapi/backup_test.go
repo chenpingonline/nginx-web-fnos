@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/platform"
-	"github.com/chenpingonline/fn-nginx-web/internal/service"
-	webassets "github.com/chenpingonline/fn-nginx-web/web"
+	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
+	"github.com/chenpingonline/nginx-web-fnos/internal/service"
+	webassets "github.com/chenpingonline/nginx-web-fnos/web"
 )
 
 func TestBackupAPIRequiresAdminAndRestoreMarker(t *testing.T) {

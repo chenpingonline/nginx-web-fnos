@@ -7,9 +7,10 @@ frontend-typecheck:
 	npm --prefix web run typecheck
 
 frontend-build:
+	@test -d web/node_modules || npm --prefix web ci
 	npm --prefix web run build
 
-test: frontend-typecheck
+test: frontend-build
 	go test ./...
 
 build-x86:
@@ -27,4 +28,4 @@ release:
 	./scripts/release.sh
 
 clean:
-	rm -rf .build .build-* .cache dist .fnproxy-dev
+	rm -rf .build .build-* .cache dist web/dist .fnproxy-dev

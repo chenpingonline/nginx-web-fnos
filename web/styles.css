@@ -281,14 +281,15 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .modal-backdrop:has(.rule-modal) { padding: 32px 40px; }
 .modal { width: min(960px, 100%); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; background: var(--surface-solid); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
 .rule-modal { width: min(920px, calc(100vw - 80px)); max-height: calc(100vh - 64px); border-radius: 14px; }
+.policy-modal .policy-burst-help { grid-column: 1 / -1; white-space: nowrap; }
 .policy-modal { width: min(720px, calc(100vw - 40px)); }
 .certificate-modal { width: min(480px, 100%); }
 .certificate-modal .certificate-form-grid { grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; }
 .certificate-modal .field:not(.standalone-field) { grid-template-columns: subgrid; column-gap: 12px; }
 .modal-header { min-height: 56px; padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
 .rule-modal .modal-header { flex-shrink: 0; min-height: 78px; padding: 14px 30px; border-bottom: 0; gap: 17px; }
-.stream-modal .modal-header { flex-shrink: 0; }
-:is(.rule-modal, .stream-modal) .modal-header > .rule-header-actions { display: flex; flex-shrink: 0; gap: 8px; margin-right: 0; }
+:is(.stream-modal, .policy-modal, .pool-modal) .modal-header { flex-shrink: 0; }
+:is(.rule-modal, .stream-modal, .policy-modal, .pool-modal) .modal-header > .rule-header-actions { display: flex; flex-shrink: 0; gap: 8px; margin-right: 0; }
 .rule-header-actions .button { white-space: nowrap; }
 .modal-title-icon { flex: 0 0 auto; color: var(--accent); }
 .modal-close { flex-shrink: 0; padding: 0; line-height: 1; }
@@ -302,6 +303,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .rule-modal .modal-body { padding: 2px 32px 20px; scrollbar-width: none; }
 .rule-modal .modal-body::-webkit-scrollbar { display: none; }
 .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 7px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface-soft); }
+.modal-backdrop:has(.confirm-modal) { z-index: 110; }
 .confirm-modal { width: min(430px, 100%); }
 .confirm-modal .modal-header { border-bottom: 0; padding: 23px 22px 12px; }
 .confirm-modal .modal-footer { background: transparent; }
@@ -351,9 +353,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .form-grid .full, .form-section { grid-column: auto; }
   .target-service-fields { grid-template-columns: 1fr; }
   .rule-modal .modal-header { min-height: 76px; padding: 15px 18px; gap: 13px; flex-wrap: wrap; }
-  .stream-modal .modal-header { flex-wrap: wrap; }
-  :is(.rule-modal, .stream-modal) .modal-header > div:not(.rule-header-actions) { flex: 1; min-width: 0; }
-  :is(.rule-modal, .stream-modal) .modal-header > .rule-header-actions { order: 1; width: 100%; justify-content: flex-end; }
+  :is(.stream-modal, .policy-modal, .pool-modal) .modal-header { flex-wrap: wrap; }
+  :is(.rule-modal, .stream-modal, .policy-modal, .pool-modal) .modal-header > div:not(.rule-header-actions) { flex: 1; min-width: 0; }
+  :is(.rule-modal, .stream-modal, .policy-modal, .pool-modal) .modal-header > .rule-header-actions { order: 1; width: 100%; justify-content: flex-end; }
   .rule-modal .modal-body { padding: 0 18px 20px; }
   .modal-backdrop:has(.rule-modal) { padding: 8px; }
   .rule-modal { width: 100%; max-height: calc(100vh - 16px); }

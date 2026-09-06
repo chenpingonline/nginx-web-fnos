@@ -3,7 +3,6 @@ import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import {
   PhArrowClockwise,
-  PhCheckCircle,
   PhPlusCircle,
   PhX,
 } from "@phosphor-icons/vue";
@@ -19,14 +18,12 @@ const props = defineProps<{
   pools: UpstreamPool[];
   certificates: CertificateMeta[];
   busy: boolean;
-  dirty: boolean;
 }>();
 const emit = defineEmits<{
   save: [value: StreamRuleInput, id: string];
   remove: [rule: StreamRule];
   toggle: [rule: StreamRule, enabled: boolean];
   refresh: [];
-  apply: [];
 }>();
 const search = ref("");
 const protocolFilter = ref<"all" | "tcp" | "udp">("all");
@@ -155,14 +152,6 @@ watch(
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
-    </button>
-    <button
-      v-if="dirty"
-      class="button primary"
-      :disabled="busy"
-      @click="emit('apply')"
-    >
-      <PhCheckCircle :size="16" aria-hidden="true" />保存并应用
     </button>
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加 TCP/UDP 规则

@@ -17,13 +17,13 @@ import (
 	"sync"
 	"time"
 
-	acmemanager "github.com/chenpingonline/fn-nginx-web/internal/acme"
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
-	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
-	nginxmanager "github.com/chenpingonline/fn-nginx-web/internal/nginx"
-	"github.com/chenpingonline/fn-nginx-web/internal/platform"
-	storepkg "github.com/chenpingonline/fn-nginx-web/internal/store"
+	acmemanager "github.com/chenpingonline/nginx-web-fnos/internal/acme"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/metrics"
+	nginxmanager "github.com/chenpingonline/nginx-web-fnos/internal/nginx"
+	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
+	storepkg "github.com/chenpingonline/nginx-web-fnos/internal/store"
 )
 
 type Paths = platform.Paths
@@ -341,7 +341,9 @@ func (s *AppService) CreateRule(input ProxyRule) (ProxyRule, error) {
 	input.ID = domain.RandomID()
 	input.CreatedAt = now
 	input.UpdatedAt = now
-	domain.NormalizeRule(&input, s.store.Snapshot().Settings)
+	snapshot := s.store.Snapshot()
+	domain.ResolveRuleGroup(&input, snapshot.RuleGroups)
+	domain.NormalizeRule(&input, snapshot.Settings)
 	if err := s.store.Update(func(state *State) error {
 		state.Rules = append(state.Rules, input)
 		state.Dirty = true
@@ -365,6 +367,7 @@ func (s *AppService) UpdateRule(id string, input ProxyRule) (ProxyRule, error) {
 			input.ID = id
 			input.CreatedAt = state.Rules[index].CreatedAt
 			input.UpdatedAt = time.Now().UTC()
+			domain.ResolveRuleGroup(&input, state.RuleGroups)
 			domain.NormalizeRule(&input, state.Settings)
 			state.Rules[index] = input
 			state.Dirty = true
@@ -523,6 +526,11 @@ func (s *AppService) DeleteCertificate(id string) error {
 	if !found {
 		return errors.New("找不到指定证书")
 	}
+	for _, group := range state.RuleGroups {
+		if group.CertificateID == id {
+			return fmt.Errorf("证书仍被分组 %q 使用", group.Name)
+		}
+	}
 	for _, rule := range state.Rules {
 		if rule.CertificateID == id {
 			return fmt.Errorf("证书仍被规则 %q 使用", rule.Name)
@@ -535,6 +543,11 @@ func (s *AppService) DeleteCertificate(id string) error {
 	}
 	revisions, _ := s.ListRevisions()
 	for _, revision := range revisions {
+		for _, group := range revision.State.RuleGroups {
+			if group.CertificateID == id {
+				return fmt.Errorf("证书仍被配置历史 %s 的分组引用，请先删除相关历史", revision.ID)
+			}
+		}
 		for _, rule := range revision.State.Rules {
 			if rule.CertificateID == id {
 				return fmt.Errorf("证书仍被配置历史 %s 引用，请先删除相关历史", revision.ID)

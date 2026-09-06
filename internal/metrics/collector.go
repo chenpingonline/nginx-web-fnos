@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
 )
 
 const Retention = 30 * 24 * time.Hour

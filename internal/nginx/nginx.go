@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
-	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
-	"github.com/chenpingonline/fn-nginx-web/internal/platform"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
 )
 
 type Paths = platform.Paths

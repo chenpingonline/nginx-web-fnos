@@ -1,314 +1,138 @@
-# nginx-web
+<p align="center">
+  <img src="packaging/fnos/ICON_256.PNG" width="104" alt="nginx-web 图标">
+</p>
 
-nginx-web 是一个面向飞牛 fnOS 的原生 Nginx 反向代理可视化管理应用，FPK 模板集中保存在 `packaging/fnos/`。
+<h1 align="center">nginx-web for fnOS</h1>
 
-它自带独立的 Nginx Open Source 1.30.4，不读取、不修改、也不会重启飞牛系统 Nginx；不依赖 Docker，管理后台通过 fnOS 统一网关和 Unix Socket 提供。
+<p align="center">在飞牛 NAS 上，通过可视化界面管理反向代理、证书和流量。</p>
 
-## 页面功能总览
+<p align="center">
+  <a href="https://github.com/chenpingonline/nginx-web-fnos/releases/latest"><img src="https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?label=Release" alt="最新版本"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
+  <img src="https://img.shields.io/badge/fnOS-x86__64%20%7C%20ARM64-009688" alt="支持 x86_64 和 ARM64">
+  <img src="https://img.shields.io/badge/NGINX-1.30.4-009639?logo=nginx" alt="NGINX 1.30.4">
+</p>
 
-管理页面使用 Vue 3、TypeScript 和 Vite，共有九个主要页面。所有配置都通过结构化表单生成，不允许直接提交任意 Nginx 指令。
+<p align="center">
+  <a href="https://github.com/chenpingonline/nginx-web-fnos/releases/latest">下载安装</a> ·
+  <a href="#快速上手">快速上手</a> ·
+  <a href="docs/features.md">功能文档</a> ·
+  <a href="docs/build.md">源码构建</a> ·
+  <a href="https://github.com/chenpingonline/nginx-web-fnos/issues">反馈问题</a>
+</p>
 
-### 总览
+## 项目介绍
 
-- 浅色绿色总览：独立运行状态卡展示 Nginx 运行时长、进程 ID、工作进程数、活动连接与请求/秒。运行时长及工作进程数由 Linux 实际进程信息提供，无法读取时显示缺失。
-- 紧凑指标栏展示 HTTP 请求速率、响应速率、当前连接数（含空闲 Keepalive）、完成请求及错误率（4xx + 5xx），没有可靠带宽数据时不显示带宽。
-- 折线图支持最近 15 分钟、1 小时、5 小时、1 天、7 天、1 月（最近 30 天），请求与响应曲线叠加显示；上方短横线图例可分别显隐曲线，支持悬停及键盘查看同一时刻的多项数据。
-- 点击“错误率 →”进入详情，延续所选时段与规则，分别查看总错误率、4xx、5xx 趋势及受影响规则。
-- 规则表格展示入口、监听地址、转发目标、配置状态、时段平均请求速率和错误率；支持搜索、协议与配置状态筛选、请求数/错误数排序和分页。名称打开该规则的响应趋势，错误率箭头打开该规则的错误详情。
-- 明确区分已生效、待应用、已停用及待删除的规则。草稿中删除但尚未应用的规则仍保留在首页，不把“启用”视为服务健康检测结果。
-- 检查已生效配置和启用草稿引用的 HTTPS / Stream TLS 证书，提前 30 天提醒到期，并展示受影响规则；已过期或尚未生效单独提醒。
-- 快速添加代理、校验配置、应用草稿、启动或平滑重载 Nginx。
+**nginx-web** 是面向飞牛 fnOS 的原生 Nginx 管理应用。用表单配置 HTTP/HTTPS 反向代理、TCP/UDP 转发、SSL 证书和后端服务组，让 NAS 应用与局域网服务拥有统一的访问入口。
 
-#### 首页统计的数据范围
+应用自带独立的 **Nginx Open Source 1.30.4**，通过 fnOS 桌面和统一网关访问管理界面，安装后运行无需 Docker。配置、日志和进程均由应用独立管理，不读取、修改或重启飞牛系统 Nginx。
 
-- Go 服务每 5 秒采样，按分钟汇总并保存最近 30 天；页面关闭后继续采集。长时间范围自动汇总曲线，未采集到的历史保留为空；升级前已过期的历史无法恢复。历史与日志读取位置每分钟原子保存，正常退出时再次保存。
-- HTTP 连接与累计请求由应用私有 Unix Socket 上的 `stub_status` 提供，没有新增公网统计端口；采集请求自身从请求速率和连接数中扣除。
-- 响应速率来自最近一次连续日志采样间隔的已完成请求数，趋势按分钟覆盖时间汇总。首次采样、日志关闭或采集中断时显示缺失，避免把补读历史当作当前响应速率。
-- 规则归属和错误率来自独立的 `http-metrics.log`，固定 JSON 格式包含时间、规则 ID、状态码和响应体字节数，不记录 URL、客户端 IP 或凭据，不受自定义访问日志格式影响。
-- 错误率为 400–599 状态码请求数除以已完成请求数；详情分别展示 4xx（请求错误）与 5xx（服务端错误）。旧历史没有采集过的 4xx 保持未知，相关总错误率显示空白，既有 5xx 历史继续保留。
-- 关闭访问日志时，同时停止规则日志统计；HTTP 状态采样继续。统计日志复用日志大小与保留数量设置参与轮转。
-- 升级已有安装后，需要保存并应用一次配置才能启用新的统计入口。此操作也会应用当前草稿，首页会明确提醒。
-- 没有历史数据或采集中断时保留空白，不补造历史、不将缺失值显示成零；显示采样时间与所选时段的日志覆盖时间。异常退出后的已保存数据与日志位置一起恢复；已被清理的未处理日志无法恢复，会提示统计不完整。
-- HTTP 日志在请求结束后记录，长下载、WebSocket、SSE 尚未结束的请求不会提前计入完成请求与错误率。规则趋势是已完成请求的速率，与全局接收请求速率口径不同。
-- TCP/UDP 首版展示配置与转发目标，其会话指标不混入 HTTP 请求数。P95 耗时、即时带宽及主动健康探测不属于这一版统计范围。
+仓库名为 `nginx-web-fnos`；fnOS 内的应用名称和安装标识保持为 `nginx-web`。
 
-### HTTP/HTTPS 代理规则
+## 主要功能
 
-- 创建、编辑、启用、停用、搜索和删除代理规则。
-- 按 HTTP/HTTPS 协议、启用状态与名称/域名/端口/目标组合筛选，显示匹配数量并支持一键重置。
-- 配置规则名称、一个或多个域名/IP、监听端口及 `*` 默认站点。
-- 配置 HTTP 或 HTTPS 入口、手动选择证书及 HTTP/2。
-- 使用单个 HTTP/HTTPS 后端服务，或选择可复用的 HTTP 后端服务组。
-- 配置后端服务 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
-- 按客户端 IP 限制每秒请求数、突发请求、并发连接数和下载速度。
-- 为根路径和额外 Location 分别选择前缀、精确或正则匹配，并为每个路径配置不同处理方式。
-- Location 后端支持 HTTP 反向代理、静态文件、固定返回/跳转、gRPC、FastCGI、uWSGI、SCGI、Memcached 和 Stub Status。
-- 静态文件支持 `root`/`alias`、Index、目录浏览、Expires 和 Try Files。
-- 支持 HTTP 跳转 HTTPS，以及 `last`、`break`、临时跳转和永久跳转 Rewrite。
-- 支持代理缓存区、磁盘上限、未访问失效、响应有效期、自定义缓存 Key、变量绕过缓存、故障使用过期缓存和大文件 Slice。
-- 支持 IP/CIDR 允许与拒绝、Basic Auth、Auth Request、Secure Link、Referer 防盗链，以及静态 Location 的有限 WebDAV。
-- 支持添加、覆盖或清空后端服务请求 Header，以及通过原生 `add_header` 添加响应 Header。
-- 支持 Sub Filter 内容替换、Addition 响应前后追加、Mirror 请求镜像和 SSI。
-
-### TCP/UDP 代理
-
-- 创建、编辑、启用、停用和删除 TCP/UDP 四层代理规则。
-- 支持 TCP/UDP 协议与启用状态组合筛选，按名称、监听地址、端口、目标服务或 SNI 域名搜索，显示匹配数量并支持一键重置。
-- 配置监听地址、监听端口、单个后端服务或 Stream 后端服务组。
-- 配置连接超时、会话超时和 UDP 响应次数。
-- 支持入口接收和向后端服务发送 PROXY Protocol，并配置可信代理地址。
-- TCP 支持关闭 TLS、TLS 终止和 TLS SNI 透传；TLS 终止可选择已导入证书。
-- SNI 透传可按多个域名分流到不同单节点后端服务或 Stream 后端服务组。
-- 支持 Stream 访问日志、单 IP 最大连接数及 IP/CIDR 允许与拒绝。
-- 适用于 SSH、数据库、MQTT、游戏服务和 HTTPS 四层透传等场景。
-
-### 后端服务组
-
-- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的后端服务组，并在多个规则间复用。
-- 管理多个服务器节点的主机、端口、权重、最大失败次数、故障恢复时间、备份和停用状态。
-- HTTP 池支持 Round Robin、Least Connections、IP Hash、Hash 和 Random Two Least Connections。
-- Stream 池支持 Round Robin、Least Connections、Hash 和 Random Two Least Connections。
-- 配置 Keepalive 数量、单连接最大请求数、单连接最长时间和空闲超时。
-- 删除前检查规则引用，避免留下无效配置。
-
-### SSL/TLS 证书
-
-- 支持上传 PEM 证书链与私钥文件、从服务器绝对路径导入或粘贴 PEM，并校验证书与私钥是否匹配。
-- 路径导入会将证书复制到应用目录，源文件更新后需要重新导入。
-- ACME 自动申请：基于 lego v5.4.1，支持 Let’s Encrypt、ZeroSSL、测试环境和自定义 HTTPS ACME Directory；ZeroSSL 需要填写 EAB KID / HMAC Key。
-- DNS-01 验证接入 lego v5.4.1 的39 个原生 DNS 适配器（16 个国内、23 个常见国际服务商，含 DNS.LA、Dynadot、华为云、阿里云 ESA 等），支持多个域名、通配符以及 CNAME 验证委托。Cloudflare Token 需具有目标 Zone 的读取和 DNS 编辑权限。
-- 支持 RSA 2048/4096、ECDSA P-256/P-384，以及续期时轮换私钥。申请前需同意所选 CA 服务条款；测试证书不受浏览器信任。
-- 申请在后台执行，任务列表可查看状态、重试、暂停续期和移除任务；执行中的任务不可移除。移除任务会删除保存的凭据，但保留已导入证书。
-- 每 6 小时内检查续期，优先参考 CA 的 ARI 窗口，否则在剩余三分之一有效期时续期。失败按 5 分钟起指数退避，最长 24 小时；手动重试间隔至少一分钟。
-- 任务、DNS 凭据和 ACME 账户私钥保存在应用私有 `var/acme/` 目录（0700）内的任务文件（0600），不进入普通配置历史或 API 响应。磁盘文件包含续期所需明文凭据，应与应用数据一起妥善保护。
-- 续期保持证书 ID，通过版本目录和原子符号链接切换证书链与私钥；运行中的 Nginx 使用当前已安装配置进行校验和平滑重载，失败回滚。Nginx 停止时仅保存证书，不会自动启动，也不会应用规则草稿。
-- 签发结果在部署前持久化，部署失败或进程重启后优先重试部署，避免重复申请。首次签发成功后需在代理规则中选择该证书并应用。
-- 查看证书主体、SAN 域名/IP、序列号、有效期、状态和 SHA-256 指纹。
-- 私钥不会通过 API 返回浏览器；证书目录为 `0700`，私钥文件为 `0600`。
-- 删除前检查 HTTP 和 Stream 规则引用。
-
-### 运行日志
-
-- 查看最近的 Nginx 错误日志、HTTP 访问日志、Stream 访问日志和管理服务日志。
-- 页面每次读取最近 500 行，避免浏览器一次加载整个日志文件。
-- Nginx 日志支持按配置大小自动轮转、保留指定数量，并可在页面立即轮转。
-
-### 请求详情
-
-- 侧边栏独立入口，可按 HTTP/HTTPS 规则和时间范围查看请求数量、4xx/5xx 错误率、趋势与受影响规则。
-- 总览的错误率入口仍可携带所选规则和时间范围跳转。此页为聚合统计，不是逐条请求报文抓取。
-
-### 备份与恢复
-
-- 下载 JSON 备份，包含当前已保存的全局设置、HTTP(S)/TCP/UDP 代理、后端服务组、限流策略、证书与私钥（包括尚未应用的草稿）。
-- 导入前显示备份时间和数量摘要，确认后恢复为草稿，需手动应用；恢复前自动保存一份配置历史。
-- 保留现有证书及运行中的配置文件；不同的证书材料创建新副本并更新草稿引用，避免改变当前 HTTPS 服务。
-- 备份含明文私钥，请妥善保管。最大 64 MB，仅支持兼容的备份及配置版本。
-- 不包含日志、流量统计、缓存、配置历史、ACME 账户或自动续期任务。现有 ACME 任务保持不变；迁移设备后需重新配置续期。自定义配置中引用的服务器外部文件需要单独迁移。
-
-### 配置历史
-
-- 每次“保存并应用”成功后自动保存配置快照。
-- 查看快照时间、说明、规则数量和启用数量。
-- 将历史版本恢复为草稿，检查后再决定是否应用。
-- 删除不再需要的历史记录，并配置最多保留 1～100 个版本。
-
-### Nginx 配置
-
-- 只读查看当前实际使用的 `nginx.conf` 和生成的 HTTP/Stream 配置片段。
-- 在多个配置文件标签间切换，并复制当前文件内容。
-- 配置文件来自结构化数据，不暴露任意原始指令编辑入口。
-
-### 全局设置
-
-- 设置默认 HTTP/HTTPS 端口和配置历史保留数量。
-- 设置 Worker 数量、Worker Connections、文件句柄上限、Multi Accept、文件 AIO 和线程池。
-- 文件句柄未手动指定时，会根据 fnOS 当前软限制自动降低 Worker Connections，避免资源限制警告。
-- 配置 Real IP Header、可信代理网段和递归代理链解析。
-- 配置 Gzip 开关、压缩级别、最小响应大小、MIME 类型、Gzip Static 和 Gunzip。
-- 配置 TLS 1.2/1.3、加密套件、会话缓存、会话超时、OCSP Stapling 和客户端证书校验。
-- 配置访问日志开关、错误日志级别、自定义访问日志格式、缓冲、刷新周期和轮转策略。
-- 使用 Map、Geo 和 Split Clients 创建可供 Header、Rewrite 等配置引用的动态变量和灰度分流变量。
-- 一键清理 nginx-web 自己的全部 HTTP 代理缓存。
-
-### 应用、校验与安全保护
-
-- 页面顶部可随时刷新状态、运行 `nginx -t`，或保存并应用全部草稿。
-- 应用配置时先在隔离候选目录运行 `nginx -t`，通过后再原子替换正式配置。
-- 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
-- 校验重复域名、端口冲突、证书/后端服务组引用、IP/CIDR、路径和指令参数范围。
-- 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
-- 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
-- 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。
-
-## 架构
-
-```text
-fnOS 桌面
-   ↓
-fnOS 统一网关 /app/nginx-web/
-   ↓
-TRIM_APPDEST/app.sock
-   ↓
-nginx-web Go 管理服务
-   ↓
-配置生成、nginx -t、平滑重载与回滚
-   ↓
-应用自带的独立 Nginx 1.30.4
-   ↓
-NAS 服务 / Docker 服务 / 局域网设备
-```
-
-默认无规则时，独立 Nginx 监听 `9080` 并返回 404。首版只允许 `1024–65535` 端口，因此不需要 root 权限。
-
-页面只保存结构化配置，不接受任意 Nginx 指令。Basic Auth 使用 fnOS 上已有的 htpasswd 文件，页面只记录绝对路径，不保存明文密码。例如可在隔离环境生成后复制到应用可读目录：
-
-```bash
-htpasswd -c /vol1/appdata/nginx-web/.htpasswd admin
-```
-
-响应 Header 使用 Nginx 原生 `add_header`，不等同于未编译的第三方 `headers-more` 模块。
-
-## 源码结构
-
-```text
-cmd/nginx-web/       命令入口
-internal/app/        服务生命周期与诊断
-internal/domain/     配置模型和校验规则
-internal/httpapi/    HTTP API 与管理权限
-internal/nginx/      Nginx 配置生成和进程管理
-internal/platform/   fnOS 与开发环境路径
-internal/service/    应用业务逻辑
-internal/store/      状态持久化
-packaging/fnos/      fnOS FPK 模板
-scripts/             构建、验证和发布脚本
-third_party/nginx/   Nginx 来源与摘要记录
-web/                 Vue 3 + TypeScript + Vite 管理页面
-```
-
-## 与系统 Nginx 的隔离
-
-nginx-web 只使用自己的 `TRIM_APPDEST`、`TRIM_PKGETC`、`TRIM_PKGVAR` 和 `TRIM_PKGTMP` 目录，不会访问 `/etc/nginx`、`/usr/trim/nginx`，也不会执行 `systemctl restart nginx`。
-
-## 构建
-
-### 1. 在 fnOS 上编译 NGINX
-
-FPK 打包不会自动下载或编译 NGINX。请先在对应架构的 fnOS 设备或虚拟机上安装并启动 Docker，然后执行：
-
-```bash
-chmod +x scripts/build-nginx-on-fnos.sh
-./scripts/build-nginx-on-fnos.sh
-```
-
-脚本会自动识别当前主机是 ARM64 还是 AMD64，下载并校验官方 NGINX 1.30.4 源码，然后在 `alpine:3.21` 容器中编译静态二进制。Docker 容器和临时编译目录会在完成后清理，不会向 fnOS 本体安装编译依赖。
-
-默认产物：
-
-| fnOS 架构 | NGINX 二进制 |
+| 能力 | 说明 |
 | --- | --- |
-| ARM64 | `nginx-arm64-output/nginx-1.30.4-aarch64-linux` |
-| AMD64 | `nginx-amd64-output/nginx-1.30.4-x86_64-linux` |
+| HTTP / HTTPS 代理 | 域名、路径转发、WebSocket、SSE、HTTP/2、静态文件与跳转 |
+| 规则分组 | 分组管理代理，共享协议、端口、证书和 HTTP/2 默认值；各项可独立覆盖 |
+| TCP / UDP 转发 | 四层代理、TLS 终止、SNI 分流与 PROXY Protocol |
+| 后端服务组 | 多节点、权重、备用节点及多种负载均衡策略 |
+| SSL / TLS 证书 | PEM 导入、ACME DNS-01 自动签发与续期，接入 39 个 DNS 服务商适配器 |
+| 访问控制 | IP/CIDR 规则、Basic Auth、限流策略、连接数及下载速度限制 |
+| 流量与日志 | HTTP 请求趋势、4xx/5xx 错误分析、规则维度统计及运行日志 |
+| 配置与恢复 | 配置校验、平滑重载、失败回滚、历史快照和 JSON 备份恢复 |
+| fnOS 集成 | 管理员身份校验、统一网关访问、自动跟随平台亮暗主题 |
 
-如需指定输出目录，可以把目录作为第一个参数：
+更多路径处理、缓存、Header、TLS 和运行参数见 [功能与使用说明](docs/features.md)。
+
+## 安装
+
+要求 **fnOS 1.1.3100 或更新版本**。按 NAS 的 CPU 架构，从 [最新 Release](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) 下载 FPK：
+
+| NAS 架构 | 下载文件 |
+| --- | --- |
+| Intel / AMD，x86_64（AMD64） | `nginx-web-<版本>-x86.fpk` |
+| ARM64（aarch64） | `nginx-web-<版本>-arm64.fpk` |
+
+1. 下载匹配架构的 `.fpk`；Release 同时提供 `SHA256SUMS.txt` 供核对文件完整性。
+2. 在 fnOS 应用中心使用手动安装，选择下载的 FPK 并完成安装。
+3. 使用 fnOS 管理员账号，从桌面打开 **nginx-web**。
+
+不支持 32 位 ARMv7。平台自动主题需要 fnOS 1.2.0401 / App 1.34.0 及以上；旧系统或独立浏览器会跟随浏览器主题。
+
+## 快速上手
+
+以把 `nas.example.com:9080` 转发到局域网服务 `192.168.1.10:3000` 为例：
+
+1. 确保 NAS 能访问目标服务，并将域名解析到可访问的 NAS 地址。
+2. 打开 **代理 HTTP(S)**，添加规则：协议选 HTTP，域名填 `nas.example.com`，监听端口填 `9080`。
+3. 后端协议选 HTTP，主机填 `192.168.1.10`，端口填 `3000`；按需开启 WebSocket 或流式传输。
+4. 保存并应用配置，在总览确认规则已生效、Nginx 正在运行，然后访问 `http://nas.example.com:9080`。
+
+需要 HTTPS 时，先在 **SSL/TLS 证书** 导入证书，或通过 ACME 申请，再为规则选择 HTTPS、证书及空闲监听端口（例如 `9443`）。通配符证书和 DNS 凭据填写方式见 [DNS 服务商说明](docs/dns-providers.md)。
+
+> 应用以普通用户运行，监听端口范围为 **1024–65535**。如需使用外部 80/443，可在路由器将其映射到应用实际监听的高位端口。无规则时，默认 `9080` 返回 404 属于正常行为。
+
+## 配置应用与升级
+
+配置通过结构化数据生成，应用前先执行 `nginx -t`；校验通过后替换正式配置，并在 Nginx 运行时平滑重载。应用失败会尝试恢复上一份有效配置。保存草稿、恢复备份或历史快照后，应检查界面上的待应用状态。
+
+升级前可在 **备份与恢复** 下载 JSON 备份，再通过 fnOS 安装新版本 FPK。备份包含证书私钥，应妥善保管；**不包含 ACME 账户、DNS 凭据或自动续期任务**，迁移到新设备时需重新配置续期，外部引用文件也需单独迁移。
+
+从旧版本升级后，如首页提示统计入口未启用，需要检查并应用一次当前草稿，才能开始采集新的统计数据。
+
+## 常见问题
+
+**会影响飞牛自带的 Nginx 吗？**
+
+应用只使用自己的安装、配置、数据和临时目录，不操作系统 Nginx。仍需选择未被其他服务占用的监听端口。
+
+**需要 Docker 吗？**
+
+安装和运行 FPK 不需要。只有从官方源码编译内置 Nginx 时，构建脚本使用 Docker 隔离编译依赖。
+
+**可以直接编辑 nginx.conf 吗？**
+
+当前提供生成配置的只读预览，配置修改通过表单完成，不开放任意原始指令编辑。
+
+**为什么没有流量数据？**
+
+统计从开始采集后积累；缺失历史保留为空。关闭访问日志会停止规则日志统计。WebSocket、SSE 和长下载在请求结束后才计入完成请求数。TCP/UDP 会话不计入 HTTP 指标。
+
+**支持哪些证书验证方式？**
+
+ACME 当前支持 DNS-01，尚不支持 HTTP-01、IP 地址签发或飞牛系统证书同步。已接入适配器不代表每个 DNS 服务商都经过真实账号验证。
+
+## 文档与开发
+
+- [功能与使用说明](docs/features.md)：代理、证书、统计、备份和全局设置。
+- [DNS 服务商说明](docs/dns-providers.md)：支持列表及凭据配置入口。
+- [从源码构建](docs/build.md)：准备 Nginx、构建前端与双架构 FPK。
+- [测试说明](tests/README.md)：单元测试、真实 Nginx 集成与生命周期检查。
+
+技术栈为 **Go + Vue 3 + TypeScript + Vite**。版本唯一来源是 [`packaging/fnos/manifest`](packaging/fnos/manifest)。
 
 ```bash
-./scripts/build-nginx-on-fnos.sh /path/to/output
-```
-
-每次编译还会生成对应的 `.sha256` 和 `.build-info.txt` 文件，用于核对二进制摘要、源码来源和编译参数。
-
-### 2. 将二进制放入项目
-
-把 fnOS 上生成的二进制取回项目，并按架构放到固定位置：
-
-```text
-ARM64  → third_party/nginx/arm64/nginx
-AMD64  → third_party/nginx/x86_64/nginx
-```
-
-例如 ARM64：
-
-```bash
-cp nginx-1.30.4-aarch64-linux third_party/nginx/arm64/nginx
-```
-
-例如 AMD64：
-
-```bash
-cp nginx-1.30.4-x86_64-linux third_party/nginx/x86_64/nginx
-```
-
-这两个本地二进制已被 `.gitignore` 排除，不会提交到 Git。FPK 打包时会检查 NGINX 的目标架构、静态链接属性和版本。
-
-### 3. 构建 FPK
-
-要求：Go 1.26+、Node.js 20.19+ 或 22.12+、npm、GNU tar、Python 3 和 `file`。
-
-首次构建先安装前端依赖：
-
-```bash
+git clone https://github.com/chenpingonline/nginx-web-fnos.git
+cd nginx-web-fnos
 make frontend-install
-```
-
-开发管理页面时可以使用：
-
-```bash
-npm --prefix web run dev
-npm --prefix web run typecheck
-npm --prefix web run build
-```
-
-Vite 开发服务器适合检查页面布局；需要调用真实 API 时，应使用 Go 管理服务提供的页面。`scripts/build.sh` 会在每次 FPK 打包前自动执行前端类型检查和生产构建，并将 `web/dist/` 嵌入 `nginx-web-server`。
-
-```bash
 make test
-make build-x86
-make build-arm64
-# 或
-make build-all
 ```
 
-版本号只需修改 `packaging/fnos/manifest` 的 `version` 字段（格式为 `主版本.次版本.补丁版本`）。后端通过 Go embed 读取，前端在 Vite 启动或构建时读取，打包和发布脚本也从此文件读取；不再使用 `VERSION` 环境变量覆盖。改版本后重新构建，开发预览需重启 Vite。
+构建安装包还需准备对应架构的 Nginx 二进制，详见 [构建文档](docs/build.md)。
 
-输出：
+## 当前边界
 
-```text
-dist/nginx-web-<version>-x86.fpk
-dist/nginx-web-<version>-arm64.fpk
-```
+内置 Nginx 未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查或 Prometheus 模块。Basic Auth 密码文件和客户端 CA 等外部文件需自行维护，并确保应用用户可读。
 
-## 测试
+每个 Release 的测试范围以发布说明为准；构建与包校验不能替代实体 fnOS 设备的安装、升级及使用验证。
 
-```bash
-make integration
-make release
-```
+## 参与贡献
 
-`tests/integration.sh` 会启动临时管理服务、独立 Nginx、HTTP 后端服务和临时自签名证书，验证 HTTP、HTTPS、配置应用、历史版本及平滑重载。
+欢迎提交 [Issue](https://github.com/chenpingonline/nginx-web-fnos/issues) 或 Pull Request。报告问题时请提供应用版本、fnOS 版本、CPU 架构、复现步骤和脱敏日志；请勿附上私钥、DNS Token 或完整配置备份。代码修改请附相关测试结果。
 
-## 当前限制
+## 许可证与致谢
 
-- 不支持 32 位 ARMv7。
-- 不直接监听 80/443，不申请 root 或 `CAP_NET_BIND_SERVICE`。
-- ACME 当前支持 DNS-01（39 个 lego 原生适配器），尚不支持 HTTP-01、IP 地址签发或飞牛系统证书同步。
-- 不提供任意原始 Nginx 指令编辑，以避免配置注入和应用无法启动。
-- 当前二进制未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查及 Prometheus 模块；页面不会伪装提供这些功能。
-- 客户端 CA 与 Basic Auth 密码文件由用户维护并确保应用运行用户可读。
-- 发布前仍需分别在实体 x86_64、ARM64 fnOS 设备上完成安装验收。
+项目源码采用 [MIT License](LICENSE)。内置 Nginx 及相关组件的许可证与来源见 [NGINX_LICENSE](NGINX_LICENSE)、[NOTICE](NOTICE) 和 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
-## 许可证
-
-nginx-web 源码使用 MIT License。Nginx Open Source 和 ARM64/AMD64 静态构建所含组件的许可证见 `NGINX_LICENSE`、`NOTICE` 与 `THIRD_PARTY_LICENSES.md`。
-
-### 自动主题
-
-应用通过飞牛官方 `@trimjs/web-app` SDK 读取平台主题并监听 `os/theme`，无需手动设置。暗色侧栏与外框为 `#0C0C0D`，主内容区独立滚动，四周留边。平台主题 API 要求 fnOS 1.2.0401 / App 1.34.0 及以上；旧系统、独立浏览器或 SDK 不可用时跟随浏览器 `prefers-color-scheme`。移动 App 的 SDK 不支持主题变更事件，重新打开页面时读取当前主题。
-
-### DNS 服务商配置
-
-添加 ACME 任务时可以按名称或代码搜索服务商。表单由当前 lego 版本的官方凭据定义生成；不同认证方式按需填写，其他认证方式、可选参数和凭据文件路径位于高级设置中。字段说明及文档链接来自 lego，凭据组合最终由对应原生适配器验证。切换服务商会清除尚未提交的 DNS 配置。
-
-新任务在独立的应用子进程中运行原生适配器，环境变量仅在子进程内设置。账户和证书检查点通过私有管道传回主进程并保存；密钥不会放入命令行参数，第三方标准输出不会展示给用户。原有三家服务商的任务数据保持兼容。
-
-升级 lego 后运行 `python3 scripts/generate-dns-catalog.py`（Python 3.11+）同步服务商和字段定义，再执行构建与测试。这些适配器包含多个云 SDK，会增加首次编译时间和可执行文件体积。原生适配器已接入不等于所有服务商均使用真实账号完成实测。
+感谢 [NGINX](https://nginx.org/)、[lego](https://github.com/go-acme/lego)、[Vue](https://github.com/vuejs/core) 等开源项目。README 的组织方式参考了 [Nginx Proxy Manager](https://github.com/NginxProxyManager/nginx-proxy-manager) 和 [Nginx UI](https://github.com/0xJacky/nginx-ui)。

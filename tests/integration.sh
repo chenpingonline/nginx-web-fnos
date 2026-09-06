@@ -5,6 +5,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST="${TEST_ROOT:-$(mktemp -d /tmp/fnproxy-integration.XXXXXX)}"
 KEEP_TEST_ROOT="${KEEP_TEST_ROOT:-0}"
 
+# A prebuilt Linux binary lets isolated release tests use the exact packaged server.
+case "$(uname -m)" in
+  x86_64|amd64) TEST_ARCH=x86; TEST_GOARCH=amd64 ;;
+  aarch64|arm64) TEST_ARCH=arm64; TEST_GOARCH=arm64 ;;
+  *) echo 'Unsupported integration test architecture' >&2; exit 1 ;;
+esac
+if [[ -z "${INTEGRATION_SERVER_BIN:-}" ]]; then
+  make --no-print-directory -C "$ROOT" frontend-build
+fi
+
 read -r DEFAULT_PORT HTTP_PORT HTTPS_PORT UPSTREAM_PORT < <(python3 - <<'PY'
 import socket
 ports=[]
@@ -18,10 +28,17 @@ PY
 )
 
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/upstream"
-(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/nginx-web-server" ./cmd/nginx-web)
-"$ROOT/scripts/fetch-nginx.sh" x86 "$TEST/app/bin/nginx" >/dev/null
+if [[ -n "${INTEGRATION_SERVER_BIN:-}" ]]; then
+  cp "$INTEGRATION_SERVER_BIN" "$TEST/app/bin/nginx-web-server"
+else
+  (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$TEST_GOARCH" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$TEST/app/bin/nginx-web-server" ./cmd/nginx-web)
+fi
+"$ROOT/scripts/fetch-nginx.sh" "$TEST_ARCH" "$TEST/app/bin/nginx" >/dev/null
 cp "$ROOT/third_party/nginx/mime.types" "$TEST/app/etc/mime.types"
 chmod 755 "$TEST/app/bin/"*
+
+# All requests below target this test's local services, including --resolve hosts.
+export NO_PROXY='*' no_proxy='*'
 
 export FNPROXY_APPDEST="$TEST/app"
 export FNPROXY_ETC="$TEST/etc"

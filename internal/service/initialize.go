@@ -5,7 +5,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/chenpingonline/fn-nginx-web/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 )
 
 // Initialize runs before the management API opens, so the serving process owns

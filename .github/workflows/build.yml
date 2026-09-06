@@ -2,7 +2,7 @@ name: Build nginx-web FPK
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -11,14 +11,26 @@ permissions:
   contents: read
 
 jobs:
-  x86:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86
+            runner: ubuntu-latest
+            nginx_dir: x86_64
+            nginx_output: x86_64
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            nginx_dir: arm64
+            nginx_output: aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -26,50 +38,39 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y file binutils curl python3 openssl
-      - name: Prepare scripts
-        run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
-      - name: Unit tests
-        run: npm ci --prefix web && npm run build --prefix web && go test ./...
-      - name: Build x86 FPK
-        run: ./scripts/build.sh x86
+      - name: Read application version
+        run: echo "APP_VERSION=$(python3 scripts/version.py)" >> "$GITHUB_ENV"
+      - name: Cache Nginx core
+        id: nginx-cache
+        uses: actions/cache@v4
+        with:
+          path: third_party/nginx/${{ matrix.nginx_dir }}/nginx
+          key: nginx-${{ matrix.arch }}-${{ hashFiles('scripts/build-nginx-on-fnos.sh') }}
+      - name: Compile official Nginx source
+        if: steps.nginx-cache.outputs.cache-hit != 'true'
+        env:
+          NGINX_APK_MIRROR: https://dl-cdn.alpinelinux.org/alpine
+        run: |
+          ./scripts/build-nginx-on-fnos.sh "$RUNNER_TEMP/nginx-output"
+          cp "$RUNNER_TEMP/nginx-output/nginx-1.30.4-${{ matrix.nginx_output }}-linux" third_party/nginx/${{ matrix.nginx_dir }}/nginx
+      - name: Install frontend dependencies
+        run: npm ci --prefix web
+      - name: Build and verify FPK
+        run: ./scripts/build.sh "${{ matrix.arch }}"
+      - name: Test generated configuration and real proxy traffic
+        env:
+          NGINX_TEST_BIN: ${{ github.workspace }}/third_party/nginx/${{ matrix.nginx_dir }}/nginx
+        run: go test ./internal/nginx ./internal/service
       - name: Integration test
+        env:
+          INTEGRATION_SERVER_BIN: ${{ github.workspace }}/.build/${{ matrix.arch }}/app/bin/nginx-web-server
         run: ./tests/integration.sh
       - name: Lifecycle test
-        run: ./tests/fpk-lifecycle.sh dist/nginx-web-0.1.1-x86.fpk
+        run: ./tests/fpk-lifecycle.sh "dist/nginx-web-${APP_VERSION}-${{ matrix.arch }}.fpk"
       - uses: actions/upload-artifact@v4
         with:
-          name: nginx-web-x86
+          name: nginx-web-${{ matrix.arch }}
+          if-no-files-found: error
           path: |
-            dist/nginx-web-0.1.1-x86.fpk
-            dist/nginx-web-0.1.1-x86.fpk.sha256
-
-  arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y file binutils curl python3
-      - name: Prepare scripts
-        run: chmod +x scripts/*.sh tests/*.sh packaging/fnos/cmd/*
-      - name: Build frontend
-        run: npm ci --prefix web && npm run build --prefix web
-      - name: Build ARM64 FPK
-        run: ./scripts/build.sh arm64
-      - uses: actions/upload-artifact@v4
-        with:
-          name: nginx-web-arm64
-          path: |
-            dist/nginx-web-0.1.1-arm64.fpk
-            dist/nginx-web-0.1.1-arm64.fpk.sha256
+            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.arch }}.fpk
+            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.arch }}.fpk.sha256
