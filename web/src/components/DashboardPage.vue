@@ -2,7 +2,7 @@
 import AppSelect from "./AppSelect.vue";
 import { computed, ref, watch } from "vue";
 import {
-  PhArrowRight, PhStop, PhPlay, PhArrowClockwise,
+  PhCopy, PhArrowSquareOut, PhArrowRight, PhStop, PhPlay, PhArrowClockwise,
   PhCheckCircle, PhWarningCircle, PhMagnifyingGlass,
   PhWarning, PhGlobe, PhShareNetwork, PhCaretLeft, PhCaretRight,
 } from "@phosphor-icons/vue";
@@ -17,6 +17,7 @@ const props = defineProps<{
   initialMinutes: number; initialRule: string;
 }>();
 const emit = defineEmits<{
+  copy: [value: string, label: string];
   overview: [value: Overview]; add: []; apply: []; test: []; reload: []; start: []; stop: [];
   errors: [scope: { minutes: number; rule: string }];
   navigate: [page: "rules" | "streams" | "certificates" | "logs" | "config"];
@@ -192,13 +193,24 @@ const issue = computed(() => {
       </div>
       <div v-if="visible.length" class="table-wrap">
         <table class="table dashboard-table">
-          <thead><tr><th>名称 / 入口</th><th>类型</th><th>监听地址</th><th>目标地址</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th></tr></thead>
+          <thead><tr><th>名称</th><th>类型</th><th>访问入口</th><th>后端服务</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th></tr></thead>
           <tbody>
             <tr v-for="rule in visible" :key="rule.id">
               <td><div class="rule-identity"><PhGlobe v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" :size="16" /><PhShareNetwork v-else :size="17" />
-                <div><button v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" class="rule-name-link" :title="`查看 ${rule.name} 的访问趋势`" @click="selected = rule.id">{{ rule.name }}</button><strong v-else>{{ rule.name }}</strong><div class="rule-sub" :title="rule.entry">{{ rule.entry }}</div></div>
+                <div><button v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" class="rule-name-link" :title="`查看 ${rule.name} 的访问趋势`" @click="selected = rule.id">{{ rule.name }}</button><strong v-else>{{ rule.name }}</strong></div>
               </div></td>
-              <td>{{ rule.protocol }}</td><td>{{ rule.listen_address || "—" }}</td><td class="dashboard-target" :title="rule.target">{{ rule.target }}</td>
+              <td>{{ rule.protocol }}</td>
+              <td :title="`监听地址：${rule.listen_address || '—'}`">
+                <template v-if="rule.entry_urls?.length">
+                  <div v-for="url in rule.entry_urls" :key="url" class="proxy-entry">
+                    <span class="proxy-entry-url">{{ url }}</span>
+                    <button type="button" class="icon-button proxy-entry-action" :aria-label="`复制入口 ${url}`" title="复制入口地址" @click="emit('copy', url, '入口地址')"><PhCopy :size="16" /></button>
+                    <a v-if="!url.includes('*')" class="icon-button proxy-entry-action" :href="url" target="_blank" rel="noopener noreferrer" :aria-label="`打开 ${url}`" title="在新窗口打开"><PhArrowSquareOut :size="16" /></a>
+                  </div>
+                </template>
+                <div v-else class="proxy-entry"><span>{{ rule.listen_address || rule.entry || '—' }}</span><button v-if="rule.listen_address" type="button" class="icon-button proxy-entry-action" aria-label="复制监听地址" title="复制监听地址" @click="emit('copy', rule.listen_address, '监听地址')"><PhCopy :size="16" /></button></div>
+              </td>
+              <td><div class="proxy-entry"><span class="proxy-entry-url">{{ rule.target_url || rule.target }}</span><button v-if="rule.target_url || rule.protocol === 'TCP' || rule.protocol === 'UDP'" type="button" class="icon-button proxy-entry-action" aria-label="复制后端服务地址" title="复制后端服务地址" @click="emit('copy', rule.target_url || rule.target, '后端服务地址')"><PhCopy :size="16" /></button></div></td>
               <td><span class="rule-status" :class="rule.config_state" :title="rule.config_state === 'pending_delete' ? '草稿已删除，仍在上次生效配置中' : '配置状态不代表服务健康'"><i></i><span>{{ configNames[rule.config_state] }}</span></span></td>
               <td :title="`${period}平均完成请求速率`">{{ num(averageRate(rule), 2) }} <small v-if="averageRate(rule) != null">req/s</small></td>
               <td><button v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" class="error-rate-link" :class="{ 'error-count': (totalErrors(rule.counts) ?? 0) > 0 }" :aria-label="`查看 ${rule.name} 的错误率详情`" @click="showErrors(rule.id)">{{ errorRate(rule.counts) == null ? "—" : `${num(errorRate(rule.counts), 2)}%` }}<PhArrowRight :size="13" /></button><span v-else>—</span></td>
@@ -258,54 +270,54 @@ const issue = computed(() => {
 .dashboard-notice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .traffic-card { margin-top: 2px; }
 .card-header { justify-content: space-between; min-height: 58px; padding: 14px 20px 8px; border-bottom: 0; }
-.traffic-card .card-header h2 { font-size: 17px; font-weight: 570; }
-h2 { font-size: 17px; font-weight: 570; }
+.traffic-card .card-header h2 { font-size: 19px; font-weight: 570; }
+h2 { font-size: 19px; font-weight: 570; }
 .traffic-controls { display: flex; gap: 20px; align-items: center; }
 .range-buttons { display: flex; border: 1px solid var(--line); border-radius: 8px; }
-.range-buttons button { border: 1px solid transparent; background: transparent; color: #525d6c; padding: 7px 13px; border-radius: 7px; font-size: 13px; white-space: nowrap; }
+.range-buttons button { border: 1px solid transparent; background: transparent; color: #525d6c; padding: 7px 13px; border-radius: 7px; font-size: 14px; white-space: nowrap; }
 .range-buttons button + button { position: relative; }
 .range-buttons button:not(.active) + button:not(.active)::before { position: absolute; content: ''; height: 16px; width: 1px; background: var(--line); left: -1px; top: 8px; }
 .range-buttons button.active { background: #f7fdf9; border-color: var(--accent); color: var(--accent-dark); }
 .traffic-metrics { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 8px 20px 4px; gap: 20px; }
 .traffic-metric { text-align: left; border: 0; background: transparent; padding: 0 0 0 1px; color: var(--text); min-width: 0; display: flex; flex-direction: column; gap: 11px; }
-.traffic-metric > span { color: #46515d; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.traffic-metric > span { color: #46515d; font-size: 15px; display: flex; align-items: center; gap: 7px; }
 .traffic-metric > span i { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; background: var(--accent); }
 .requests-metric > span i { background: #00a653; }
 .responses-metric > span i { background: #3b82f6; }
 .completed-metric > span i { background: #159da7; }
 .errors-metric > span i { background: var(--warning); }
 .traffic-metric strong { font-size: 22px; line-height: 1; font-weight: 540; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.traffic-metric small { font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.traffic-metric small { font-size: 14px; color: var(--text-muted); font-weight: 400; }
 .errors-metric { border-left: 1px solid var(--line); padding-left: 24px; }
 .metric-arrow { transition: transform 140ms ease; }
 .errors-metric:hover .metric-arrow { transform: translateX(3px); }
-.traffic-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; color: #7a8490; font-size: 10px; }
-.selected-rule { display: flex; justify-content: space-between; align-items: center; margin: 10px 20px 0; color: var(--text-muted); font-size: 12px; }
+.traffic-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 0 20px 12px; color: #7a8490; font-size: 12px; }
+.selected-rule { display: flex; justify-content: space-between; align-items: center; margin: 10px 20px 0; color: var(--text-muted); font-size: 14px; }
 .rules-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 20px 0; flex-wrap: wrap; }
 .rules-heading h2 { margin: 0; flex-shrink: 0; align-self: flex-start; line-height: 35px; }
 .rules-filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-width: 0; max-width: 100%; }
-.rules-filters .select { width: 134px; font-size: 13px; height: 35px; padding-block: 0; color: #526070; }
-.dashboard-search { display: flex; gap: 8px; align-items: center; width: 236px; height: 35px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: #707b88; background: #fff; }
+.rules-filters .select { width: 134px; font-size: 15px; height: 35px; padding-block: 0; color: #526070; }
+.dashboard-search { display: flex; gap: 8px; align-items: center; width: 260px; min-width: min(260px, 100%); max-width: 100%; height: 35px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: #707b88; background: #fff; }
 .dashboard-search > svg { flex-shrink: 0; }
-.dashboard-search input { border: 0; background: transparent; outline: 0; width: 100%; min-width: 0; color: var(--text); font-size: 13px; }
+.dashboard-search input { border: 0; background: transparent; outline: 0; width: 100%; min-width: 0; color: var(--text); font-size: 15px; }
 .dashboard-search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
 .protocol-tabs { display: flex; width: max-content; max-width: calc(100% - 40px); margin: 12px 20px 12px; border: 1px solid var(--line); border-radius: 7px; overflow-x: auto; }
-.protocol-tabs button { position: relative; padding: 5px 14px; border: 1px solid transparent; background: transparent; color: #647180; border-radius: 6px; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.protocol-tabs button { position: relative; padding: 5px 14px; border: 1px solid transparent; background: transparent; color: #647180; border-radius: 6px; font-size: 14px; line-height: 16px; white-space: nowrap; }
 .protocol-tabs button.active { border-color: var(--accent); background: #f4fcf7; color: var(--accent-dark); }
 .protocol-tabs button:not(.active) + button:not(.active)::before { content: ''; position: absolute; left: -1px; height: 14px; width: 1px; top: 6px; background: var(--line); }
 .dashboard-rules .table-wrap { margin: 0 19px; border: 1px solid var(--line); border-radius: 10px; }
-.dashboard-table { min-width: 960px; font-size: 12px; }
-.dashboard-table th { padding: 9px 14px; font-size: 12px; font-weight: 450; background: #f8fbfb; color: #4d5867; }
+.dashboard-table { min-width: 960px; font-size: 14px; }
+.dashboard-table th { padding: 9px 14px; font-size: 14px; font-weight: 450; background: #f8fbfb; color: #4d5867; }
 .dashboard-table td { padding: 5px 14px; height: 43px; color: #536071; }
 .dashboard-table td:first-child { min-width: 184px; }
-.dashboard-table small { font-size: 11px; }
+.dashboard-table small { font-size: 13px; }
 .rule-identity { display: flex; align-items: center; gap: 13px; }
 .rule-identity > svg { color: #5d676d; flex-shrink: 0; }
 .rule-identity > div { min-width: 0; }
-.rule-identity strong { font-size: 12px; color: var(--text); font-weight: 550; }
-.rule-sub { max-width: 205px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; font-size: 10px; color: #788493; }
+.rule-identity strong { font-size: 14px; color: var(--text); font-weight: 550; }
+.rule-sub { max-width: 205px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; font-size: 12px; color: #788493; }
 .dashboard-target { max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rule-name-link { border: 0; background: transparent; color: var(--text); padding: 0; font-size: 12px; font-weight: 550; text-align: left; white-space: nowrap; }
+.rule-name-link { border: 0; background: transparent; color: var(--text); padding: 0; font-size: 14px; font-weight: 550; text-align: left; white-space: nowrap; }
 .rule-name-link:hover { color: var(--accent-dark); text-decoration: underline; }
 .rule-status { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: #6a7582; }
 .rule-status > i { width: 7px; height: 7px; background: currentColor; border-radius: 50%; }
@@ -317,18 +329,18 @@ h2 { font-size: 17px; font-weight: 570; }
 .error-rate-link { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-variant-numeric: tabular-nums; }
 .error-rate-link.error-count { color: #d7790a; }
 .error-rate-link:hover { text-decoration: underline; }
-.dashboard-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 20px; color: #6c7785; font-size: 13px; }
+.dashboard-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 20px; color: #6c7785; font-size: 15px; }
 .dashboard-pagination > div { display: flex; gap: 6px; align-items: center; white-space: nowrap; }
-.page-button { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; min-width: 32px; height: 32px; background: #fff; color: #465565; font-size: 13px; }
+.page-button { display: grid; place-items: center; border: 1px solid var(--line); border-radius: 7px; min-width: 32px; height: 32px; background: #fff; color: #465565; font-size: 15px; }
 .page-button:disabled { opacity: .4; }
 .page-button.active { color: var(--accent-dark); border-color: var(--accent); }
-.page-size { height: 33px; width: 98px; padding-block: 0; font-size: 13px; margin-left: 7px; }
+.page-size { height: 33px; width: 98px; padding-block: 0; font-size: 15px; margin-left: 7px; }
 .certificate-attention { padding: 9px 20px; }
-.certificate-attention h2 { margin: 0; font-size: 15px; font-weight: 500; }
-.certificate-summary { display: flex; align-items: center; gap: 14px; padding: 0 8px; color: #414b57; font-size: 13px; min-height: 33px; }
+.certificate-attention h2 { margin: 0; font-size: 17px; font-weight: 500; }
+.certificate-summary { display: flex; align-items: center; gap: 14px; padding: 0 8px; color: #414b57; font-size: 15px; min-height: 33px; }
 .certificate-summary > svg { color: var(--accent); flex-shrink: 0; }
-.certificate-summary > strong { font-size: 15px; font-weight: 550; white-space: nowrap; }
-.certificate-summary .button { margin-left: auto; flex-shrink: 0; gap: 14px; min-width: 128px; font-size: 13px; font-weight: 450; background: #fff; }
+.certificate-summary > strong { font-size: 17px; font-weight: 550; white-space: nowrap; }
+.certificate-summary .button { margin-left: auto; flex-shrink: 0; gap: 14px; min-width: 128px; font-size: 15px; font-weight: 450; background: #fff; }
 .certificate-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .certificate-attention.has-alert { border-color: #ffe0a6; margin-top: 3px; }
 .has-alert .certificate-summary > strong, .has-alert .certificate-summary > svg { color: var(--warning); }
@@ -365,7 +377,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
   .service-facts dd { font-size: 14px; }
   .rules-filters { gap: 8px; }
   .rules-filters .select { width: 112px; }
-  .dashboard-search { width: 205px; }
+  .dashboard-search { width: 260px; }
   .traffic-metrics { gap: 14px; }
   .traffic-metric strong { font-size: 20px; }
 }
@@ -375,9 +387,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
   .service-facts { flex-basis: 100%; }
   .rules-heading { flex-wrap: wrap; }
   .rules-filters { width: 100%; }
-  .dashboard-search { flex: 1; }
+  .dashboard-search { flex: 1 0 260px; }
   .protocol-tabs { margin-top: 9px; }
-  .traffic-metric > span { font-size: 12px; }
+  .traffic-metric > span { font-size: 14px; }
   .traffic-metric strong { font-size: 18px; }
 }
 @media (max-width: 760px) {
@@ -392,7 +404,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
   .traffic-card > .card-header { flex-wrap: wrap; gap: 8px; }
   .traffic-controls { gap: 8px; max-width: 100%; }
   .range-buttons { min-width: 0; overflow-x: auto; }
-  .range-buttons button { padding: 6px 7px; font-size: 12px; flex-shrink: 0; }
+  .range-buttons button { padding: 6px 7px; font-size: 13px; flex-shrink: 0; }
   .traffic-metrics { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 14px; gap: 17px 10px; }
   .traffic-metric { gap: 7px; }
   .traffic-metric strong { font-size: 20px; }
@@ -409,7 +421,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
   .dashboard-pagination > div { margin-left: auto; }
   .certificate-attention { padding: 10px 14px; }
   .certificate-summary { flex-wrap: wrap; padding: 6px 0 0; gap: 8px; }
-  .certificate-summary > strong { font-size: 13px; }
+  .certificate-summary > strong { font-size: 15px; }
   .certificate-preview { flex-basis: 100%; order: 1; }
   .certificate-summary .button { min-width: 102px; gap: 8px; }
 }

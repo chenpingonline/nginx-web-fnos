@@ -16,9 +16,45 @@ import (
 	"testing"
 	"time"
 
+	acmemanager "github.com/chenpingonline/nginx-web-fnos/internal/acme"
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/go-acme/lego/v5/certificate"
 )
+
+func TestDeleteCertificateRemovesTaskAfterReferenceChecks(t *testing.T) {
+	s := testService(t)
+	job, err := s.ACME().Create(acmemanager.Input{Name: "test", CA: "staging", Email: "admin@example.com", Domains: []string{"example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: acmemanager.Credentials{Token: "test-token"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.deployACME(job.ID, "test", acmeResource(t, 90)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.store.Update(func(state *State) error {
+		state.Rules = append(state.Rules, ProxyRule{ID: domain.RandomID(), Name: "reference", Domains: []string{"example.com"}, ListenPort: 19443, TLS: true, CertificateID: job.ID, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 18080})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteCertificate(job.ID); err == nil {
+		t.Fatal("deleted referenced certificate")
+	}
+	if !s.ACME().Manages(job.ID) || len(s.State().Certificates) != 1 {
+		t.Fatal("failed deletion changed certificate or task")
+	}
+	if err := s.store.Update(func(state *State) error { state.Rules = nil; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteCertificate(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if s.ACME().Manages(job.ID) || len(s.State().Certificates) != 0 {
+		t.Fatal("certificate or task remains")
+	}
+	if _, err := os.Lstat(filepath.Join(s.paths.CertificateDir, job.ID)); !os.IsNotExist(err) {
+		t.Fatal("certificate files remain", err)
+	}
+}
 
 func acmeResource(t *testing.T, serial int64) *certificate.Resource {
 	t.Helper()

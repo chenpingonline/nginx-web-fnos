@@ -113,6 +113,42 @@ func (m *Manager) List() []Job {
 	sort.Slice(jobs, func(i, j int) bool { return jobs[i].ID < jobs[j].ID })
 	return jobs
 }
+
+// Reissue retains the private account and DNS configuration, but starts a new
+// order: Renew would reuse the old certificate's domains. The deployed files
+// remain untouched until the replacement has been issued and deployed.
+func (m *Manager) Reissue(id string, domains []string) (Job, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	stored, ok := m.records[id]
+	if !ok {
+		return Job{}, errors.New("ACME 任务不存在")
+	}
+	if m.active == id {
+		return Job{}, errors.New("任务执行中，请等待完成后修改")
+	}
+	r := clone(stored)
+	r.Input.Domains = append([]string(nil), domains...)
+	if err := validate(&r.Input); err != nil {
+		return Job{}, err
+	}
+	r.Job.Domains = append([]string(nil), r.Input.Domains...)
+	r.Resource = nil
+	r.Pending = false
+	r.RenewAt = nil
+	r.Force = true
+	r.Job.Enabled = true
+	r.Job.Status = "queued"
+	r.Job.Message = "域名已修改，等待重新签发；原证书继续使用"
+	r.Job.Failures = 0
+	r.Job.NextAttempt = m.now()
+	r.Job.UpdatedAt = m.now()
+	if err := m.save(r); err != nil {
+		return Job{}, err
+	}
+	m.signal()
+	return r.Job, nil
+}
 func (m *Manager) Manages(id string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -167,6 +203,30 @@ func (m *Manager) Action(id, action string) error {
 		return err
 	}
 	m.signal()
+	return nil
+}
+
+// RemoveForCertificate stops future renewals before the certificate is removed.
+// Check all matching jobs first so an active renewal leaves every job untouched.
+func (m *Manager) RemoveForCertificate(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var ids []string
+	for jobID, r := range m.records {
+		if r.Job.CertificateID != id && r.Job.ID != id {
+			continue
+		}
+		if m.active == jobID {
+			return errors.New("关联 ACME 任务执行中，请等待完成后删除证书")
+		}
+		ids = append(ids, jobID)
+	}
+	for _, jobID := range ids {
+		if err := os.Remove(filepath.Join(m.dir, jobID+".json")); err != nil {
+			return err
+		}
+		delete(m.records, jobID)
+	}
 	return nil
 }
 func (m *Manager) Run(ctx context.Context) {

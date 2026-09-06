@@ -218,6 +218,17 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 			writeAPIError(w, http.StatusBadRequest, "任务操作无效")
 			return
 		}
+		if r.Method == http.MethodPost && action == "reissue" {
+			var input struct {
+				Domains []string `json:"domains"`
+			}
+			if !decodeJSON(w, r, &input) {
+				return
+			}
+			job, err := a.service.ACME().Reissue(parts[0], input.Domains)
+			writeResult(w, http.StatusAccepted, job, err)
+			return
+		}
 		err := a.service.ACME().Action(parts[0], action)
 		writeResult(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
 	case apiPath == "/api/certificates" && r.Method == http.MethodGet:

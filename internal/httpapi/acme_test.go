@@ -66,6 +66,15 @@ func TestACMEAPIProtectsCredentialsAndRequiresAdmin(t *testing.T) {
 	if w = call(http.MethodPost, "/api/acme/"+job.ID+"/pause", "{}", true); w.Code != 200 {
 		t.Fatal(w.Code)
 	}
+	if w = call(http.MethodPost, "/api/acme/"+job.ID+"/reissue", `{"domains":["example.com","*.example.com"]}`, false); w.Code != 403 {
+		t.Fatal("unauthorized reissue", w.Code)
+	}
+	if w = call(http.MethodPost, "/api/acme/"+job.ID+"/reissue", `{"domains":[]}`, true); w.Code == 202 {
+		t.Fatal("empty domains accepted")
+	}
+	if w = call(http.MethodPost, "/api/acme/"+job.ID+"/reissue", `{"domains":["example.com","*.example.com"]}`, true); w.Code != 202 || strings.Contains(w.Body.String(), "never-return-this") {
+		t.Fatal(w.Code, w.Body.String())
+	}
 	if w = call(http.MethodDelete, "/api/acme/"+job.ID, "", true); w.Code != 200 {
 		t.Fatal(w.Code)
 	}

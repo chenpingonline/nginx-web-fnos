@@ -23,6 +23,53 @@ import (
 func validInput() Input {
 	return Input{Name: "test", CA: "staging", Email: "admin@example.com", Domains: []string{"example.com", "*.example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: Credentials{Token: "secret-token-test"}}
 }
+func TestRemoveForCertificate(t *testing.T) {
+	m, err := New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := m.Create(validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := m.Create(validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	unrelated, err := m.Create(validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := clone(m.records[second.ID])
+	r.Job.CertificateID = first.ID
+	if err := m.save(r); err != nil {
+		t.Fatal(err)
+	}
+	m.active = second.ID
+	if err := m.RemoveForCertificate(first.ID); err == nil {
+		t.Fatal("removed active renewal")
+	}
+	if len(m.List()) != 3 {
+		t.Fatal("active check partially removed jobs")
+	}
+	m.active = ""
+	if err := m.RemoveForCertificate(first.ID); err != nil {
+		t.Fatal(err)
+	}
+	jobs := m.List()
+	if len(jobs) != 1 || jobs[0].ID != unrelated.ID {
+		t.Fatal("incorrect jobs removed", jobs)
+	}
+	for _, id := range []string{first.ID, second.ID} {
+		if _, err := os.Stat(filepath.Join(m.dir, id+".json")); !os.IsNotExist(err) {
+			t.Fatal("credentials remain on disk", err)
+		}
+	}
+	reloaded, err := New(m.dir, nil)
+	if err != nil || len(reloaded.List()) != 1 {
+		t.Fatal("deletion did not persist", err)
+	}
+}
 func testResource(t *testing.T, now time.Time) *certificate.Resource {
 	t.Helper()
 	k, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -186,5 +233,87 @@ func TestJobSingleFlightAndInterruptedRecovery(t *testing.T) {
 	<-done
 	if strings.Contains(m.List()[0].Message, "secret-token-test") {
 		t.Fatal("credential leaked")
+	}
+}
+
+func TestReissueDomainsPreservesCredentialsAndCertificate(t *testing.T) {
+	m, err := New(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	j, err := m.Create(validInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := clone(m.records[j.ID])
+	r.Resource = testResource(t, time.Now())
+	r.Pending = true
+	r.Job.CertificateID = "existing-cert"
+	r.AccountKey = []byte("saved-account")
+	r.Job.Enabled = false
+	if err = m.save(r); err != nil {
+		t.Fatal(err)
+	}
+	job, err := m.Reissue(j.ID, []string{"NAscp.cn", "*.nascp.cn", "nascp.cn"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(job.Domains, ",") != "nascp.cn,*.nascp.cn" || job.CertificateID != "existing-cert" || !job.Enabled || job.Status != "queued" {
+		t.Fatal(job)
+	}
+	reloaded, err := New(m.dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := reloaded.records[j.ID]
+	if saved.Resource != nil || saved.Pending || !saved.Force || saved.RenewAt != nil {
+		t.Fatal("old order could be renewed/deployed")
+	}
+	if saved.Input.Credentials.Token != "secret-token-test" || string(saved.AccountKey) != "saved-account" {
+		t.Fatal("lost private configuration")
+	}
+	public, _ := json.Marshal(job)
+	if strings.Contains(string(public), "secret-token-test") {
+		t.Fatal("credential exposed")
+	}
+	deployments := 0
+	m.issue = func(_ context.Context, r *Record, _ func() error, _ func(string)) error {
+		return errors.New("simulated failure")
+	}
+	m.deploy = func(id, name string, resource *certificate.Resource) (string, error) { deployments++; return id, nil }
+	m.step(context.Background())
+	if deployments != 0 || m.List()[0].CertificateID != "existing-cert" {
+		t.Fatal("failed order affected deployed certificate")
+	}
+	m.issue = func(_ context.Context, r *Record, _ func() error, _ func(string)) error {
+		r.Resource = testResource(t, time.Now())
+		r.Pending = true
+		return nil
+	}
+	if _, err = m.Reissue(j.ID, job.Domains); err != nil {
+		t.Fatal(err)
+	}
+	m.step(context.Background())
+	if deployments != 1 || m.List()[0].CertificateID != "existing-cert" {
+		t.Fatal("replacement changed reference")
+	}
+}
+func TestReissueRejectsInvalidOrActiveWithoutMutation(t *testing.T) {
+	m, _ := New(t.TempDir(), nil)
+	j, _ := m.Create(validInput())
+	before, _ := json.Marshal(m.records[j.ID])
+	if _, err := m.Reissue(j.ID, []string{"https://example.com"}); err == nil {
+		t.Fatal("invalid domain accepted")
+	}
+	after, _ := json.Marshal(m.records[j.ID])
+	if string(before) != string(after) {
+		t.Fatal("invalid edit persisted")
+	}
+	m.active = j.ID
+	if _, err := m.Reissue(j.ID, []string{"new.example.com"}); err == nil {
+		t.Fatal("active edit accepted")
+	}
+	if _, err := m.Reissue("missing", []string{"example.com"}); err == nil {
+		t.Fatal("missing job accepted")
 	}
 }

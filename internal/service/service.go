@@ -507,9 +507,6 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 }
 
 func (s *AppService) DeleteCertificate(id string) error {
-	if s.acme.Manages(id) {
-		return errors.New("请先移除对应 ACME 任务，再删除证书")
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !domain.ValidID(id) {
@@ -558,6 +555,9 @@ func (s *AppService) DeleteCertificate(id string) error {
 				return fmt.Errorf("证书仍被配置历史 %s 的 Stream 规则引用，请先删除相关历史", revision.ID)
 			}
 		}
+	}
+	if err := s.acme.RemoveForCertificate(id); err != nil {
+		return err
 	}
 	if err := s.store.Update(func(state *State) error {
 		for index := range state.Certificates {

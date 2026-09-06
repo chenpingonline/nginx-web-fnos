@@ -390,14 +390,14 @@ function date(value: string | null | undefined) {
   padding: 2px 0 4px;
 }
 h1 {
-  font-size: 19px;
+  font-size: 21px;
   font-weight: 650;
   line-height: 1.4;
   margin: 0;
 }
 .details-heading p {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   margin: 3px 0 0;
 }
 .details-notice {
@@ -409,7 +409,7 @@ h1 {
   border-radius: 10px;
   padding: 10px 14px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .details-notice > svg {
@@ -445,7 +445,7 @@ h1 {
   width: 220px;
   min-width: 160px;
   max-width: 100%;
-  font-size: 12px;
+  font-size: 14px;
 }
 .range-buttons {
   max-width: 100%;
@@ -462,7 +462,7 @@ h1 {
   background: transparent;
   color: var(--text-muted);
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 13px;
   border-radius: 6px;
   white-space: nowrap;
 }
@@ -498,7 +498,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
 }
 .error-metric i {
@@ -517,14 +517,14 @@ h1 {
   background: var(--danger);
 }
 .error-metric strong {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .error-metric small {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -537,7 +537,7 @@ h1 {
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 20px 12px;
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .metric-explanation {
@@ -545,17 +545,17 @@ h1 {
   padding: 11px 18px;
   border-top: 1px solid var(--line);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.7;
 }
 .coverage-note {
   margin: 0 18px 12px;
   color: var(--warning);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .affected-count {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   margin-left: 5px;
@@ -579,7 +579,7 @@ h1 {
   background: none;
   text-align: left;
   color: var(--text);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 550;
 }
 .rule-name:hover {
@@ -592,11 +592,11 @@ h1 {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .pending-delete {
   color: var(--warning);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.8;
 }
 .client-count {
@@ -621,7 +621,7 @@ h1 {
   gap: 8px;
   padding: 12px 18px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
 }
 .pagination {
   display: flex;
@@ -647,7 +647,7 @@ h1 {
     display: none;
   }
   h1 {
-    font-size: 17px;
+    font-size: 19px;
   }
   .card-header {
     padding: 12px 14px;
@@ -665,7 +665,7 @@ h1 {
     gap: 3px;
   }
   .error-metric strong {
-    font-size: 22px;
+    font-size: 24px;
   }
   .table-wrap {
     margin: 0 12px;

@@ -139,3 +139,37 @@ func TestRuleGroupTLSAndCertificateReferences(t *testing.T) {
 		t.Fatal("HTTP transition retained certificate", updated)
 	}
 }
+
+func TestListenTypePersistsThroughGroupUpdates(t *testing.T) {
+	s := testService(t)
+	g, err := s.SaveRuleGroup("", domain.RuleGroup{Name: "IPv6", ListenPort: 19560, ListenType: "ipv6"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := groupedRule("music", "music.example.com", g.ID, true)
+	r.InheritFields = append(r.InheritFields, "listen_type")
+	created, err := s.CreateRule(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.ListenType != "ipv6" {
+		t.Fatal(created)
+	}
+	g.ListenType = "dual"
+	if _, err = s.SaveRuleGroup(g.ID, g); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := store.New(s.paths.StateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Snapshot().Rules[0].ListenType != "dual" {
+		t.Fatal("listener did not persist")
+	}
+	if err = s.DeleteRuleGroup(g.ID); err != nil {
+		t.Fatal(err)
+	}
+	if s.State().Rules[0].ListenType != "dual" {
+		t.Fatal("detach lost listener")
+	}
+}

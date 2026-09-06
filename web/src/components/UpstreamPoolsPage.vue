@@ -353,7 +353,7 @@ function savedResult(saved?: UpstreamPool, error?: string) {
 .pool-description { position: relative; }
 .pool-help { position: relative; display: inline-flex; vertical-align: middle; margin-left: 5px; }
 .pool-help::after { content: ""; position: absolute; left: 100%; top: 0; width: 10px; height: 100%; }
-.pool-help-button { width: 18px; height: 18px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); background: transparent; font-size: 12px; padding: 0; line-height: 16px; }
+.pool-help-button { width: 18px; height: 18px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); background: transparent; font-size: 14px; padding: 0; line-height: 16px; }
 .pool-help-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pool-help-panel { position: fixed; z-index: 50; padding: 9px; width: 500px; background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
 .pool-help-panel :deep(.example-path) { min-width: 0; }

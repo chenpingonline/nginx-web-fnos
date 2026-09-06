@@ -74,14 +74,14 @@ function date(value: string) {
 
 <style scoped>
 .backup-page, .backup-body { display: grid; gap: 14px; min-width: 0; }
-.backup-heading h1 { margin: 0; font-size: 19px; font-weight: 650; }
-.backup-heading p { margin: 5px 0 2px; color: var(--text-muted); font-size: 12px; }
+.backup-heading h1 { margin: 0; font-size: 21px; font-weight: 650; }
+.backup-heading p { margin: 5px 0 2px; color: var(--text-muted); font-size: 14px; }
 .backup-body p { margin: 0; line-height: 1.7; }
 .backup-summary { display: flex; flex-wrap: wrap; gap: 24px; margin: 0; }
 .backup-summary div { min-width: 100px; }
-.backup-summary dt, .backup-note { color: var(--text-muted); font-size: 12px; }
-.backup-summary dd { margin: 6px 0 0; font-size: 24px; font-weight: 650; }
-.backup-file { display: grid; gap: 10px; font-size: 13px; }
+.backup-summary dt, .backup-note { color: var(--text-muted); font-size: 14px; }
+.backup-summary dd { margin: 6px 0 0; font-size: 26px; font-weight: 650; }
+.backup-file { display: grid; gap: 10px; font-size: 15px; }
 .backup-file-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .backup-file-picker > span { color: var(--text-muted); overflow-wrap: anywhere; min-width: 0; }
 .backup-preview { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; overflow-wrap: anywhere; }
