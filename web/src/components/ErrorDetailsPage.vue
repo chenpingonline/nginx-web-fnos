@@ -2,7 +2,6 @@
 import AppSelect from "./AppSelect.vue";
 import { computed, ref, watch } from "vue";
 import {
-  PhArrowLeft,
   PhArrowRight,
   PhArrowClockwise,
   PhCheckCircle,
@@ -22,7 +21,6 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   overview: [value: Overview];
-  back: [];
   edit: [id: string];
 }>();
 const minutes = ref(props.initialMinutes);
@@ -143,12 +141,9 @@ function date(value: string | null | undefined) {
 <template>
   <div class="error-details-page">
     <header class="details-heading">
-      <button class="button ghost small" @click="emit('back')">
-        <PhArrowLeft :size="16" />返回总览
-      </button>
       <div>
-        <h1>错误率详情</h1>
-        <p>查看请求错误的趋势与受影响规则</p>
+        <h1>请求详情</h1>
+        <p>查看 HTTP / HTTPS 请求统计、错误趋势与受影响规则</p>
       </div>
     </header>
 
@@ -172,7 +167,7 @@ function date(value: string | null | undefined) {
           <p>{{ scopeName }} · {{ period }}</p>
         </div>
         <div class="details-controls">
-          <AppSelect v-model="selected" class="select" aria-label="错误统计规则">
+          <AppSelect v-model="selected" class="select details-rule-select" aria-label="请求统计规则">
             <option value="">全部 HTTP / HTTPS</option>
             <option v-for="rule in httpRules" :key="rule.id" :value="rule.id">
               {{ rule.name }}
@@ -437,13 +432,18 @@ h1 {
   line-height: 1.5;
 }
 .details-controls {
+  min-width: 0;
+  margin-left: auto;
+  justify-content: flex-end;
   flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.details-controls select {
-  width: 190px;
+.details-controls .details-rule-select {
+  flex: 0 1 220px;
+  width: 220px;
+  min-width: 160px;
   max-width: 100%;
   font-size: 12px;
 }
@@ -635,7 +635,8 @@ h1 {
   }
   .details-controls {
     width: 100%;
-    justify-content: space-between;
+    margin-left: 0;
+    justify-content: flex-start;
   }
 }
 @media (max-width: 600px) {
@@ -654,7 +655,7 @@ h1 {
   .details-controls {
     flex-wrap: wrap;
   }
-  .details-controls select {
+  .details-controls .details-rule-select {
     flex: 1;
     min-width: 150px;
   }

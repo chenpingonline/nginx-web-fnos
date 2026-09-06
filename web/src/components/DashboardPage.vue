@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 import {
   PhArrowRight,
   PhCheckCircle, PhWarningCircle, PhMagnifyingGlass,
-  PhWarning, PhGlobe, PhShareNetwork, PhPencilSimple, PhCaretLeft, PhCaretRight,
+  PhWarning, PhGlobe, PhShareNetwork, PhCaretLeft, PhCaretRight,
 } from "@phosphor-icons/vue";
 import { useDashboardData } from "../composables/useDashboardData";
 import type { DashboardData, DashboardRule, MetricCounts, Overview } from "../types";
@@ -17,8 +17,8 @@ const props = defineProps<{
   initialMinutes: number; initialRule: string;
 }>();
 const emit = defineEmits<{
-  overview: [value: Overview]; add: []; apply: []; test: []; reload: []; start: [];
-  edit: [id: string]; errors: [scope: { minutes: number; rule: string }];
+  overview: [value: Overview]; add: []; apply: []; test: []; reload: []; start: []; stop: [];
+  errors: [scope: { minutes: number; rule: string }];
   navigate: [page: "rules" | "streams" | "certificates" | "logs" | "config"];
 }>();
 const minutes = ref(props.initialMinutes), selected = ref(props.initialRule);
@@ -85,11 +85,6 @@ function date(value?: string | null) {
     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
   }) : "—";
 }
-function openRule(rule: DashboardRule) {
-  if (rule.config_state === "pending_delete") emit("navigate", "config");
-  else if (["TCP", "UDP"].includes(rule.protocol)) emit("navigate", "streams");
-  else emit("edit", rule.id);
-}
 function averageRate(rule: DashboardRule) {
   return rule.counts && stats.value && stats.value.observed_seconds > 0
     ? rule.counts.requests / stats.value.observed_seconds : null;
@@ -120,7 +115,8 @@ const issue = computed(() => {
         <div class="service-copy">
           <h2><span>Nginx</span> {{ overview.nginx.running ? "运行中" : "已停止" }}</h2>
           <p>{{ overview.last_apply_error ? "最近配置应用失败" : overview.dirty ? "有待应用的配置变更" : "配置已同步" }}</p>
-          <button v-if="!overview.nginx.running" class="button secondary small" :disabled="busy" @click="emit('start')">启动 Nginx</button>
+          <button v-if="overview.nginx.running" class="button danger-ghost small" :disabled="busy" @click="emit('stop')">停止 Nginx</button>
+          <button v-else class="button secondary small" :disabled="busy" @click="emit('start')">启动 Nginx</button>
         </div>
       </div>
       <dl class="service-facts">
@@ -194,7 +190,7 @@ const issue = computed(() => {
       </div>
       <div v-if="visible.length" class="table-wrap">
         <table class="table dashboard-table">
-          <thead><tr><th>名称 / 入口</th><th>类型</th><th>监听地址</th><th>目标地址</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th><th>操作</th></tr></thead>
+          <thead><tr><th>名称 / 入口</th><th>类型</th><th>监听地址</th><th>目标地址</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th></tr></thead>
           <tbody>
             <tr v-for="rule in visible" :key="rule.id">
               <td><div class="rule-identity"><PhGlobe v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" :size="16" /><PhShareNetwork v-else :size="17" />
@@ -204,7 +200,6 @@ const issue = computed(() => {
               <td><span class="rule-status" :class="rule.config_state" :title="rule.config_state === 'pending_delete' ? '草稿已删除，仍在上次生效配置中' : '配置状态不代表服务健康'"><i></i><span>{{ configNames[rule.config_state] }}</span></span></td>
               <td :title="`${period}平均完成请求速率`">{{ num(averageRate(rule), 2) }} <small v-if="averageRate(rule) != null">req/s</small></td>
               <td><button v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" class="error-rate-link" :class="{ 'error-count': (totalErrors(rule.counts) ?? 0) > 0 }" :aria-label="`查看 ${rule.name} 的错误率详情`" @click="showErrors(rule.id)">{{ errorRate(rule.counts) == null ? "—" : `${num(errorRate(rule.counts), 2)}%` }}<PhArrowRight :size="13" /></button><span v-else>—</span></td>
-              <td><button class="row-action" :aria-label="`管理 ${rule.name}`" :title="rule.config_state === 'pending_delete' ? '查看配置' : '编辑规则'" :disabled="busy" @click="openRule(rule)"><PhPencilSimple :size="18" /></button></td>
             </tr>
           </tbody>
         </table>
@@ -264,8 +259,6 @@ h2 { font-size: 17px; font-weight: 570; }
 .range-buttons button + button { position: relative; }
 .range-buttons button:not(.active) + button:not(.active)::before { position: absolute; content: ''; height: 16px; width: 1px; background: var(--line); left: -1px; top: 8px; }
 .range-buttons button.active { background: #f7fdf9; border-color: var(--accent); color: var(--accent-dark); }
-.row-action { display: inline-flex; align-items: center; justify-content: center; color: #55616f; border: 1px solid var(--line); border-radius: 7px; background: #fff; width: 34px; height: 34px; }
-.row-action:hover { color: var(--accent-dark); background: var(--accent-soft); }
 .traffic-metrics { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 8px 20px 4px; gap: 20px; }
 .traffic-metric { text-align: left; border: 0; background: transparent; padding: 0 0 0 1px; color: var(--text); min-width: 0; display: flex; flex-direction: column; gap: 11px; }
 .traffic-metric > span { color: #46515d; font-size: 13px; display: flex; align-items: center; gap: 7px; }
@@ -314,7 +307,6 @@ h2 { font-size: 17px; font-weight: 570; }
 .rule-status.applied > span { background: #e6f7ee; }
 .rule-status.pending, .rule-status.pending_delete, .rule-status.unknown { color: #e48700; }
 .rule-status.pending > span, .rule-status.pending_delete > span, .rule-status.unknown > span { background: #fff5e6; }
-.row-action { border: 0; width: 28px; height: 28px; }
 .error-rate-link { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: var(--text-muted); font: inherit; font-variant-numeric: tabular-nums; }
 .error-rate-link.error-count { color: #d7790a; }
 .error-rate-link:hover { text-decoration: underline; }

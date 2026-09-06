@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	acmemanager "github.com/chenpingonline/fn-nginx-web/internal/acme"
 	"github.com/chenpingonline/fn-nginx-web/internal/domain"
 	"github.com/chenpingonline/fn-nginx-web/internal/fileutil"
 	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
@@ -45,6 +46,7 @@ type AppService struct {
 	nginx   *NginxManager
 	mu      sync.Mutex
 	metrics *metrics.Collector
+	acme    *acmemanager.Manager
 }
 
 type Overview struct {
@@ -81,12 +83,17 @@ func New(paths Paths) (*AppService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("加载应用数据失败: %w", err)
 	}
-	return &AppService{
+	service := &AppService{
 		paths:   paths,
 		store:   store,
 		nginx:   nginxmanager.New(paths),
 		metrics: metrics.New(paths.MetricsLog(), paths.MetricsHistory(), time.Now()),
-	}, nil
+	}
+	service.acme, err = acmemanager.New(filepath.Join(paths.VarDir, "acme"), service.deployACME)
+	if err != nil {
+		return nil, err
+	}
+	return service, nil
 }
 
 func (s *AppService) Prepare() (ApplyResult, error) {
@@ -497,6 +504,11 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 }
 
 func (s *AppService) DeleteCertificate(id string) error {
+	if s.acme.Manages(id) {
+		return errors.New("请先移除对应 ACME 任务，再删除证书")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !domain.ValidID(id) {
 		return errors.New("证书 ID 不合法")
 	}
@@ -546,7 +558,10 @@ func (s *AppService) DeleteCertificate(id string) error {
 	}); err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(s.paths.CertificateDir, id))
+	if err := os.RemoveAll(filepath.Join(s.paths.CertificateDir, id)); err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(s.paths.CertificateDir, ".acme-versions", id))
 }
 
 func (s *AppService) Apply(summary string) (ApplyResult, error) {

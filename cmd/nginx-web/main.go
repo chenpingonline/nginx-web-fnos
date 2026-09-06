@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/chenpingonline/fn-nginx-web/internal/acme"
 	"github.com/chenpingonline/fn-nginx-web/internal/app"
 	"github.com/chenpingonline/fn-nginx-web/internal/domain"
 	"github.com/chenpingonline/fn-nginx-web/internal/platform"
@@ -14,6 +15,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "acme-worker" {
+		os.Exit(acme.RunWorker())
+	}
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.LUTC)
 	command := "serve"
 	if len(os.Args) > 1 {

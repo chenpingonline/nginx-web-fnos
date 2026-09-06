@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ACMEInput } from "./types";
+import ACMEJobs from "./components/ACMEJobs.vue";
 import AppSelect from "./components/AppSelect.vue";
 import RevisionPreview from "./components/RevisionPreview.vue";
 import {
@@ -32,6 +34,7 @@ import ErrorDetailsPage from "./components/ErrorDetailsPage.vue";
 import CertificateForm from "./components/CertificateForm.vue";
 import UpstreamPoolsPage from "./components/UpstreamPoolsPage.vue";
 import RateLimitPoliciesPage from "./components/RateLimitPoliciesPage.vue";
+import BackupPage, { type BackupFile } from "./components/BackupPage.vue";
 import RuntimeSettingsForm from "./components/RuntimeSettingsForm.vue";
 import SidebarIcon from "./components/SidebarIcon.vue";
 import StreamRulesPage from "./components/StreamRulesPage.vue";
@@ -67,6 +70,8 @@ type SidebarIconName =
   | "rate-limit"
   | "certificate"
   | "logs"
+  | "requests"
+  | "backup"
   | "history"
   | "config"
   | "settings";
@@ -105,14 +110,16 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
     id: "certificates",
     icon: "certificate",
     label: "SSL/TLS 证书",
-    subtitle: "导入并管理手动 TLS 证书",
+    subtitle: "管理证书导入、ACME 申请与自动续期",
   },
+  { id: "errors", icon: "requests", label: "请求详情", subtitle: "查看 HTTP 请求统计与错误趋势" },
   {
     id: "logs",
     icon: "logs",
     label: "运行日志",
     subtitle: "查看 Nginx 与管理服务日志",
   },
+  { id: "backup", icon: "backup", label: "备份与恢复", subtitle: "导出配置备份并恢复为草稿" },
   {
     id: "revisions",
     icon: "history",
@@ -205,7 +212,7 @@ const confirmBox = reactive({
   resolve: null as ((value: boolean) => void) | null,
 });
 const currentPage = computed(
-  () => page.value === "errors" ? { ...pages[0]!, label: "错误率详情" } : pages.find((item) => item.id === page.value) ?? pages[0]!,
+  () => pages.find((item) => item.id === page.value) ?? pages[0]!,
 );
 const filteredRules = computed(() => {
   const rules = state.value?.rules ?? [],
@@ -259,12 +266,13 @@ function toast(message: string, type: Toast["type"] = "") {
   );
 }
 function setPage(value: Page) {
+  if (value === "errors") errorScope.value = { ...errorScope.value, rule: "" };
   page.value = value;
   menuOpen.value = false;
 }
 function openErrorDetails(scope: { minutes: number; rule: string }) {
-  errorScope.value = scope;
   setPage("errors");
+  errorScope.value = scope;
   document.querySelector(".workspace")?.scrollTo({ top: 0 });
 }
 async function loadCore(quiet = false) {
@@ -425,6 +433,15 @@ async function importCertificate(value: CertificateInput) {
     await loadCore(true);
   }
 }
+async function createACME(value: ACMEInput) {
+  const saved = await mutate(() => request('/acme', { method: 'POST', body: jsonBody(value) }));
+  if (saved !== undefined) { modal.value = null; toast('ACME 任务已创建，将在后台申请证书', 'success'); }
+}
+async function acmeAction(id: string, action: string) {
+  if (action === 'delete' && !await ask('移除 ACME 任务', '将删除申请配置和凭据并停止自动续期，已导入的证书会保留。')) return;
+  const result = await mutate(() => request(`/acme/${id}${action === 'delete' ? '' : '/' + action}`, { method: action === 'delete' ? 'DELETE' : 'POST' }));
+  if (result !== undefined) toast('ACME 任务已更新', 'success');
+}
 function ask(title: string, message: string) {
   confirmBox.title = title;
   confirmBox.message = message;
@@ -547,6 +564,25 @@ async function applySettings(value: Settings) {
     if (saved) await loadCore(true);
     busy.value = false;
   }
+}
+async function downloadBackup() {
+  const backup = await mutate(() => request<BackupFile>("/backup"));
+  if (!backup) return;
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `nginx-web-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function restoreBackup(backup: BackupFile) {
+  if (!await ask("从备份恢复", "将替换已保存的全局设置和代理配置，并保留恢复前的配置历史。恢复后仅保存为草稿，不会立即应用。")) return;
+  const result = await mutate(() => request<State>("/backup/restore", {
+    method: "POST", body: jsonBody(backup),
+  }), "备份已恢复为草稿，请确认后应用");
+  if (result) await loadCore(true);
 }
 async function clearCache() {
   if (!(await ask("清理代理缓存", "将删除 nginx-web 生成的全部 HTTP 缓存文件，正在处理的请求可能重新回源。"))) return;
@@ -700,7 +736,7 @@ onBeforeUnmount(() => {
           :key="item.id"
           type="button"
           class="nav-item"
-          :class="{ active: page === item.id || (page === 'errors' && item.id === 'dashboard') }"
+          :class="{ active: page === item.id }"
           @click="setPage(item.id)"
         >
           <SidebarIcon :name="item.icon" class="nav-icon" />
@@ -769,18 +805,19 @@ onBeforeUnmount(() => {
         <template v-else-if="overview && state">
           <DashboardPage v-if="page === 'dashboard'"
             :overview="overview" :busy="busy" :updated-at="state.updated_at"
-            :initial-minutes="errorScope.minutes" :initial-rule="errorScope.rule"
+            :initial-minutes="errorScope.minutes" initial-rule=""
             @overview="overview = $event" @add="openRule()" @apply="applyConfiguration"
             @test="runNginxAction('test')" @reload="runNginxAction('reload')" @start="runNginxAction('start')"
-            @edit="openDashboardRule"
+            @stop="stopNginx"
             @errors="openErrorDetails"
             @navigate="setPage"
           />
           <ErrorDetailsPage v-else-if="page === 'errors'"
             :overview="overview" :busy="busy" :updated-at="state.updated_at"
             :initial-minutes="errorScope.minutes" :initial-rule="errorScope.rule"
-            @overview="overview = $event" @back="setPage('dashboard')" @edit="openDashboardRule"
+            @overview="overview = $event" @edit="openDashboardRule"
           />
+          <BackupPage v-else-if="page === 'backup'" :state="state" :busy="busy" @download="downloadBackup" @restore="restoreBackup" @apply="applyConfiguration" />
           <template v-else-if="page === 'streams'">
             <StreamRulesPage
               :rules="state.stream_rules"
@@ -976,21 +1013,12 @@ onBeforeUnmount(() => {
               ><button class="button ghost" :disabled="busy" @click="loadCore()">
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新
               </button>
-              <button
-                class="button"
-                :class="state.dirty ? 'primary' : 'secondary'"
-                :disabled="busy"
-                @click="applyConfiguration"
-              >
-                <PhCheckCircle :size="16" aria-hidden="true" />{{
-                  state.dirty ? "保存并应用" : "重新应用"
-                }}
-              </button>
-              ><button class="button primary" @click="openCertificate">
+              <button class="button primary" @click="openCertificate">
                 <PhPlusCircle :size="17" aria-hidden="true" />导入证书
               </button>
             </div>
             <article class="card">
+              <ACMEJobs @changed="loadCore(true)" @action="acmeAction" />
               <div v-if="state.certificates.length" class="table-wrap">
                 <table class="table">
                   <thead>
@@ -1046,7 +1074,7 @@ onBeforeUnmount(() => {
                 <div class="empty-icon">◇</div>
                 <h3>尚未导入 SSL/TLS 证书</h3>
                 <p>
-                  支持上传证书文件、从服务器路径导入，或粘贴完整证书链和对应私钥。
+                  支持 ACME 自动申请、文件上传、服务器路径和粘贴 PEM。
                 </p>
               </div>
             </article></template
@@ -1259,7 +1287,7 @@ onBeforeUnmount(() => {
   >
     <section
       class="modal"
-      :class="{ 'rule-modal': modal === 'rule' }"
+      :class="{ 'rule-modal': modal === 'rule', 'certificate-modal': modal === 'certificate' }"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="`${modal}-title`"
@@ -1311,6 +1339,7 @@ onBeforeUnmount(() => {
           :busy="busy"
           @save="saveRule"
         /><CertificateForm
+          @acme="createACME"
           v-else
           :busy="busy"
           @save="importCertificate"

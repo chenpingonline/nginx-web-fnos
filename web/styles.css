@@ -282,6 +282,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .modal { width: min(960px, 100%); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; background: var(--surface-solid); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 24px 64px rgba(0,0,0,.22); }
 .rule-modal { width: min(920px, calc(100vw - 80px)); max-height: calc(100vh - 64px); border-radius: 14px; }
 .policy-modal { width: min(720px, calc(100vw - 40px)); }
+.certificate-modal { width: min(480px, 100%); }
+.certificate-modal .certificate-form-grid { grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; }
+.certificate-modal .field:not(.standalone-field) { grid-template-columns: subgrid; column-gap: 12px; }
 .modal-header { min-height: 56px; padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
 .rule-modal .modal-header { flex-shrink: 0; min-height: 78px; padding: 14px 30px; border-bottom: 0; gap: 17px; }
 .stream-modal .modal-header { flex-shrink: 0; }
@@ -296,7 +299,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .modal-header p { margin: 4px 0 0; color: var(--text-muted); font-size: 11px; }
 .rule-modal .modal-header p { margin-top: 4px; font-size: 11px; }
 .modal-body { padding: 13px 14px; overflow-y: auto; }
-.rule-modal .modal-body { padding: 2px 32px 20px; }
+.rule-modal .modal-body { padding: 2px 32px 20px; scrollbar-width: none; }
+.rule-modal .modal-body::-webkit-scrollbar { display: none; }
 .modal-footer { display: flex; justify-content: flex-end; align-items: center; gap: 7px; padding: 10px 14px; border-top: 1px solid var(--line); background: var(--surface-soft); }
 .confirm-modal { width: min(430px, 100%); }
 .confirm-modal .modal-header { border-bottom: 0; padding: 23px 22px 12px; }
@@ -382,6 +386,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 }
 
 @media (max-width: 520px) {
+  .certificate-modal .certificate-form-grid { grid-template-columns: minmax(0, 1fr); }
   .modal .field:not(.standalone-field), .modal .standalone-field { display: flex; flex-direction: column; align-items: stretch; }
   .metric-grid { grid-template-columns: 1fr; }
   .metric-grid .metric-card { border-right: 0; border-bottom: 1px solid var(--line); }

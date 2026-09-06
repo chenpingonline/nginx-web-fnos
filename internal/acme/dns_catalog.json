@@ -1,0 +1,3065 @@
+{
+  "version": "v5.4.1",
+  "providers": [
+    {
+      "code": "alidns",
+      "name": "阿里云 DNS",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/alidns/",
+      "fields": [
+        {
+          "key": "ALICLOUD_RAM_ROLE",
+          "description": "Your instance RAM role (https://www.alibabacloud.com/help/en/ecs/user-guide/attach-an-instance-ram-role-to-an-ecs-instance)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_ACCESS_KEY",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_SECRET_KEY",
+          "description": "Access Key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_SECURITY_TOKEN",
+          "description": "STS Security Token (optional)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_REGION_ID",
+          "description": "Region ID (Default: cn-hangzhou)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_LINE",
+          "description": "Line (Default: default)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_RAM_ROLE_FILE",
+          "description": "从服务器文件读取 ALICLOUD_RAM_ROLE，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_ACCESS_KEY_FILE",
+          "description": "从服务器文件读取 ALICLOUD_ACCESS_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_SECRET_KEY_FILE",
+          "description": "从服务器文件读取 ALICLOUD_SECRET_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALICLOUD_SECURITY_TOKEN_FILE",
+          "description": "从服务器文件读取 ALICLOUD_SECURITY_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "tencentcloud",
+      "name": "腾讯云 DNSPod",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/tencentcloud/",
+      "fields": [
+        {
+          "key": "TENCENTCLOUD_SECRET_ID",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_SECRET_KEY",
+          "description": "Access Key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_SESSION_TOKEN",
+          "description": "Access Key token",
+          "advanced": true,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_REGION",
+          "description": "Region",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_SECRET_ID_FILE",
+          "description": "从服务器文件读取 TENCENTCLOUD_SECRET_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TENCENTCLOUD_SECRET_KEY_FILE",
+          "description": "从服务器文件读取 TENCENTCLOUD_SECRET_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "cloudflare",
+      "name": "Cloudflare",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/cloudflare/",
+      "fields": [
+        {
+          "key": "CF_API_EMAIL",
+          "description": "Account email",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CF_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CF_DNS_API_TOKEN",
+          "description": "API token with DNS:Edit permission (since v3.1.0)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CF_ZONE_API_TOKEN",
+          "description": "API token with Zone:Read permission (since v3.1.0)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_EMAIL",
+          "description": "Alias to CF_API_EMAIL",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_API_KEY",
+          "description": "Alias to CF_API_KEY",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_DNS_API_TOKEN",
+          "description": "Alias to CF_DNS_API_TOKEN",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_ZONE_API_TOKEN",
+          "description": "Alias to CF_ZONE_API_TOKEN",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: )",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_BASE_URL",
+          "description": "API base URL (Default: https://api.cloudflare.com/client/v4)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CF_API_EMAIL_FILE",
+          "description": "从服务器文件读取 CF_API_EMAIL，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CF_API_KEY_FILE",
+          "description": "从服务器文件读取 CF_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CF_DNS_API_TOKEN_FILE",
+          "description": "从服务器文件读取 CF_DNS_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CF_ZONE_API_TOKEN_FILE",
+          "description": "从服务器文件读取 CF_ZONE_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_EMAIL_FILE",
+          "description": "从服务器文件读取 CLOUDFLARE_EMAIL，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_API_KEY_FILE",
+          "description": "从服务器文件读取 CLOUDFLARE_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_DNS_API_TOKEN_FILE",
+          "description": "从服务器文件读取 CLOUDFLARE_DNS_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "CLOUDFLARE_ZONE_API_TOKEN_FILE",
+          "description": "从服务器文件读取 CLOUDFLARE_ZONE_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "aliesa",
+      "name": "阿里云 ESA",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/aliesa/",
+      "fields": [
+        {
+          "key": "ALIESA_RAM_ROLE",
+          "description": "Your instance RAM role (https://www.alibabacloud.com/help/en/ecs/user-guide/attach-an-instance-ram-role-to-an-ecs-instance)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_ACCESS_KEY",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_SECRET_KEY",
+          "description": "Access Key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_SECURITY_TOKEN",
+          "description": "STS Security Token (optional)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_RAM_ROLE_FILE",
+          "description": "从服务器文件读取 ALIESA_RAM_ROLE，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_ACCESS_KEY_FILE",
+          "description": "从服务器文件读取 ALIESA_ACCESS_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_SECRET_KEY_FILE",
+          "description": "从服务器文件读取 ALIESA_SECRET_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "ALIESA_SECURITY_TOKEN_FILE",
+          "description": "从服务器文件读取 ALIESA_SECURITY_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "baiducloud",
+      "name": "百度云",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/baiducloud/",
+      "fields": [
+        {
+          "key": "BAIDUCLOUD_ACCESS_KEY_ID",
+          "description": "Access key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_SECRET_ACCESS_KEY",
+          "description": "Secret access key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_ACCESS_KEY_ID_FILE",
+          "description": "从服务器文件读取 BAIDUCLOUD_ACCESS_KEY_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "BAIDUCLOUD_SECRET_ACCESS_KEY_FILE",
+          "description": "从服务器文件读取 BAIDUCLOUD_SECRET_ACCESS_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "com35",
+      "name": "三五互联",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/com35/",
+      "fields": [
+        {
+          "key": "COM35_USERNAME",
+          "description": "Username",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_PASSWORD",
+          "description": "API password",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "COM35_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_USERNAME_FILE",
+          "description": "从服务器文件读取 COM35_USERNAME，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "COM35_PASSWORD_FILE",
+          "description": "从服务器文件读取 COM35_PASSWORD，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "dns51",
+      "name": "51DNS",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/dns51/",
+      "fields": [
+        {
+          "key": "DNS51_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_API_SECRET",
+          "description": "API secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_API_KEY_FILE",
+          "description": "从服务器文件读取 DNS51_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNS51_API_SECRET_FILE",
+          "description": "从服务器文件读取 DNS51_API_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "dnsla",
+      "name": "DNS.LA",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/dnsla/",
+      "fields": [
+        {
+          "key": "DNSLA_API_ID",
+          "description": "API ID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_API_SECRET",
+          "description": "API secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_API_ID_FILE",
+          "description": "从服务器文件读取 DNSLA_API_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DNSLA_API_SECRET_FILE",
+          "description": "从服务器文件读取 DNSLA_API_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "edgeone",
+      "name": "腾讯云 EdgeOne",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/edgeone/",
+      "fields": [
+        {
+          "key": "EDGEONE_SECRET_ID",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_SECRET_KEY",
+          "description": "Access Key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_SESSION_TOKEN",
+          "description": "Access Key token",
+          "advanced": true,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_REGION",
+          "description": "Region",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_ZONES_MAPPING",
+          "description": "Mapping between DNS zones and site IDs. (ex: 'example.org:id1,example.com:id2')",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 1200)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_SECRET_ID_FILE",
+          "description": "从服务器文件读取 EDGEONE_SECRET_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "EDGEONE_SECRET_KEY_FILE",
+          "description": "从服务器文件读取 EDGEONE_SECRET_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "huaweicloud",
+      "name": "华为云",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/huaweicloud/",
+      "fields": [
+        {
+          "key": "HUAWEICLOUD_ACCESS_KEY_ID",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_SECRET_ACCESS_KEY",
+          "description": "Access Key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_REGION",
+          "description": "Region",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_ACCESS_KEY_ID_FILE",
+          "description": "从服务器文件读取 HUAWEICLOUD_ACCESS_KEY_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_SECRET_ACCESS_KEY_FILE",
+          "description": "从服务器文件读取 HUAWEICLOUD_SECRET_ACCESS_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HUAWEICLOUD_REGION_FILE",
+          "description": "从服务器文件读取 HUAWEICLOUD_REGION，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "jdcloud",
+      "name": "京东云",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/jdcloud/",
+      "fields": [
+        {
+          "key": "JDCLOUD_ACCESS_KEY_ID",
+          "description": "Access key ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_ACCESS_KEY_SECRET",
+          "description": "Access key secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_REGION_ID",
+          "description": "Region ID (Default: cn-north-1)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_ACCESS_KEY_ID_FILE",
+          "description": "从服务器文件读取 JDCLOUD_ACCESS_KEY_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "JDCLOUD_ACCESS_KEY_SECRET_FILE",
+          "description": "从服务器文件读取 JDCLOUD_ACCESS_KEY_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "rainyun",
+      "name": "雨云",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/rainyun/",
+      "fields": [
+        {
+          "key": "RAINYUN_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "RAINYUN_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "RAINYUN_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "RAINYUN_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "RAINYUN_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "RAINYUN_API_KEY_FILE",
+          "description": "从服务器文件读取 RAINYUN_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "todaynic",
+      "name": "时代互联",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/todaynic/",
+      "fields": [
+        {
+          "key": "TODAYNIC_AUTH_USER_ID",
+          "description": "account ID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_AUTH_USER_ID_FILE",
+          "description": "从服务器文件读取 TODAYNIC_AUTH_USER_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TODAYNIC_API_KEY_FILE",
+          "description": "从服务器文件读取 TODAYNIC_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "ucloud",
+      "name": "UCloud",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/ucloud/",
+      "fields": [
+        {
+          "key": "UCLOUD_PUBLIC_KEY",
+          "description": "Public key",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_PRIVATE_KEY",
+          "description": "Private key",
+          "advanced": false,
+          "secret": true,
+          "multiline": true
+        },
+        {
+          "key": "UCLOUD_REGION",
+          "description": "Region",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_PROJECT_ID",
+          "description": "Project ID",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_PUBLIC_KEY_FILE",
+          "description": "从服务器文件读取 UCLOUD_PUBLIC_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "UCLOUD_PRIVATE_KEY_FILE",
+          "description": "从服务器文件读取 UCLOUD_PRIVATE_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "volcengine",
+      "name": "火山引擎",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/volcengine/",
+      "fields": [
+        {
+          "key": "VOLC_ACCESSKEY",
+          "description": "Access Key ID (AK)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_SECRETKEY",
+          "description": "Secret Access Key (SK)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_REGION",
+          "description": "Region",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_HOST",
+          "description": "API host",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_SCHEME",
+          "description": "API scheme",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 240)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 15)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_ACCESSKEY_FILE",
+          "description": "从服务器文件读取 VOLC_ACCESSKEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VOLC_SECRETKEY_FILE",
+          "description": "从服务器文件读取 VOLC_SECRETKEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "westcn",
+      "name": "西部数码",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/westcn/",
+      "fields": [
+        {
+          "key": "WESTCN_USERNAME",
+          "description": "Username",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_PASSWORD",
+          "description": "API password",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_USERNAME_FILE",
+          "description": "从服务器文件读取 WESTCN_USERNAME，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "WESTCN_PASSWORD_FILE",
+          "description": "从服务器文件读取 WESTCN_PASSWORD，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "xinnet",
+      "name": "新网",
+      "group": "国内",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/xinnet/",
+      "fields": [
+        {
+          "key": "XINNET_SECRET",
+          "description": "Application secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_AGENT_ID",
+          "description": "Agent ID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_SECRET_FILE",
+          "description": "从服务器文件读取 XINNET_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "XINNET_AGENT_ID_FILE",
+          "description": "从服务器文件读取 XINNET_AGENT_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "azuredns",
+      "name": "Azure DNS",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/azuredns/",
+      "fields": [
+        {
+          "key": "AZURE_CLIENT_ID",
+          "description": "Client ID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_CLIENT_SECRET",
+          "description": "Client secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_TENANT_ID",
+          "description": "Tenant ID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_CLIENT_CERTIFICATE_PATH",
+          "description": "Client certificate path",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_ENVIRONMENT",
+          "description": "Azure environment, one of: public, usgovernment, and china",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_SUBSCRIPTION_ID",
+          "description": "DNS zone subscription ID",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_RESOURCE_GROUP",
+          "description": "DNS zone resource group",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_SERVICEDISCOVERY_FILTER",
+          "description": "Advanced ServiceDiscovery filter using Kusto query condition",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_PRIVATE_ZONE",
+          "description": "Set to true to use Azure Private DNS Zones and not public",
+          "advanced": true,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_ZONE_NAME",
+          "description": "Zone name to use inside Azure DNS service to add the TXT record in",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_AUTH_METHOD",
+          "description": "Specify which authentication method to use",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_AUTH_MSI_TIMEOUT",
+          "description": "Managed Identity timeout duration",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_CLIENT_ID_FILE",
+          "description": "从服务器文件读取 AZURE_CLIENT_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_CLIENT_SECRET_FILE",
+          "description": "从服务器文件读取 AZURE_CLIENT_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_TENANT_ID_FILE",
+          "description": "从服务器文件读取 AZURE_TENANT_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AZURE_CLIENT_CERTIFICATE_PATH_FILE",
+          "description": "从服务器文件读取 AZURE_CLIENT_CERTIFICATE_PATH，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "desec",
+      "name": "deSEC.io",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/desec/",
+      "fields": [
+        {
+          "key": "DESEC_TOKEN",
+          "description": "Domain token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DESEC_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 4)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DESEC_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DESEC_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 3600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DESEC_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DESEC_TOKEN_FILE",
+          "description": "从服务器文件读取 DESEC_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "digitalocean",
+      "name": "Digital Ocean",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/digitalocean/",
+      "fields": [
+        {
+          "key": "DO_AUTH_TOKEN",
+          "description": "Authentication token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DO_API_URL",
+          "description": "The URL of the API",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DO_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 5)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DO_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DO_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DO_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DO_AUTH_TOKEN_FILE",
+          "description": "从服务器文件读取 DO_AUTH_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "duckdns",
+      "name": "Duck DNS",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/duckdns/",
+      "fields": [
+        {
+          "key": "DUCKDNS_TOKEN",
+          "description": "Account token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DUCKDNS_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DUCKDNS_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DUCKDNS_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DUCKDNS_SEQUENCE_INTERVAL",
+          "description": "Time between sequential requests in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DUCKDNS_TOKEN_FILE",
+          "description": "从服务器文件读取 DUCKDNS_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "dynadot",
+      "name": "Dynadot",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/dynadot/",
+      "fields": [
+        {
+          "key": "DYNADOT_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_API_SECRET",
+          "description": "API secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_API_KEY_FILE",
+          "description": "从服务器文件读取 DYNADOT_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "DYNADOT_API_SECRET_FILE",
+          "description": "从服务器文件读取 DYNADOT_API_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "freemyip",
+      "name": "freemyip.com",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/freemyip/",
+      "fields": [
+        {
+          "key": "FREEMYIP_TOKEN",
+          "description": "Account token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 3600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_SEQUENCE_INTERVAL",
+          "description": "Time between sequential requests in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "FREEMYIP_TOKEN_FILE",
+          "description": "从服务器文件读取 FREEMYIP_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "gandiv5",
+      "name": "Gandi Live DNS (v5)",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/gandiv5/",
+      "fields": [
+        {
+          "key": "GANDIV5_PERSONAL_ACCESS_TOKEN",
+          "description": "Personal Access Token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_API_KEY",
+          "description": "API key (Deprecated)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 20)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 1200)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_PERSONAL_ACCESS_TOKEN_FILE",
+          "description": "从服务器文件读取 GANDIV5_PERSONAL_ACCESS_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GANDIV5_API_KEY_FILE",
+          "description": "从服务器文件读取 GANDIV5_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "gcloud",
+      "name": "Google Cloud",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/gcloud/",
+      "fields": [
+        {
+          "key": "GCE_PROJECT",
+          "description": "Project name (by default, the project name is auto-detected by using the metadata service)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "Application Default Credentials",
+          "description": "[Documentation](https://cloud.google.com/docs/authentication/production#providing_credentials_to_your_application)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_SERVICE_ACCOUNT_FILE",
+          "description": "Account file path",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_SERVICE_ACCOUNT",
+          "description": "Account",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_ALLOW_PRIVATE_ZONE",
+          "description": "Allows requested domain to be in private DNS zone, works only with a private ACME server (by default: false)",
+          "advanced": true,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "GCE_ZONE_ID",
+          "description": "Allows to skip the automatic detection of the zone",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_IMPERSONATE_SERVICE_ACCOUNT",
+          "description": "Service account email to impersonate",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 5)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 180)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GCE_PROJECT_FILE",
+          "description": "从服务器文件读取 GCE_PROJECT，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "Application Default Credentials_FILE",
+          "description": "从服务器文件读取 Application Default Credentials，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "godaddy",
+      "name": "Go Daddy",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/godaddy/",
+      "fields": [
+        {
+          "key": "GODADDY_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_API_SECRET",
+          "description": "API secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_API_KEY_FILE",
+          "description": "从服务器文件读取 GODADDY_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "GODADDY_API_SECRET_FILE",
+          "description": "从服务器文件读取 GODADDY_API_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "hetzner",
+      "name": "Hetzner",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/hetzner/",
+      "fields": [
+        {
+          "key": "HETZNER_API_TOKEN",
+          "description": "API token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "HETZNER_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HETZNER_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HETZNER_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HETZNER_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "HETZNER_API_TOKEN_FILE",
+          "description": "从服务器文件读取 HETZNER_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "linode",
+      "name": "Linode (v4)",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/linode/",
+      "fields": [
+        {
+          "key": "LINODE_TOKEN",
+          "description": "API token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "LINODE_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 15)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "LINODE_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "LINODE_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "LINODE_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "LINODE_TOKEN_FILE",
+          "description": "从服务器文件读取 LINODE_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "namecheap",
+      "name": "Namecheap",
+      "group": "国际",
+      "description": "Configuration for [Namecheap](https://www.namecheap.com).\n\n**To enable API access on the Namecheap production environment, some opaque requirements must be met.**\nMore information in the section [Enabling API Access](https://www.namecheap.com/support/api/intro/) of the Namecheap documentation.\n(2020-08: Account balance of $50+, 20+ domains in your account, or purchases totaling $50+ within the last 2 years.)",
+      "url": "https://go-acme.github.io/lego/dns/namecheap/",
+      "fields": [
+        {
+          "key": "NAMECHEAP_API_USER",
+          "description": "API user",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 15)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 3600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_SANDBOX",
+          "description": "Activate the sandbox (boolean)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_API_USER_FILE",
+          "description": "从服务器文件读取 NAMECHEAP_API_USER，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECHEAP_API_KEY_FILE",
+          "description": "从服务器文件读取 NAMECHEAP_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "namedotcom",
+      "name": "Name.com",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/namedotcom/",
+      "fields": [
+        {
+          "key": "NAMECOM_USERNAME",
+          "description": "Username",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_API_TOKEN",
+          "description": "API token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 20)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 900)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_USERNAME_FILE",
+          "description": "从服务器文件读取 NAMECOM_USERNAME，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMECOM_API_TOKEN_FILE",
+          "description": "从服务器文件读取 NAMECOM_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "namesilo",
+      "name": "Namesilo",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/namesilo/",
+      "fields": [
+        {
+          "key": "NAMESILO_API_KEY",
+          "description": "Client ID",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "NAMESILO_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMESILO_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60), it is better to set larger than 15 minutes",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMESILO_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 3600), should be in [3600, 2592000]",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NAMESILO_API_KEY_FILE",
+          "description": "从服务器文件读取 NAMESILO_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "netlify",
+      "name": "Netlify",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/netlify/",
+      "fields": [
+        {
+          "key": "NETLIFY_TOKEN",
+          "description": "Token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "NETLIFY_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NETLIFY_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NETLIFY_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NETLIFY_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "NETLIFY_TOKEN_FILE",
+          "description": "从服务器文件读取 NETLIFY_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "oraclecloud",
+      "name": "Oracle Cloud",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/oraclecloud/",
+      "fields": [
+        {
+          "key": "OCI_COMPARTMENT_OCID",
+          "description": "Compartment OCID",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_REGION",
+          "description": "Region (it can be empty if `OCI_AUTH_TYPE` is not empty).",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PRIVATE_KEY_PATH",
+          "description": "Private key file (ignored if `OCI_AUTH_TYPE` is not empty)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PRIVATE_KEY_PASSWORD",
+          "description": "Private key password (ignored if `OCI_AUTH_TYPE` is not empty)",
+          "advanced": false,
+          "secret": true,
+          "multiline": true
+        },
+        {
+          "key": "OCI_TENANCY_OCID",
+          "description": "Tenancy OCID (ignored if `OCI_AUTH_TYPE` is not empty)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_USER_OCID",
+          "description": "User OCID (ignored if `OCI_AUTH_TYPE` is not empty)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_FINGERPRINT",
+          "description": "Public key fingerprint (ignored if `OCI_AUTH_TYPE` is not empty)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_AUTH_TYPE",
+          "description": "Authorization type. Possible values: 'instance_principal', 'user_principal', ''. (Default: '')",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TF_VAR_region",
+          "description": "Alias on `OCI_REGION`",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TF_VAR_fingerprint",
+          "description": "Alias on `OCI_FINGERPRINT`",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TF_VAR_user_ocid",
+          "description": "Alias on `OCI_USER_OCID`",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TF_VAR_tenancy_ocid",
+          "description": "Alias on `OCI_TENANCY_OCID`",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "TF_VAR_private_key_path",
+          "description": "Alias on `OCI_PRIVATE_KEY_PATH`",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_CONFIG_FILE",
+          "description": "Path to the configuration file. (only for `OCI_AUTH_TYPE=user_principal`)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PROFILE",
+          "description": "Profile name. (only for `OCI_AUTH_TYPE=user_principal`)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_COMPARTMENT_OCID_FILE",
+          "description": "从服务器文件读取 OCI_COMPARTMENT_OCID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_REGION_FILE",
+          "description": "从服务器文件读取 OCI_REGION，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PRIVATE_KEY_PATH_FILE",
+          "description": "从服务器文件读取 OCI_PRIVATE_KEY_PATH，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_PRIVATE_KEY_PASSWORD_FILE",
+          "description": "从服务器文件读取 OCI_PRIVATE_KEY_PASSWORD，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_TENANCY_OCID_FILE",
+          "description": "从服务器文件读取 OCI_TENANCY_OCID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_USER_OCID_FILE",
+          "description": "从服务器文件读取 OCI_USER_OCID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OCI_FINGERPRINT_FILE",
+          "description": "从服务器文件读取 OCI_FINGERPRINT，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "ovh",
+      "name": "OVH",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/ovh/",
+      "fields": [
+        {
+          "key": "OVH_ENDPOINT",
+          "description": "Endpoint URL (ovh-eu or ovh-ca)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_APPLICATION_KEY",
+          "description": "Application key (Application Key authentication)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_APPLICATION_SECRET",
+          "description": "Application secret (Application Key authentication)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CONSUMER_KEY",
+          "description": "Consumer key (Application Key authentication)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CLIENT_ID",
+          "description": "Client ID (OAuth2)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CLIENT_SECRET",
+          "description": "Client secret (OAuth2)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "OVH_ACCESS_TOKEN",
+          "description": "Access token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "OVH_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 180)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_ENDPOINT_FILE",
+          "description": "从服务器文件读取 OVH_ENDPOINT，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_APPLICATION_KEY_FILE",
+          "description": "从服务器文件读取 OVH_APPLICATION_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_APPLICATION_SECRET_FILE",
+          "description": "从服务器文件读取 OVH_APPLICATION_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CONSUMER_KEY_FILE",
+          "description": "从服务器文件读取 OVH_CONSUMER_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CLIENT_ID_FILE",
+          "description": "从服务器文件读取 OVH_CLIENT_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_CLIENT_SECRET_FILE",
+          "description": "从服务器文件读取 OVH_CLIENT_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "OVH_ACCESS_TOKEN_FILE",
+          "description": "从服务器文件读取 OVH_ACCESS_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "porkbun",
+      "name": "Porkbun",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/porkbun/",
+      "fields": [
+        {
+          "key": "PORKBUN_SECRET_API_KEY",
+          "description": "secret API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 600)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 300)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_SECRET_API_KEY_FILE",
+          "description": "从服务器文件读取 PORKBUN_SECRET_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "PORKBUN_API_KEY_FILE",
+          "description": "从服务器文件读取 PORKBUN_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "route53",
+      "name": "Amazon Route 53",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/route53/",
+      "fields": [
+        {
+          "key": "AWS_ACCESS_KEY_ID",
+          "description": "Managed by the AWS client. Access key ID (`AWS_ACCESS_KEY_ID_FILE` is not supported, use `AWS_SHARED_CREDENTIALS_FILE` instead)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "AWS_SECRET_ACCESS_KEY",
+          "description": "Managed by the AWS client. Secret access key (`AWS_SECRET_ACCESS_KEY_FILE` is not supported, use `AWS_SHARED_CREDENTIALS_FILE` instead)",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "AWS_REGION",
+          "description": "Managed by the AWS client (`AWS_REGION_FILE` is not supported)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_HOSTED_ZONE_ID",
+          "description": "Override the hosted zone ID.",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_PROFILE",
+          "description": "Managed by the AWS client (`AWS_PROFILE_FILE` is not supported)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_SDK_LOAD_CONFIG",
+          "description": "Managed by the AWS client. Retrieve the region from the CLI config file (`AWS_SDK_LOAD_CONFIG_FILE` is not supported)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_ASSUME_ROLE_ARN",
+          "description": "Managed by the AWS Role ARN (`AWS_ASSUME_ROLE_ARN_FILE` is not supported)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_EXTERNAL_ID",
+          "description": "Managed by STS AssumeRole API operation (`AWS_EXTERNAL_ID_FILE` is not supported)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_WAIT_FOR_RECORD_SETS_CHANGED",
+          "description": "Wait for changes to be INSYNC (it can be unstable)",
+          "advanced": false,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_PRIVATE_ZONE",
+          "description": "Set to true to use private zones only (default: use public zones only)",
+          "advanced": true,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "AWS_SHARED_CREDENTIALS_FILE",
+          "description": "Managed by the AWS client. Shared credentials file.",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_MAX_RETRIES",
+          "description": "The number of maximum returns the service will use to make an individual API request",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 4)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 10)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_ACCESS_KEY_ID_FILE",
+          "description": "从服务器文件读取 AWS_ACCESS_KEY_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_SECRET_ACCESS_KEY_FILE",
+          "description": "从服务器文件读取 AWS_SECRET_ACCESS_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_REGION_FILE",
+          "description": "从服务器文件读取 AWS_REGION，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_HOSTED_ZONE_ID_FILE",
+          "description": "从服务器文件读取 AWS_HOSTED_ZONE_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_PROFILE_FILE",
+          "description": "从服务器文件读取 AWS_PROFILE，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_SDK_LOAD_CONFIG_FILE",
+          "description": "从服务器文件读取 AWS_SDK_LOAD_CONFIG，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_ASSUME_ROLE_ARN_FILE",
+          "description": "从服务器文件读取 AWS_ASSUME_ROLE_ARN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_EXTERNAL_ID_FILE",
+          "description": "从服务器文件读取 AWS_EXTERNAL_ID，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "AWS_WAIT_FOR_RECORD_SETS_CHANGED_FILE",
+          "description": "从服务器文件读取 AWS_WAIT_FOR_RECORD_SETS_CHANGED，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "spaceship",
+      "name": "Spaceship",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/spaceship/",
+      "fields": [
+        {
+          "key": "SPACESHIP_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_API_SECRET",
+          "description": "API secret",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_API_KEY_FILE",
+          "description": "从服务器文件读取 SPACESHIP_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "SPACESHIP_API_SECRET_FILE",
+          "description": "从服务器文件读取 SPACESHIP_API_SECRET，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "vercel",
+      "name": "Vercel",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/vercel/",
+      "fields": [
+        {
+          "key": "VERCEL_API_TOKEN",
+          "description": "Authentication token",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_TEAM_ID",
+          "description": "Team ID (ex: team_xxxxxxxxxxxxxxxxxxxxxxxx)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 5)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VERCEL_API_TOKEN_FILE",
+          "description": "从服务器文件读取 VERCEL_API_TOKEN，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    },
+    {
+      "code": "vultr",
+      "name": "Vultr",
+      "group": "国际",
+      "description": "",
+      "url": "https://go-acme.github.io/lego/dns/vultr/",
+      "fields": [
+        {
+          "key": "VULTR_API_KEY",
+          "description": "API key",
+          "advanced": false,
+          "secret": true,
+          "multiline": false
+        },
+        {
+          "key": "VULTR_POLLING_INTERVAL",
+          "description": "Time between DNS propagation check in seconds (Default: 2)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VULTR_PROPAGATION_TIMEOUT",
+          "description": "Maximum waiting time for DNS propagation in seconds (Default: 60)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VULTR_TTL",
+          "description": "The TTL of the TXT record used for the DNS challenge in seconds (Default: 120)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VULTR_HTTP_TIMEOUT",
+          "description": "API request timeout in seconds (Default: 30)",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        },
+        {
+          "key": "VULTR_API_KEY_FILE",
+          "description": "从服务器文件读取 VULTR_API_KEY，与直接填写二选一；文件需允许应用读取。",
+          "advanced": true,
+          "secret": false,
+          "multiline": false
+        }
+      ]
+    }
+  ]
+}

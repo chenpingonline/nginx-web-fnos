@@ -1,6 +1,7 @@
 export type Page =
   | "dashboard"
   | "errors"
+  | "backup"
   | "rules"
   | "streams"
   | "upstreams"
@@ -397,3 +398,27 @@ export interface Toast {
   message: string;
   type: "" | "success" | "error";
 }
+
+export interface ACMEInput {
+  name: string;
+  ca: 'letsencrypt' | 'zerossl' | 'staging' | 'custom';
+  directory_url: string;
+  email: string;
+  domains: string[];
+  provider: string;
+  dns_config?: Record<string, string>;
+  key_type: 'rsa2048' | 'rsa4096' | 'ec256' | 'ec384';
+  rotate_key: boolean;
+  accept_terms: boolean;
+  propagation_seconds: number;
+  credentials: { token: string; access_id: string; secret: string; eab_kid: string; eab_hmac: string };
+}
+export interface ACMEJob {
+  id: string; name: string; ca: string; domains: string[]; provider: string; key_type: string;
+  enabled: boolean; status: 'queued' | 'running' | 'ready' | 'failed'; message: string;
+  certificate_id?: string; not_after?: string; next_attempt: string; updated_at: string; failures: number;
+}
+
+export interface DNSProviderField { multiline: boolean; key: string; description: string; advanced: boolean; secret: boolean }
+export interface DNSProvider { group: string; code: string; name: string; description: string; url: string; fields: DNSProviderField[] }
+export interface DNSCatalog { version: string; providers: DNSProvider[] }

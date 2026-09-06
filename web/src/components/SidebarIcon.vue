@@ -8,6 +8,8 @@ defineProps<{
     | "rate-limit"
     | "certificate"
     | "logs"
+    | "requests"
+    | "backup"
     | "history"
     | "config"
     | "settings";
@@ -24,7 +26,14 @@ defineProps<{
     stroke-linejoin="round"
     aria-hidden="true"
   >
-    <g v-if="name === 'overview'">
+    <g v-if="name === 'requests'">
+      <path d="M5 3h10l4 4v7M15 3v5h4M5 3v18h7M8 8h3M8 12h6M8 16h3" />
+      <circle cx="17" cy="17" r="3" /><path d="m19.3 19.3 2.2 2.2" />
+    </g>
+    <g v-else-if="name === 'backup'">
+      <path d="M4 8h16v12H4zM3 4h18v4H3zM9 12h6M12 12v5m-2-2 2 2 2-2" />
+    </g>
+    <g v-else-if="name === 'overview'">
       <rect x="3" y="3" width="7" height="7" rx="1.4" />
       <rect x="14" y="3" width="7" height="7" rx="1.4" />
       <rect x="3" y="14" width="7" height="7" rx="1.4" />

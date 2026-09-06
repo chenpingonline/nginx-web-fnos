@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { reactive, ref } from "vue";
-import type { CertificateInput } from "../types";
+import type { ACMEInput, CertificateInput } from "../types";
+import ACMEFields from "./ACMEFields.vue";
 import AppSelect from "./AppSelect.vue";
 const props = defineProps<{ busy: boolean }>();
-const emit = defineEmits<{ save: [value: CertificateInput]; cancel: [] }>();
-const method = ref<"file" | "path" | "pem">("file");
+const emit = defineEmits<{ save: [value: CertificateInput]; cancel: []; acme: [value: ACMEInput] }>();
+const method = ref<"file" | "path" | "pem" | "acme">("file");
 const form = reactive({ name: "", certificate: "", private_key: "", certificate_path: "", private_key_path: "" });
+const acme = ref<ACMEInput>({name:"",ca:"letsencrypt",directory_url:"",email:"",domains:[],provider:"cloudflare",key_type:"rsa2048",rotate_key:true,accept_terms:false,propagation_seconds:180,credentials:{token:"",access_id:"",secret:"",eab_kid:"",eab_hmac:""}});
+const acmeReady = ref(false);
 const certificateFile = ref<File>();
 const keyFile = ref<File>();
 const reading = ref(false);
@@ -19,6 +22,15 @@ function selectFile(event: Event, kind: "certificate" | "key") {
 async function submit() {
   if (props.busy || reading.value) return;
   error.value = "";
+  if (method.value === "acme") {
+    if (!acmeReady.value) { error.value = "请先加载 DNS 服务商列表。"; return; }
+    const value = structuredClone({ ...acme.value, credentials: { ...acme.value.credentials }, dns_config: { ...acme.value.dns_config }, domains: [...acme.value.domains] });
+    value.name = form.name; value.domains = value.domains.map(d => d.trim()).filter(Boolean);
+    value.credentials.token = ''; value.credentials.access_id = ''; value.credentials.secret = '';
+    value.dns_config = Object.fromEntries(Object.entries(value.dns_config ?? {}).filter(([,v]) => v.trim() !== ''));
+    if(value.ca === 'letsencrypt' || value.ca === 'staging') { value.credentials.eab_kid = ''; value.credentials.eab_hmac = ''; }
+    emit('acme',value); return;
+  }
   const input: CertificateInput = { name: form.name, method: method.value, certificate: "", private_key: "" };
   if (method.value === "path") {
     input.certificate_path = form.certificate_path;
@@ -57,6 +69,7 @@ async function submit() {
         <option value="file">文件上传</option>
         <option value="path">服务器路径</option>
         <option value="pem">粘贴 PEM</option>
+        <option value="acme">ACME 自动申请</option>
       </AppSelect>
     </div>
     <template v-if="method === 'file'">
@@ -82,6 +95,7 @@ async function submit() {
         <span class="field-help">填写运行 nginx-web 的服务器上的绝对路径，应用需要有读取权限。导入后保存独立副本，源文件更新后需重新导入。</span>
       </div>
     </template>
+    <ACMEFields v-else-if="method === 'acme'" v-model="acme" :busy="busy" @ready="acmeReady = $event" />
     <template v-else>
       <div class="field full">
         <label for="cert-chain">完整证书链（PEM）</label>
@@ -96,7 +110,7 @@ async function submit() {
     <p v-if="error" class="full certificate-import-error" role="alert">{{ error }}</p>
     <footer class="modal-footer full">
       <button type="button" class="button ghost" :disabled="busy || reading" @click="emit('cancel')">取消</button>
-      <button type="submit" class="button primary" :disabled="busy || reading">{{ busy || reading ? '处理中…' : '导入证书' }}</button>
+      <button type="submit" class="button primary" :disabled="busy || reading">{{ busy || reading ? '处理中…' : method === 'acme' ? '开始申请' : '导入证书' }}</button>
     </footer>
   </form>
 </template>

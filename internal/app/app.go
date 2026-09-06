@@ -56,6 +56,8 @@ func (a *App) Serve() error {
 		return fmt.Errorf("监听 Unix Socket 失败: %w", err)
 	}
 	defer listener.Close()
+	// Start certificate jobs only after owning the server socket; a second serve must not issue duplicate orders.
+	go a.service.MaintainACME(maintenanceContext)
 	defer os.Remove(a.paths.SocketPath)
 	_ = os.Chmod(a.paths.SocketPath, 0o660)
 

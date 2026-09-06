@@ -1,0 +1,190 @@
+package acme
+
+import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"math/big"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/go-acme/lego/v5/certificate"
+)
+
+func validInput() Input {
+	return Input{Name: "test", CA: "staging", Email: "admin@example.com", Domains: []string{"example.com", "*.example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: Credentials{Token: "secret-token-test"}}
+}
+func testResource(t *testing.T, now time.Time) *certificate.Resource {
+	t.Helper()
+	k, e := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if e != nil {
+		t.Fatal(e)
+	}
+	c := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "example.com"}, DNSNames: []string{"example.com", "*.example.com"}, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(90 * 24 * time.Hour)}
+	der, e := x509.CreateCertificate(rand.Reader, c, c, &k.PublicKey, k)
+	if e != nil {
+		t.Fatal(e)
+	}
+	pk, e := x509.MarshalPKCS8PrivateKey(k)
+	if e != nil {
+		t.Fatal(e)
+	}
+	return &certificate.Resource{Domains: []string{"example.com"}, Certificate: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), PrivateKey: pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pk})}
+}
+func TestDurableIssueRetryDeployAndSecretIsolation(t *testing.T) {
+	now := time.Now().UTC()
+	dir := t.TempDir()
+	issues := 0
+	deployments := 0
+	fail := true
+	var target string
+	deploy := func(id, name string, r *certificate.Resource) (string, error) {
+		deployments++
+		target = id
+		if fail {
+			return "", errors.New("failure")
+		}
+		return id, nil
+	}
+	m, e := New(dir, deploy)
+	if e != nil {
+		t.Fatal(e)
+	}
+	m.now = func() time.Time { return now }
+	m.issue = func(ctx context.Context, r *Record, save func() error, stage func(string)) error {
+		issues++
+		r.AccountKey = []byte("secret-account-key")
+		r.Resource = testResource(t, now)
+		r.Pending = true
+		return save()
+	}
+	job, e := m.Create(validInput())
+	if e != nil {
+		t.Fatal(e)
+	}
+	m.step(context.Background())
+	if issues != 1 || deployments != 1 || target != job.ID {
+		t.Fatal("issue or stable target failure")
+	}
+	failed := m.List()[0]
+	if failed.Status != "failed" || !failed.NextAttempt.After(now) {
+		t.Fatalf("missing backoff: %+v", failed)
+	}
+	raw, _ := json.Marshal(m.List())
+	for _, secret := range []string{"secret-token-test", "secret-account-key", "private_key", "credentials"} {
+		if strings.Contains(string(raw), secret) {
+			t.Fatal("secret exposed", secret)
+		}
+	}
+	info, e := os.Stat(filepath.Join(dir, job.ID+".json"))
+	if e != nil || info.Mode().Perm() != 0600 {
+		t.Fatal("private file permissions", e)
+	}
+	// A restart must retry the already issued certificate, not create another ACME order.
+	m, e = New(dir, deploy)
+	if e != nil {
+		t.Fatal(e)
+	}
+	now = now.Add(10 * time.Minute)
+	m.now = func() time.Time { return now }
+	m.issue = func(context.Context, *Record, func() error, func(string)) error {
+		t.Fatal("reissued pending certificate")
+		return nil
+	}
+	fail = false
+	m.step(context.Background())
+	ready := m.List()[0]
+	if ready.Status != "ready" || ready.CertificateID != job.ID || deployments != 2 {
+		t.Fatalf("deployment not recovered: %+v", ready)
+	}
+	if !m.Manages(job.ID) {
+		t.Fatal("missing managed certificate guard")
+	}
+	if e = m.Action(job.ID, "pause"); e != nil {
+		t.Fatal(e)
+	}
+	now = now.Add(100 * 24 * time.Hour)
+	m.step(context.Background())
+	if deployments != 2 {
+		t.Fatal("paused task executed")
+	}
+	if e = m.Action(job.ID, "delete"); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = os.Stat(filepath.Join(dir, job.ID+".json")); !os.IsNotExist(e) {
+		t.Fatal("credentials not removed")
+	}
+}
+func TestValidation(t *testing.T) {
+	cases := []func(*Input){func(i *Input) { i.Domains = []string{"127.0.0.1"} }, func(i *Input) { i.Domains = []string{"foo.*.com"} }, func(i *Input) { i.AcceptTerms = false }, func(i *Input) { i.CA = "zerossl" }, func(i *Input) { i.CA = "custom"; i.DirectoryURL = "http://example.com/acme" }, func(i *Input) { i.Email = "" }, func(i *Input) { i.Provider = "shell" }, func(i *Input) { i.PropagationSeconds = 1801 }, func(i *Input) { i.Credentials.EABKID = "only-kid" }}
+	for n, change := range cases {
+		in := validInput()
+		change(&in)
+		if validate(&in) == nil {
+			t.Fatalf("accepted invalid case %d", n)
+		}
+	}
+	in := validInput()
+	in.Domains = []string{"EXAMPLE.COM.", "example.com", "*.example.com"}
+	if e := validate(&in); e != nil || len(in.Domains) != 2 {
+		t.Fatal("normalization failed", e)
+	}
+	for _, p := range []string{"cloudflare", "alidns", "tencentcloud"} {
+		in := validInput()
+		in.Provider = p
+		in.Credentials.AccessID = "id"
+		in.Credentials.Secret = "secret"
+		if e := validate(&in); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := dnsProvider(in); e != nil {
+			t.Fatal("provider initialization", p, e)
+		}
+	}
+}
+func TestJobSingleFlightAndInterruptedRecovery(t *testing.T) {
+	dir := t.TempDir()
+	m, e := New(dir, func(id, name string, r *certificate.Resource) (string, error) { return id, nil })
+	if e != nil {
+		t.Fatal(e)
+	}
+	job, e := m.Create(validInput())
+	if e != nil {
+		t.Fatal(e)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	m.issue = func(context.Context, *Record, func() error, func(string)) error {
+		close(started)
+		<-release
+		return errors.New("credential secret-token-test error")
+	}
+	go func() { m.step(context.Background()); close(done) }()
+	<-started
+	if e = m.Action(job.ID, "delete"); e == nil {
+		t.Fatal("removed running job")
+	}
+	m.step(context.Background())
+	restarted, e := New(dir, m.deploy)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if restarted.List()[0].Status != "queued" {
+		t.Fatal("interrupted job not requeued")
+	}
+	close(release)
+	<-done
+	if strings.Contains(m.List()[0].Message, "secret-token-test") {
+		t.Fatal("credential leaked")
+	}
+}

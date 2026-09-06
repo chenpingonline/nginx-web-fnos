@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	acmemanager "github.com/chenpingonline/fn-nginx-web/internal/acme"
 	"github.com/chenpingonline/fn-nginx-web/internal/domain"
 	"github.com/chenpingonline/fn-nginx-web/internal/metrics"
 	appservice "github.com/chenpingonline/fn-nginx-web/internal/service"
@@ -171,6 +172,32 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusCreated, rule, err)
 	case strings.HasPrefix(apiPath, "/api/rules/"):
 		a.handleRule(w, r, strings.TrimPrefix(apiPath, "/api/rules/"))
+	case apiPath == "/api/acme/providers" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, acmemanager.Providers())
+	case apiPath == "/api/acme" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, a.service.ACME().List())
+	case apiPath == "/api/acme" && r.Method == http.MethodPost:
+		var input acmemanager.Input
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		job, err := a.service.ACME().Create(input)
+		writeResult(w, http.StatusAccepted, job, err)
+	case strings.HasPrefix(apiPath, "/api/acme/") && (r.Method == http.MethodPost || r.Method == http.MethodDelete):
+		parts := strings.Split(strings.TrimPrefix(apiPath, "/api/acme/"), "/")
+		action := "delete"
+		if r.Method == http.MethodPost {
+			if len(parts) != 2 {
+				writeAPIError(w, http.StatusBadRequest, "任务操作无效")
+				return
+			}
+			action = parts[1]
+		} else if len(parts) != 1 {
+			writeAPIError(w, http.StatusBadRequest, "任务操作无效")
+			return
+		}
+		err := a.service.ACME().Action(parts[0], action)
+		writeResult(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
 	case apiPath == "/api/certificates" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State().Certificates)
 	case apiPath == "/api/certificates" && r.Method == http.MethodPost:
@@ -184,6 +211,22 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		id := strings.TrimPrefix(apiPath, "/api/certificates/")
 		err := a.service.DeleteCertificate(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
+	case apiPath == "/api/backup" && r.Method == http.MethodGet:
+		backup, err := a.service.ExportBackup()
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"nginx-web-backup-%s.json\"", time.Now().UTC().Format("20060102-150405")))
+		writeJSON(w, http.StatusOK, backup)
+	case apiPath == "/api/backup/restore" && r.Method == http.MethodPost:
+		var backup appservice.Backup
+		if !decodeJSONLimit(w, r, &backup, appservice.MaxBackupBytes) {
+			return
+		}
+		state, err := a.service.RestoreBackup(backup)
+		writeResult(w, http.StatusOK, state, err)
 	case apiPath == "/api/settings" && r.Method == http.MethodPut:
 		var settings domain.Settings
 		if !decodeJSON(w, r, &settings) {
@@ -354,11 +397,14 @@ func (a *API) handleRevision(w http.ResponseWriter, r *http.Request, suffix stri
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
+	return decodeJSONLimit(w, r, target, 3*1024*1024)
+}
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, target any, limit int64) bool {
 	if r.Body == nil {
 		writeAPIError(w, http.StatusBadRequest, "请求体不能为空")
 		return false
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 3*1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
