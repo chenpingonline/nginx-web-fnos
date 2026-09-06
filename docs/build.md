@@ -94,7 +94,7 @@ make build-all
 输出：
 
 ```text
-dist/nginx-web-<version>-x86.fpk
+dist/nginx-web-<version>-x86_64.fpk
 dist/nginx-web-<version>-arm64.fpk
 ```
 

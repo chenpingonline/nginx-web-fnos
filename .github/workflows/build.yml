@@ -17,10 +17,12 @@ jobs:
       matrix:
         include:
           - arch: x86
+            package_arch: x86_64
             runner: ubuntu-latest
             nginx_dir: x86_64
             nginx_output: x86_64
           - arch: arm64
+            package_arch: arm64
             runner: ubuntu-24.04-arm
             nginx_dir: arm64
             nginx_output: aarch64
@@ -66,11 +68,11 @@ jobs:
           INTEGRATION_SERVER_BIN: ${{ github.workspace }}/.build/${{ matrix.arch }}/app/bin/nginx-web-server
         run: ./tests/integration.sh
       - name: Lifecycle test
-        run: ./tests/fpk-lifecycle.sh "dist/nginx-web-${APP_VERSION}-${{ matrix.arch }}.fpk"
+        run: ./tests/fpk-lifecycle.sh "dist/nginx-web-${APP_VERSION}-${{ matrix.package_arch }}.fpk"
       - uses: actions/upload-artifact@v4
         with:
-          name: nginx-web-${{ matrix.arch }}
+          name: nginx-web-${{ matrix.package_arch }}
           if-no-files-found: error
           path: |
-            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.arch }}.fpk
-            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.arch }}.fpk.sha256
+            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.package_arch }}.fpk
+            dist/nginx-web-${{ env.APP_VERSION }}-${{ matrix.package_arch }}.fpk.sha256

@@ -6,7 +6,7 @@ ARCH="${1:-x86}"
 VERSION="$(python3 "$ROOT/scripts/version.py")"
 DIST="$ROOT/dist"
 case "$ARCH" in
-  x86|x86_64|amd64) ARCH="x86"; GOARCH="amd64"; PLATFORM="x86"; FILE_PATTERN='x86-64|x86_64'; OUTPUT_ARCH="x86" ;;
+  x86|x86_64|amd64) ARCH="x86"; GOARCH="amd64"; PLATFORM="x86"; FILE_PATTERN='x86-64|x86_64'; OUTPUT_ARCH="x86_64" ;;
   arm|arm64|aarch64) ARCH="arm64"; GOARCH="arm64"; PLATFORM="arm"; FILE_PATTERN='ARM aarch64|ARM64|aarch64'; OUTPUT_ARCH="arm64" ;;
   *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
 esac
@@ -61,5 +61,5 @@ printf 'checksum                   = %s\n' "$APP_MD5" >> "$STAGE/manifest"; chmo
 echo "[7/8] 创建 $FPK_NAME"
 create_archive "$STAGE" "$DIST/$FPK_NAME"
 echo '[8/8] 验证 FPK'; "$ROOT/scripts/verify-fpk.sh" "$DIST/$FPK_NAME"
-if command -v sha256sum >/dev/null 2>&1; then sha256sum "$DIST/$FPK_NAME" > "$DIST/${FPK_NAME}.sha256"; else shasum -a 256 "$DIST/$FPK_NAME" > "$DIST/${FPK_NAME}.sha256"; fi
+if command -v sha256sum >/dev/null 2>&1; then (cd "$DIST" && sha256sum "$FPK_NAME" > "${FPK_NAME}.sha256"); else (cd "$DIST" && shasum -a 256 "$FPK_NAME" > "${FPK_NAME}.sha256"); fi
 echo "完成：$DIST/$FPK_NAME"

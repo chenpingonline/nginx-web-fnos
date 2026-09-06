@@ -7,13 +7,13 @@ VERSION="$(python3 "$ROOT/scripts/version.py")"
 "$ROOT/tests/integration.sh"
 case "$(uname -m)" in
   aarch64|arm64) TEST_ARCH=arm64 ;;
-  *) TEST_ARCH=x86 ;;
+  *) TEST_ARCH=x86_64 ;;
 esac
 "$ROOT/tests/fpk-lifecycle.sh" "$ROOT/dist/nginx-web-${VERSION}-${TEST_ARCH}.fpk"
 (cd "$ROOT/dist"
  if command -v sha256sum >/dev/null 2>&1; then
-   sha256sum "nginx-web-${VERSION}-x86.fpk" "nginx-web-${VERSION}-arm64.fpk" > SHA256SUMS.txt
+   sha256sum "nginx-web-${VERSION}-x86_64.fpk" "nginx-web-${VERSION}-arm64.fpk" > SHA256SUMS.txt
  else
-   shasum -a 256 "nginx-web-${VERSION}-x86.fpk" "nginx-web-${VERSION}-arm64.fpk" > SHA256SUMS.txt
+   shasum -a 256 "nginx-web-${VERSION}-x86_64.fpk" "nginx-web-${VERSION}-arm64.fpk" > SHA256SUMS.txt
  fi)
 echo "nginx-web release artifacts created in $ROOT/dist"

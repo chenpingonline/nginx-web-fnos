@@ -83,7 +83,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 
 | fnOS 设备架构 | Release 文件 | 内置 Nginx |
 | --- | --- | --- |
-| Intel / AMD x86_64 | `nginx-web-<version>-x86.fpk` | Linux AMD64 静态二进制 |
+| Intel / AMD x86_64 | `nginx-web-<version>-x86_64.fpk` | Linux AMD64 静态二进制 |
 | ARM64 / aarch64 | `nginx-web-<version>-arm64.fpk` | Linux ARM64 静态二进制 |
 
 运行要求：
@@ -92,7 +92,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 - 使用 fnOS 管理员账号安装和访问管理界面。
 - NAS 能够连接待代理的目标服务。
 
-当前不提供 `all` 通用包，也不支持 32 位 ARMv7。
+文件名中的 `x86_64` 表示 Intel / AMD 64 位，`arm64` 表示 ARM 64 位。当前不提供 32 位或 `all` 通用安装包。
 
 > [!TIP]
 > 平台自动主题需要 fnOS 1.2.0401 / App 1.34.0 及以上；旧系统或独立浏览器会跟随浏览器主题。
@@ -116,7 +116,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 Release 提供以下文件：
 
 ```text
-nginx-web-<version>-x86.fpk
+nginx-web-<version>-x86_64.fpk
 nginx-web-<version>-arm64.fpk
 SHA256SUMS.txt
 ```
@@ -130,7 +130,7 @@ sha256sum -c SHA256SUMS.txt
 只下载一个架构时，可以先筛选对应记录，例如 x86：
 
 ```bash
-grep 'x86.fpk$' SHA256SUMS.txt | sha256sum -c -
+grep 'x86_64\.fpk$' SHA256SUMS.txt | sha256sum -c -
 ```
 
 macOS 可将上述命令中的 `sha256sum` 替换为 `shasum -a 256`。
