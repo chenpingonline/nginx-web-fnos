@@ -77,6 +77,8 @@ echo "[4/6] 编译官方 NGINX ${NGINX_VERSION} $ARCH_LABEL 静态二进制"
   -v "$WORK_DIR:/work" \
   -w "/work/src/nginx-${NGINX_VERSION}" \
   "$BUILD_IMAGE" sh -euxc '
+    # Return root-owned build files to the caller even when compilation fails.
+    trap "chown -R $HOST_UID:$HOST_GID /work" EXIT
     if [ -n "$APK_MIRROR" ]; then
       printf "%s/v3.21/main\n%s/v3.21/community\n" "$APK_MIRROR" "$APK_MIRROR" > /etc/apk/repositories
     fi
@@ -122,7 +124,6 @@ echo "[4/6] 编译官方 NGINX ${NGINX_VERSION} $ARCH_LABEL 静态二进制"
     strip objs/nginx
     install -m 755 objs/nginx /work/out/nginx
     ./objs/nginx -V 2> /work/out/nginx-build-info.txt
-    chown "$HOST_UID:$HOST_GID" /work/out/nginx /work/out/nginx-build-info.txt
   '
 
 echo "[5/6] 导出编译产物"
