@@ -11,7 +11,7 @@
 [![Release](https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?display_name=tag)](https://github.com/chenpingonline/nginx-web-fnos/releases)
 ![fnOS](https://img.shields.io/badge/fnOS-x86__64%20%7C%20ARM64-2ea44f)
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 [下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用文档](docs/features.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/)
 
@@ -288,6 +288,6 @@ ACME 当前支持 DNS-01，尚不支持 HTTP-01、IP 地址签发或飞牛系统
 
 ## License
 
-项目源码采用 [MIT License](LICENSE)。
+项目源码采用 [GNU GPL v3](LICENSE)。
 
 内置 Nginx 及相关组件遵循各自的许可证，来源和许可证说明见 [NGINX_LICENSE](NGINX_LICENSE)、[NOTICE](NOTICE) 与 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
