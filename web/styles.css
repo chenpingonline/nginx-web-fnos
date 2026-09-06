@@ -41,10 +41,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   display: flex; flex-direction: column; z-index: 30;
 }
 .nav { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; padding-bottom: 18px; scrollbar-width: thin; }
-.nav-item { border: 1px solid transparent; color: #3e4852; background: transparent; min-height: 36px; border-radius: 6px; padding: 0 10px; display: flex; align-items: center; gap: 9px; text-align: left; transition: background-color .16s ease, color .16s ease; font-size: 13px; line-height: 20px; font-weight: 500; }
+.nav-item { border: 1px solid transparent; color: #3e4852; background: transparent; min-height: 36px; border-radius: 6px; padding: 0 10px; display: flex; align-items: center; gap: 9px; text-align: left; transition: background-color .16s ease, color .16s ease; font-size: 13px; line-height: 20px; font-weight: 600; }
 .nav-item:hover { background: rgba(255,255,255,.66); color: var(--text); }
 .nav-item:active { transform: scale(.99); }
-.nav-item.active { background: #e7f6ef; border-color: #d3ece1; color: var(--accent-dark); font-weight: 600; }
+.nav-item.active { background: #e7f6ef; border-color: #d3ece1; color: var(--accent-dark); font-weight: 700; }
 .nav-icon { width: 16px; min-width: 16px; height: 16px; }
 .nav-item { flex-shrink: 0; }
 .sidebar-footer { flex-shrink: 0; margin: auto 6px 0; padding: 10px 6px 0; border-top: 0; }
@@ -286,6 +286,10 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .certificate-modal { width: min(480px, 100%); }
 .certificate-modal .certificate-form-grid { grid-template-columns: max-content minmax(0, 1fr); column-gap: 12px; }
 .certificate-modal .field:not(.standalone-field) { grid-template-columns: subgrid; column-gap: 12px; }
+.certificate-modal .field-help,
+.certificate-modal .modal-header p { font-size: 11px; font-weight: 400; line-height: 1.6; color: var(--text-muted); }
+.certificate-modal .field-help a { font-size: 11px; font-weight: 400; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.certificate-modal .field-help a.dns-credential-link { font-size: 12px; font-weight: 600; }
 .modal-header { min-height: 56px; padding: 11px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
 .rule-modal .modal-header { flex-shrink: 0; min-height: 78px; padding: 14px 30px; border-bottom: 0; gap: 17px; }
 :is(.stream-modal, .policy-modal, .pool-modal) .modal-header { flex-shrink: 0; }

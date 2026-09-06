@@ -2,7 +2,7 @@
 import AppSelect from "./AppSelect.vue";
 import { computed, ref, watch } from "vue";
 import {
-  PhArrowRight,
+  PhArrowRight, PhStop, PhPlay, PhArrowClockwise,
   PhCheckCircle, PhWarningCircle, PhMagnifyingGlass,
   PhWarning, PhGlobe, PhShareNetwork, PhCaretLeft, PhCaretRight,
 } from "@phosphor-icons/vue";
@@ -114,10 +114,11 @@ const issue = computed(() => {
         </div>
         <div class="service-copy">
           <h2><span>Nginx</span> {{ overview.nginx.running ? "运行中" : "已停止" }}</h2>
-          <p>{{ overview.last_apply_error ? "最近配置应用失败" : overview.dirty ? "有待应用的配置变更" : "配置已同步" }}</p>
-          <button v-if="overview.nginx.running" class="button danger-ghost small" :disabled="busy" @click="emit('stop')">停止 Nginx</button>
-          <button v-else class="button secondary small" :disabled="busy" @click="emit('start')">启动 Nginx</button>
-          <button v-if="overview.nginx.running" class="button secondary small" :disabled="busy" title="重新加载已应用的配置，不应用草稿修改" @click="emit('reload')">重载配置</button>
+          <div class="service-actions">
+            <button v-if="overview.nginx.running" type="button" class="button danger-ghost service-action" :disabled="busy" @click="emit('stop')"><PhStop :size="15" weight="fill" aria-hidden="true" />停止 Nginx</button>
+            <button v-else type="button" class="button secondary service-action" :disabled="busy" @click="emit('start')"><PhPlay :size="15" weight="fill" aria-hidden="true" />启动 Nginx</button>
+            <button v-if="overview.nginx.running" type="button" class="button secondary service-action" :disabled="busy" title="重新加载已应用的配置，不应用草稿修改" @click="emit('reload')"><PhArrowClockwise :size="16" weight="bold" aria-hidden="true" />重载配置</button>
+          </div>
         </div>
       </div>
       <dl class="service-facts">
@@ -239,8 +240,13 @@ const issue = computed(() => {
 .service-emblem.stopped { color: var(--warning); border-color: #f8d496; background: var(--warning-soft); box-shadow: none; }
 .service-copy h2 { margin: 0; font-size: 30px; font-weight: 550; line-height: 1.35; white-space: nowrap; }
 .service-copy h2 > span { color: var(--accent-dark); font-weight: 600; }
-.service-copy p { margin: 7px 0 0; font-size: 17px; color: #606a77; }
-.service-copy > .button { margin-top: 7px; }
+.service-copy { min-width: 0; }
+.service-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.service-actions .service-action { min-height: 34px; padding: 0 11px; gap: 6px; border-radius: 8px; font-size: 12px; font-weight: 550; }
+.service-actions .danger-ghost { border-color: color-mix(in srgb, var(--danger) 25%, transparent); }
+.service-actions .danger-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 16%, var(--surface)); border-color: var(--danger); }
+.service-actions .secondary:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-dark); }
+.service-actions .service-action:disabled { opacity: .45; cursor: not-allowed; }
 .service-facts { display: grid; grid-template-columns: 1.12fr repeat(4, 1fr); flex: 1; margin: 0; min-width: 0; }
 .service-facts > div { padding: 0 16px; text-align: center; border-left: 1px solid var(--line); min-width: 0; }
 .service-facts > div:first-child { padding-left: 0; border: 0; }
@@ -327,14 +333,34 @@ h2 { font-size: 17px; font-weight: 570; }
 .certificate-attention.has-alert { border-color: #ffe0a6; margin-top: 3px; }
 .has-alert .certificate-summary > strong, .has-alert .certificate-summary > svg { color: var(--warning); }
 .has-alert .certificate-summary .button { border-color: #ffe0a6; }
+.service-facts dt,
+.traffic-metric > span,
+.range-buttons button,
+.traffic-foot,
+.rules-filters .select,
+.dashboard-search input,
+.protocol-tabs button,
+.dashboard-rules .empty-state p,
+.dashboard-pagination,
+.page-button,
+.page-size,
+.certificate-summary,
+.certificate-summary .button {
+  font-weight: 600;
+}
+.traffic-card :deep(.legend-item),
+.traffic-card :deep(.chart-scale),
+.traffic-card :deep(.chart-times),
+.traffic-card :deep(.chart-empty span) {
+  font-weight: 600;
+}
 button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 1200px) {
-  .dashboard-service { flex-basis: 35%; gap: 15px; }
+  .dashboard-service { flex-basis: 35%; min-width: min(100%, 320px); gap: 15px; }
   .dashboard-status { gap: 15px; padding-inline: 20px; }
   .service-emblem { width: 72px; height: 72px; flex-basis: 72px; }
   .service-emblem svg { width: 64px; height: 64px; }
   .service-copy h2 { font-size: 22px; }
-  .service-copy p { font-size: 14px; }
   .service-facts > div { padding-inline: 10px; }
   .service-facts dd { font-size: 14px; }
   .rules-filters { gap: 8px; }

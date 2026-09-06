@@ -87,7 +87,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "rules",
     icon: "http",
-    label: "代理 HTTP(S)",
+    label: "HTTP(S) 代理",
     subtitle: "管理域名、监听端口与后端服务",
   },
   {

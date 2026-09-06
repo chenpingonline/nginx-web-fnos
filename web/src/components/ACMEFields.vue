@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import AppSelect from './AppSelect.vue';
+import { dnsProviderLink } from '../dnsProviderLinks';
 import { request, errorMessage } from '../api';
 import type { ACMEInput, DNSCatalog, DNSProviderField } from '../types';
 const props = defineProps<{ modelValue: ACMEInput; busy: boolean }>();
@@ -12,8 +13,6 @@ const domains = computed({ get: () => props.modelValue.domains.join('\n'), set: 
 const catalog = ref<DNSCatalog>();
 const loading = ref(false);
 const loadError = ref('');
-const search = ref('');
-const advanced = ref(false);
 const controller = new AbortController();
 async function loadProviders() {
  loading.value = true; loadError.value = '';
@@ -25,14 +24,45 @@ onMounted(loadProviders);
 onBeforeUnmount(() => controller.abort());
 const selected = computed(() => catalog.value?.providers.find(p => p.code === props.modelValue.provider));
 watch(selected, value => emit('ready', !!value), { immediate: true });
-const filtered = computed(() => catalog.value?.providers.filter(p => p.code === props.modelValue.provider || `${p.group} ${p.name} ${p.code}`.toLowerCase().includes(search.value.trim().toLowerCase())) ?? []);
-function selectProvider(value: string) { advanced.value = false; emit('update:modelValue', { ...props.modelValue, provider: value, dns_config: {} }); }
+function selectProvider(value: string) { emit('update:modelValue', { ...props.modelValue, provider: value, dns_config: {} }); }
 function dnsValue(key: string, value: string) { set('dns_config', { ...props.modelValue.dns_config, [key]: value }); }
+const alidnsFields: Record<string, { label: string; description: string; advanced: boolean }> = {
+ ALICLOUD_ACCESS_KEY: { label: 'ID', description: '', advanced: false },
+ ALICLOUD_SECRET_KEY: { label: 'Secret', description: '', advanced: false },
+ ALICLOUD_RAM_ROLE: { label: '实例 RAM 角色（可选）', description: '仅在阿里云 ECS 上使用实例角色认证时填写；此方式无需填写 AccessKey ID 和 Secret。', advanced: true },
+ ALICLOUD_SECURITY_TOKEN: { label: 'STS 临时令牌（可选）', description: '仅使用 STS 临时凭证时填写，并配套填写临时 AccessKey ID 和 Secret；普通 AccessKey 认证请留空。', advanced: true },
+};
+// Keep provider-specific credential names while hiding environment variable prefixes.
+const domesticLabels: Record<string, string> = {
+ TENCENTCLOUD_SECRET_ID: 'ID', TENCENTCLOUD_SECRET_KEY: 'Secret',
+ BAIDUCLOUD_ACCESS_KEY_ID: 'ID', BAIDUCLOUD_SECRET_ACCESS_KEY: 'Secret',
+ COM35_USERNAME: '用户名', COM35_PASSWORD: 'API 密码',
+ DNS51_API_KEY: 'API Key', DNS51_API_SECRET: 'Secret',
+ DNSLA_API_ID: 'ID', DNSLA_API_SECRET: 'Secret',
+ EDGEONE_SECRET_ID: 'ID', EDGEONE_SECRET_KEY: 'Secret',
+ HUAWEICLOUD_ACCESS_KEY_ID: 'ID', HUAWEICLOUD_SECRET_ACCESS_KEY: 'Secret', HUAWEICLOUD_REGION: '区域',
+ JDCLOUD_ACCESS_KEY_ID: 'ID', JDCLOUD_ACCESS_KEY_SECRET: 'Secret',
+ RAINYUN_API_KEY: 'API Key',
+ TODAYNIC_AUTH_USER_ID: '账户 ID', TODAYNIC_API_KEY: 'API Key',
+ UCLOUD_PUBLIC_KEY: '公钥', UCLOUD_PRIVATE_KEY: '私钥',
+ VOLC_ACCESSKEY: 'ID', VOLC_SECRETKEY: 'Secret',
+ WESTCN_USERNAME: '用户名', WESTCN_PASSWORD: 'API 密码',
+ XINNET_SECRET: '应用密钥', XINNET_AGENT_ID: '代理商 ID',
+};
+function fieldPresentation(field: DNSProviderField) {
+ if (props.modelValue.provider === 'alidns') return alidnsFields[field.key];
+ if (props.modelValue.provider === 'aliesa') return alidnsFields[field.key.replace(/^ALIESA_/, 'ALICLOUD_')];
+ if (selected.value?.group !== '国内') return undefined;
+ const label = domesticLabels[field.key];
+ return label ? { label, description: '', advanced: field.advanced } : undefined;
+}
 function isAdvanced(field: DNSProviderField) {
+ const presentation = fieldPresentation(field);
+ if (presentation) return presentation.advanced;
  return field.advanced || field.description.startsWith('Alias') || (props.modelValue.provider === 'cloudflare' && field.key !== 'CF_DNS_API_TOKEN');
 }
 const primaryFields = computed(() => selected.value?.fields.filter(f => !isAdvanced(f)) ?? []);
-const extraFields = computed(() => selected.value?.fields.filter(isAdvanced) ?? []);
+const providerLink = computed(() => selected.value && dnsProviderLink(selected.value.code, selected.value.name));
 </script>
 <template>
   <div class="field full"><label for="acme-ca">证书颁发机构</label><AppSelect id="acme-ca" :model-value="modelValue.ca" class="select" :disabled="busy" @update:model-value="set('ca', $event)"><option value="letsencrypt">Let’s Encrypt</option><option value="zerossl">ZeroSSL</option><option value="staging">Let’s Encrypt 测试环境</option><option value="custom">自定义 ACME 服务</option></AppSelect><span v-if="modelValue.ca === 'staging'" class="field-help">仅供测试，浏览器不会信任测试证书。</span></div>
@@ -42,24 +72,16 @@ const extraFields = computed(() => selected.value?.fields.filter(isAdvanced) ?? 
     <div class="field full"><label for="acme-hmac">EAB HMAC Key</label><input id="acme-hmac" class="input" type="password" :required="modelValue.ca === 'zerossl'" :value="modelValue.credentials.eab_hmac" :disabled="busy" autocomplete="new-password" @input="credential('eab_hmac', ($event.target as HTMLInputElement).value)" /><span class="field-help">{{ modelValue.ca === 'zerossl' ? '在 ZeroSSL 控制台生成 EAB 凭据，不能用 DNS Token 代替。' : '仅在证书机构要求 EAB 时填写，两项需同时提供。' }}</span></div>
   </template>
 
-  <div class="field full"><label for="acme-provider-search">搜索服务商</label><input id="acme-provider-search" v-model="search" class="input" type="search" placeholder="名称或代码，例如 华为云、dnsla" :disabled="busy || loading" /></div>
-  <div class="field full"><label for="acme-provider">DNS 验证服务商</label><AppSelect id="acme-provider" :model-value="modelValue.provider" class="select" :disabled="busy || loading" @update:model-value="selectProvider"><option v-for="provider in filtered" :key="provider.code" :value="provider.code">{{ provider.name }}</option></AppSelect><span class="field-help">{{ catalog?.providers.length ?? 0 }} 个原生 DNS 适配器。使用 DNS-01 验证，无需开放公网 80 端口。</span></div>
+  <div class="field full"><label for="acme-provider">DNS 验证服务商</label><AppSelect id="acme-provider" :model-value="modelValue.provider" class="select" :disabled="busy || loading" @update:model-value="selectProvider"><option v-for="provider in catalog?.providers ?? []" :key="provider.code" :value="provider.code">{{ provider.name }}</option></AppSelect></div>
   <div v-if="loadError" class="full notice warning" role="alert">服务商列表加载失败：{{ loadError }} <button type="button" class="button ghost small" @click="loadProviders">重试</button></div>
   <div v-if="selected" class="full dns-provider-fields">
-    <p class="field-help">按所用认证方式填写；可选字段可留空。<a :href="selected.url" target="_blank" rel="noopener noreferrer">查看 {{ selected.name }} 配置说明</a></p>
-    <div v-for="field in primaryFields" :key="field.key" class="dns-provider-field">
-      <label :for="`dns-${field.key}`">{{ field.key }}</label>
+    <p v-if="providerLink" class="field-help"><a class="dns-credential-link" :href="providerLink.url" target="_blank" rel="noopener noreferrer">{{ providerLink.label }}</a></p>
+    <div v-for="field in primaryFields" :key="field.key" class="field full dns-provider-field">
+      <label :for="`dns-${field.key}`">{{ fieldPresentation(field)?.label ?? field.key }}</label>
       <textarea v-if="field.multiline" :id="`dns-${field.key}`" class="textarea" rows="3" :value="modelValue.dns_config?.[field.key] ?? ''" :disabled="busy" autocomplete="off" spellcheck="false" @input="dnsValue(field.key, ($event.target as HTMLTextAreaElement).value)" />
       <input v-else :id="`dns-${field.key}`" :type="field.secret ? 'password' : 'text'" class="input" :value="modelValue.dns_config?.[field.key] ?? ''" :disabled="busy" autocomplete="new-password" spellcheck="false" @input="dnsValue(field.key, ($event.target as HTMLInputElement).value)" />
-      <span class="field-help">{{ field.description }}</span>
+      <span v-if="fieldPresentation(field)?.description ?? field.description" class="field-help">{{ fieldPresentation(field)?.description ?? field.description }}</span>
     </div>
-    <button v-if="extraFields.length" type="button" class="button ghost small" :aria-expanded="advanced" @click="advanced = !advanced">{{ advanced ? '收起' : '展开' }}其他认证方式与高级设置（{{ extraFields.length }}）</button>
-    <template v-if="advanced"><div v-for="field in extraFields" :key="field.key" class="dns-provider-field">
-      <label :for="`dns-${field.key}`">{{ field.key }}</label>
-      <textarea v-if="field.multiline" :id="`dns-${field.key}`" class="textarea" rows="3" :value="modelValue.dns_config?.[field.key] ?? ''" :disabled="busy" autocomplete="off" spellcheck="false" @input="dnsValue(field.key, ($event.target as HTMLTextAreaElement).value)" />
-      <input v-else :id="`dns-${field.key}`" :type="field.secret ? 'password' : 'text'" class="input" :value="modelValue.dns_config?.[field.key] ?? ''" :disabled="busy" autocomplete="new-password" spellcheck="false" @input="dnsValue(field.key, ($event.target as HTMLInputElement).value)" />
-      <span class="field-help">{{ field.description }}</span>
-    </div></template>
   </div>
   <div class="field full"><label for="acme-domains">域名列表</label><textarea id="acme-domains" v-model="domains" class="textarea" rows="3" required spellcheck="false" :disabled="busy" placeholder="example.com&#10;*.example.com"></textarea><span class="field-help">每行一个域名，支持通配符；DNS 验证不支持 IP 地址证书。</span></div>
   <div class="field full"><label for="acme-email">电子邮箱</label><input id="acme-email" class="input" type="email" required :value="modelValue.email" :disabled="busy" @input="set('email', ($event.target as HTMLInputElement).value)" /></div>
@@ -71,10 +93,9 @@ const extraFields = computed(() => selected.value?.fields.filter(isAdvanced) ?? 
 </template>
 
 <style scoped>
-.dns-provider-fields { min-width: 0; display: grid; gap: 10px; }
-.dns-provider-fields > p { margin: 0; }
-.dns-provider-fields > button { justify-self: start; max-width: 100%; white-space: normal; }
-.dns-provider-field { display: grid; gap: 4px; min-width: 0; }
-.dns-provider-field > label { font-size: 11px; font-weight: 600; overflow-wrap: anywhere; }
+.dns-provider-fields { min-width: 0; display: grid; grid-template-columns: subgrid; row-gap: 10px; }
+.dns-provider-fields > p { margin: 0; grid-column: 1 / -1; }
+.dns-provider-field { min-width: 0; }
+.dns-provider-field > label { max-width: 132px; overflow-wrap: anywhere; }
 .dns-provider-field .field-help { overflow-wrap: anywhere; }
 </style>
