@@ -236,13 +236,14 @@ watch(
       <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单个后端服务或 Stream 后端服务组。" }}</p>
     </div>
   </article>
-  <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
-    <section
-      class="modal rule-modal stream-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="stream-title"
-    >
+  <Teleport to="body">
+    <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
+      <section
+        class="modal rule-modal stream-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="stream-title"
+      >
       <header class="modal-header">
         <PhShareNetwork class="stream-heading-icon" :size="32" aria-hidden="true" />
         <div>
@@ -491,8 +492,9 @@ watch(
           </section>
         </form>
       </div>
-    </section>
-  </div>
+      </section>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
