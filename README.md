@@ -13,7 +13,7 @@
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用文档](docs/features.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/)
+[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/)
 
 </div>
 
@@ -38,7 +38,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 | --- | --- |
 | 总览 | 查看 Nginx 运行状态、HTTP 请求趋势、连接数、错误率及规则生效状态 |
 | 代理 HTTP(S) | 管理域名与路径转发、WebSocket、SSE、HTTP/2、静态文件和跳转 |
-| 规则分组 | 共享协议、监听端口、证书与 HTTP/2 默认值，支持逐项取消继承 |
+| 规则分组 | 共享监听类型、协议、监听端口、证书与 HTTP/2 默认值，支持逐项取消继承 |
 | TCP/UDP 代理 | 四层转发、TLS 终止、SNI 分流、PROXY Protocol 与访问控制 |
 | 后端服务组 | 管理多个节点、权重、备用节点及负载均衡策略，可供多个规则复用 |
 | 限流策略 | 管理请求速率、突发请求、并发连接与下载速度限制 |
@@ -50,7 +50,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 | Nginx 配置 | 只读查看生成配置，执行校验并应用草稿 |
 | 全局设置 | 管理默认端口、Worker、TLS、Gzip、Real IP、日志轮转和缓存等参数 |
 
-详细配置项见 [功能与使用说明](docs/features.md)，DNS 凭据配置见 [DNS 服务商说明](docs/dns-providers.md)。
+首次配置与排查请看 [使用指南](docs/user-guide.md)，详细配置项见 [功能与使用说明](docs/features.md)，DNS 凭据配置见 [DNS 服务商说明](docs/dns-providers.md)。
 
 ---
 
@@ -139,10 +139,12 @@ macOS 可将上述命令中的 `sha256sum` 替换为 `shasum -a 256`。
 
 ## 快速上手
 
+完整步骤见 [使用指南](docs/user-guide.md)，包含 IPv6、证书申请与重新签发、分组继承、TCP/UDP 转发及常见错误排查。
+
 以把 `nas.example.com:9080` 转发到局域网服务 `192.168.1.10:3000` 为例：
 
 1. 确保 NAS 能访问目标服务，并将域名解析到可访问的 NAS 地址。
-2. 打开 **代理 HTTP(S)**，添加规则：协议选 HTTP，域名填 `nas.example.com`，监听端口填 `9080`。
+2. 打开 **代理 HTTP(S)**，添加规则：协议选 HTTP，域名填 `nas.example.com`，监听端口填 `9080`，监听类型按实际网络选择 IPv4、IPv6 或双栈。
 3. 后端协议选 HTTP，主机填 `192.168.1.10`，端口填 `3000`；按需开启 WebSocket 或流式传输。
 4. 保存并应用配置，在总览确认规则已生效、Nginx 正在运行，然后访问 `http://nas.example.com:9080`。
 

@@ -39,8 +39,8 @@
 .path-lines { stroke: var(--text-muted); stroke-opacity: .55; stroke-width: 1.5; }
 .path-node rect { fill: var(--surface-soft); stroke: var(--line-strong); stroke-width: 1; }
 .path-node text { text-anchor: middle; }
-.node-title { fill: var(--text-muted); font-size: 12px; font-weight: 600; }
-.node-detail { fill: var(--text-muted); opacity: .85; font-size: 10px; }
+.node-title { fill: var(--text-muted); font-size: 14px; font-weight: 600; }
+.node-detail { fill: var(--text-muted); opacity: .85; font-size: 12px; }
 .pool-node rect { fill: var(--surface-soft); stroke: var(--accent); stroke-width: 2; stroke-opacity: .35; }
 .pool-node .node-title { fill: #599c7e; }
 :global(html[data-theme="dark"] .pool-example .pool-node .node-title) { fill: #83bda3; }

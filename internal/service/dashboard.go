@@ -17,6 +17,8 @@ import (
 )
 
 type DashboardRule struct {
+	EntryURLs     []string        `json:"entry_urls,omitempty"`
+	TargetURL     string          `json:"target_url,omitempty"`
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`
 	Protocol      string          `json:"protocol"`
@@ -134,7 +136,7 @@ func (s *AppService) Dashboard(minutes int, selected string) Dashboard {
 			protocol = "HTTPS"
 		}
 		target := httpTarget(rule, state)
-		row := DashboardRule{ID: rule.ID, Name: rule.Name, Protocol: protocol, Entry: strings.Join(rule.Domains, ", ") + ":" + itoa(rule.ListenPort), ListenAddress: dashboardListenAddress("0.0.0.0", rule.ListenPort), Target: target, ConfigState: status, Enabled: rule.Enabled}
+		row := DashboardRule{ID: rule.ID, Name: rule.Name, Protocol: protocol, Entry: strings.Join(rule.Domains, ", ") + ":" + itoa(rule.ListenPort), EntryURLs: dashboardEntryURLs(rule), TargetURL: dashboardTargetURL(rule), ListenAddress: dashboardHTTPListenAddress(rule.ListenType, rule.ListenPort), Target: target, ConfigState: status, Enabled: rule.Enabled}
 		if stats.ObservedSeconds > 0 || stats.Rules[rule.ID].Requests > 0 {
 			value := stats.Rules[rule.ID]
 			if value.Requests == 0 {
@@ -168,7 +170,7 @@ func (s *AppService) Dashboard(minutes int, selected string) Dashboard {
 			if rule.TLS {
 				protocol = "HTTPS"
 			}
-			row := DashboardRule{ID: rule.ID, Name: rule.Name, Protocol: protocol, Entry: strings.Join(rule.Domains, ", ") + ":" + itoa(rule.ListenPort), ListenAddress: dashboardListenAddress("0.0.0.0", rule.ListenPort), Target: httpTarget(rule, applied), ConfigState: "pending_delete", Enabled: true}
+			row := DashboardRule{ID: rule.ID, Name: rule.Name, Protocol: protocol, Entry: strings.Join(rule.Domains, ", ") + ":" + itoa(rule.ListenPort), EntryURLs: dashboardEntryURLs(rule), TargetURL: dashboardTargetURL(rule), ListenAddress: dashboardHTTPListenAddress(rule.ListenType, rule.ListenPort), Target: httpTarget(rule, applied), ConfigState: "pending_delete", Enabled: true}
 			if stats.ObservedSeconds > 0 || stats.Rules[rule.ID].Requests > 0 {
 				value := stats.Rules[rule.ID]
 				if value.Requests == 0 {
@@ -296,3 +298,49 @@ func httpTarget(rule domain.ProxyRule, state State) string {
 }
 
 func itoa(value int) string { return strconv.Itoa(value) }
+
+func dashboardHTTPListenAddress(listenType string, port int) string {
+	addresses := []string{}
+	for _, family := range domain.ListenFamilies(listenType) {
+		address := "0.0.0.0"
+		if family == "ipv6" {
+			address = "::"
+		}
+		addresses = append(addresses, dashboardListenAddress(address, port))
+	}
+	return strings.Join(addresses, ", ")
+}
+
+func dashboardEntryURLs(rule domain.ProxyRule) []string {
+	scheme := "http"
+	if rule.TLS {
+		scheme = "https"
+	}
+	urls := []string{}
+	for _, host := range rule.Domains {
+		urls = append(urls, scheme+"://"+net.JoinHostPort(strings.Trim(host, "[]"), itoa(rule.ListenPort)))
+	}
+	return urls
+}
+func dashboardTargetURL(rule domain.ProxyRule) string {
+	for _, loc := range rule.Locations {
+		if loc.Enabled {
+			return ""
+		}
+	}
+	loc := rule.RootLocation
+	if loc.BackendType != "" && loc.BackendType != "proxy" {
+		return ""
+	}
+	host, port, scheme, pool := rule.UpstreamHost, rule.UpstreamPort, rule.UpstreamScheme, rule.UpstreamPoolID
+	if loc.UpstreamHost != "" || loc.UpstreamPoolID != "" {
+		host, port, scheme, pool = loc.UpstreamHost, loc.UpstreamPort, loc.UpstreamScheme, loc.UpstreamPoolID
+	}
+	if pool != "" || host == "" {
+		return ""
+	}
+	if scheme == "" {
+		scheme = "http"
+	}
+	return scheme + "://" + net.JoinHostPort(strings.Trim(host, "[]"), itoa(port))
+}

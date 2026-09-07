@@ -176,11 +176,13 @@ export interface LocationRule {
   match: "prefix" | "exact" | "regex";
   settings: LocationSettings;
 }
-export type GroupField = "listen_port" | "tls" | "certificate_id" | "http2";
+export type ListenType = "ipv4" | "ipv6" | "dual";
+export type GroupField = "listen_type" | "listen_port" | "tls" | "certificate_id" | "http2";
 export interface RuleGroup {
- id: string; name: string; listen_port: number; tls: boolean; http2: boolean; certificate_id: string;
+ id: string; name: string; listen_type?: ListenType; listen_port: number; tls: boolean; http2: boolean; certificate_id: string;
 }
 export interface ProxyRuleInput {
+  listen_type?: ListenType;
   group_id?: string;
   inherit_fields?: GroupField[];
   name: string;
@@ -348,6 +350,8 @@ export interface MetricPoint {
   requests: number | null;
 }
 export interface DashboardRule {
+  entry_urls?: string[];
+  target_url?: string;
   id: string;
   name: string;
   protocol: string;

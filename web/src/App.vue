@@ -14,6 +14,12 @@ import {
 } from "vue";
 import {
   PhArrowClockwise,
+  PhArrowUp,
+  PhArrowDown,
+  PhArrowSquareOut,
+  PhCopy,
+  PhCaretDown,
+  PhCaretRight,
   PhArrowsLeftRight,
   PhCertificate,
   PhCheckCircle,
@@ -87,7 +93,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
   {
     id: "rules",
     icon: "http",
-    label: "代理 HTTP(S)",
+    label: "HTTP(S) 代理",
     subtitle: "管理域名、监听端口与后端服务",
   },
   {
@@ -177,6 +183,7 @@ function closePreview() {
 }
 const logLineLimit = ref(500);
 const logSearch = ref("");
+const logWrap = ref(false);
 const activeLogMatch = ref(0);
 const highlightedLogLines = computed(() => logLines.value.map(highlightLog));
 const searchedLogs = computed(() => searchLogLines(highlightedLogLines.value, logSearch.value));
@@ -202,6 +209,7 @@ watch(logSearch, (query) => {
 });
 const stopTheme = followSystemTheme();
 const stopScrollActivity = followScrollActivity();
+const acmeJobsPanel = ref<InstanceType<typeof ACMEJobs> | null>(null);
 const modal = ref<"rule" | "certificate" | null>(null),
   editingRule = ref<ProxyRule | null>(null),
   toasts = ref<Toast[]>([]),
@@ -278,6 +286,25 @@ const filteredRules = computed(() => {
         .includes(term)),
   );
 });
+const collapsedGroups = ref(new Set<string>());
+function toggleGroupExpanded(id: string) {
+  if (collapsedGroups.value.has(id)) collapsedGroups.value.delete(id);
+  else collapsedGroups.value.add(id);
+}
+const groupedRuleSections = computed(() => {
+  const groups: { id: string; name: string; group?: RuleGroup; rules: ProxyRule[] }[] = ruleGroups.value.map(group => ({ id: group.id, name: group.name, group, rules: filteredRules.value.filter(rule => rule.group_id === group.id) }));
+  const ungrouped = filteredRules.value.filter(rule => !rule.group_id);
+  if (ungrouped.length || !groups.length || selectedGroup.value === '') groups.push({ id: '', name: '未分组', rules: ungrouped });
+  const filtering = Boolean(ruleSearch.value || ruleProtocol.value !== 'all' || ruleEnabled.value !== 'all');
+  return groups.filter(group => (selectedGroup.value === 'all' || selectedGroup.value === group.id) && (!filtering || group.rules.length));
+});
+function groupDescription(group: RuleGroup) {
+  const family = group.listen_type === 'dual' ? 'IPv4 + IPv6' : group.listen_type === 'ipv6' ? 'IPv6' : 'IPv4';
+  const cert = state.value?.certificates.find(cert => cert.id === group.certificate_id)?.name || '未选择证书';
+  return `${group.tls ? 'HTTPS' : 'HTTP'} · ${group.listen_port} · ${family}${group.tls ? ` · ${cert} · HTTP/2 ${group.http2 ? '开启' : '关闭'}` : ''}`;
+}
+const newRuleGroup = ref('');
+function addRuleToGroup(id: string) { openRule(); newRuleGroup.value = id; }
 const hasRuleFilters = computed(() => Boolean(selectedGroup.value !== "all" || ruleSearch.value || ruleProtocol.value !== "all" || ruleEnabled.value !== "all"));
 function resetRuleFilters() {
   selectedGroup.value = "all";
@@ -288,12 +315,64 @@ function resetRuleFilters() {
 function formatRuleEntry(rule: ProxyRule, domain = rule.domains[0]): string {
   if (!domain) return `未配置域名:${rule.listen_port}`;
   if (domain === "*") return `所有域名:${rule.listen_port}`;
-  return `${formatHost(domain)}:${rule.listen_port}`;
+  return `${rule.tls ? "https" : "http"}://${formatHost(domain)}:${rule.listen_port}`;
+}
+function canOpenRuleEntry(domain?: string): boolean {
+  return Boolean(domain && !domain.includes("*"));
+}
+function formatRuleBackend(rule: ProxyRule): string {
+  return `${rule.upstream_scheme}://${formatHost(rule.upstream_host)}:${rule.upstream_port}`;
+}
+async function copyRuleEntry(rule: ProxyRule, domain: string) {
+  await copyProxyAddress(formatRuleEntry(rule, domain), "入口地址");
+}
+async function copyProxyAddress(value: string, label: string) {
+  try {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const previous = document.activeElement as HTMLElement | null;
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(input);
+      try {
+        input.select();
+        if (!document.execCommand("copy")) throw new Error("copy failed");
+      } finally { input.remove(); previous?.focus(); }
+    }
+    toast(`${label}已复制`, "success");
+  } catch { toast(`浏览器不允许复制，请手动选择${label}`, "error"); }
 }
 const configKeys = computed(() => [
   "master",
   ...Object.keys(config.value?.files ?? {}).sort(),
 ]);
+const configFileGroups = computed(() => {
+  const categories = [
+    { id: 'system', name: '系统配置', files: [] as { key: string; label: string }[] },
+    { id: 'http', name: 'HTTP(S) 代理', files: [] as { key: string; label: string }[] },
+    { id: 'stream', name: 'TCP/UDP 代理', files: [] as { key: string; label: string }[] },
+  ];
+  for (const key of configKeys.value.filter(key => key !== 'master')) {
+    const match = key.match(/^\d+-(\d+)-([a-f0-9]+)\.(conf|stream)$/i);
+    const kind = match ? match[3] === 'stream' ? 'stream' : 'http' : 'system';
+    let label = key;
+    if (match) {
+      const candidates = kind === 'stream' ? state.value?.stream_rules : state.value?.rules;
+      const rule = candidates?.find(rule => rule.id === match[2]);
+      label = rule ? `${rule.name} · ${Number(match[1])}` : key;
+    } else if (key === '000-monitoring.conf') label = '监控配置';
+    else if (key === '001-runtime-and-upstreams.conf') label = 'HTTP 公共配置与后端服务组';
+    else if (key === '001-stream-runtime.stream') label = 'TCP/UDP 公共配置与后端服务组';
+    else {
+      const fallback = key.match(/^000-default-(\d+)(-ipv6)?\.conf$/);
+      if (fallback) label = `默认站点 · ${Number(fallback[1])} · ${fallback[2] ? 'IPv6' : 'IPv4'}`;
+    }
+    categories.find(category => category.id === kind)!.files.push({ key, label });
+  }
+  return categories.filter(category => category.files.length);
+});
 const configText = computed(() =>
   configTab.value === "master"
     ? (config.value?.master ?? "")
@@ -437,6 +516,7 @@ async function applyConfiguration() {
 }
 function openRule(rule: ProxyRule | null = null) {
   editingRule.value = rule;
+  newRuleGroup.value = selectedGroup.value === "all" ? "" : selectedGroup.value;
   modal.value = "rule";
 }
 function openCertificate() {
@@ -529,7 +609,7 @@ async function deleteCertificate(id: string, name: string) {
   if (
     !(await ask(
       "删除 SSL/TLS 证书",
-      `确定删除“${name}”吗？该操作会同时删除本机保存的私钥，且无法恢复。`,
+      `确定删除“${name}”吗？将同时删除证书、私钥及关联的 ACME 任务和凭据，并停止自动续期。此操作无法恢复。`,
     ))
   )
     return;
@@ -859,6 +939,7 @@ onBeforeUnmount(() => {
             @overview="overview = $event" @add="openRule()" @apply="applyConfiguration"
             @test="runNginxAction('test')" @reload="runNginxAction('reload')" @start="runNginxAction('start')"
             @stop="stopNginx"
+            @copy="copyProxyAddress"
             @errors="openErrorDetails"
             @navigate="setPage"
           />
@@ -898,7 +979,21 @@ onBeforeUnmount(() => {
               @refresh="loadCore()"
           /></template>
           <template v-else-if="page === 'rules'"
-            ><div class="toolbar rule-filters" role="search" aria-label="HTTP/HTTPS 规则筛选">
+            ><div class="toolbar"><span
+                class="badge"
+                :class="state.dirty ? 'warning' : 'success'"
+                >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span>
+              <span class="rule-port-hint">监听端口 1024–65535，不占用系统 80/443</span>
+              <span class="spacer"></span
+              ><button class="button ghost" :disabled="busy" @click="loadCore()">
+                <PhArrowClockwise :size="15" aria-hidden="true" />刷新
+              </button>
+              <button class="button ghost" :disabled="busy" @click="groupPanel?.show()"><PhPlusCircle :size="17" aria-hidden="true" />新建分组</button>
+              <button class="button primary" @click="openRule()">
+                <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
+              </button>
+            </div>
+<div class="toolbar rule-filters" role="search" aria-label="HTTP/HTTPS 规则筛选">
               <input
                 v-model="ruleSearch"
                 class="input search-input"
@@ -906,6 +1001,10 @@ onBeforeUnmount(() => {
                 aria-label="搜索 HTTP/HTTPS 规则"
                 placeholder="搜索名称、域名、端口或目标"
               />
+              <AppSelect v-model="selectedGroup" class="select" aria-label="分组筛选">
+                <option value="all">全部分组</option><option value="">未分组</option>
+                <option v-for="group in ruleGroups" :key="group.id" :value="group.id">{{ group.name }}</option>
+              </AppSelect>
               <AppSelect v-model="ruleProtocol" class="select" aria-label="HTTP/HTTPS 协议筛选">
                 <option value="all">全部协议</option><option value="http">HTTP</option><option value="https">HTTPS</option>
               </AppSelect>
@@ -918,21 +1017,16 @@ onBeforeUnmount(() => {
             <RuleGroups ref="groupPanel" :groups="ruleGroups" :rules="state.rules" :certificates="state.certificates"
               :selected="selectedGroup" :busy="busy" :default-port="state.settings.default_http_port"
               :save="saveRuleGroup" :remove="deleteRuleGroup" @select="selectedGroup = $event" />
-            <div class="toolbar"><span
-                class="badge"
-                :class="state.dirty ? 'warning' : 'success'"
-                >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span
-              ><span class="spacer"></span
-              ><button class="button ghost" :disabled="busy" @click="loadCore()">
-                <PhArrowClockwise :size="15" aria-hidden="true" />刷新
-              </button>
-              <button class="button ghost" :disabled="busy" @click="groupPanel?.show()"><PhPlusCircle :size="17" aria-hidden="true" />新建分组</button>
-              <button class="button primary" @click="openRule()">
-                <PhPlusCircle :size="17" aria-hidden="true" />添加代理规则
-              </button>
-            </div>
-            <article class="card proxy-rule-card">
-              <div v-if="filteredRules.length" class="table-wrap">
+            <article v-for="section in groupedRuleSections" :key="section.id" class="card proxy-rule-card grouped-rule-card">
+              <header class="proxy-group-heading" :class="{ 'is-collapsed': collapsedGroups.has(section.id) }">
+                <div class="proxy-group-summary">
+                  <button type="button" class="button ghost small group-toggle" :aria-expanded="!collapsedGroups.has(section.id)" :aria-controls="`group-rules-${section.id || 'ungrouped'}`" :aria-label="`${collapsedGroups.has(section.id) ? '展开' : '收起'}分组 ${section.name}`" @click="toggleGroupExpanded(section.id)"><PhCaretRight v-if="collapsedGroups.has(section.id)" :size="15" aria-hidden="true" /><PhCaretDown v-else :size="15" aria-hidden="true" />{{ collapsedGroups.has(section.id) ? '展开' : '收起' }}</button>
+                  <h3>{{ section.name }}</h3><span class="proxy-group-count">{{ section.rules.length }} 条规则</span><p v-if="section.group" :title="groupDescription(section.group)">{{ groupDescription(section.group) }}</p>
+                </div>
+                <div class="table-actions"><button v-if="section.group" class="button ghost small" :disabled="busy" @click="groupPanel?.show(section.group)">编辑分组</button><button class="button ghost small" :disabled="busy" @click="addRuleToGroup(section.id)"><PhPlusCircle :size="15" />添加规则</button></div>
+              </header>
+              <div v-show="!collapsedGroups.has(section.id)" :id="`group-rules-${section.id || 'ungrouped'}`">
+              <div v-if="section.rules.length" class="table-wrap">
                 <table class="table">
                   <thead>
                     <tr>
@@ -945,7 +1039,7 @@ onBeforeUnmount(() => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr v-for="rule in filteredRules" :key="rule.id">
+                    <tr v-for="rule in section.rules" :key="rule.id">
                       <td>
                         <label class="switch"
                           ><input
@@ -963,29 +1057,18 @@ onBeforeUnmount(() => {
                         <div class="rule-name">{{ rule.name }}</div>
                       </td>
                       <td>
-                        <div v-for="domain in rule.domains" :key="domain">
-                          {{ formatRuleEntry(rule, domain) }}
+                        <div v-for="domain in rule.domains" :key="domain" class="proxy-entry">
+                          <span class="proxy-entry-url">{{ formatRuleEntry(rule, domain) }}</span>
+                          <button type="button" class="icon-button proxy-entry-action" :disabled="domain === '*'" :aria-label="`复制入口 ${formatRuleEntry(rule, domain)}`" title="复制入口地址" @click="copyRuleEntry(rule, domain)"><PhCopy :size="16" aria-hidden="true" /></button>
+                          <a v-if="canOpenRuleEntry(domain)" class="icon-button proxy-entry-action" :href="formatRuleEntry(rule, domain)" target="_blank" rel="noopener noreferrer" :aria-label="`在新窗口打开 ${formatRuleEntry(rule, domain)}`" title="在新窗口打开"><PhArrowSquareOut :size="16" aria-hidden="true" /></a>
+                          <button v-else type="button" class="icon-button proxy-entry-action" disabled aria-label="通配符域名无法直接打开" title="通配符域名需替换为实际域名后访问"><PhArrowSquareOut :size="16" aria-hidden="true" /></button>
                         </div>
-                        <div v-if="!rule.domains.length">
-                          {{ formatRuleEntry(rule) }}
-                        </div>
-                        <div class="rule-sub">
-                          <span
-                            class="badge"
-                            :class="rule.tls ? 'success' : 'info'"
-                          >{{ rule.tls ? "HTTPS" : "HTTP" }}</span
-                          >
-                        </div>
+                        <div v-if="!rule.domains.length">{{ formatRuleEntry(rule) }}</div>
                       </td>
                       <td>
-                        <div>
-                          {{ rule.upstream_scheme }}://{{
-                            formatHost(rule.upstream_host)
-                          }}:{{ rule.upstream_port }}
-                        </div>
-                        <div class="rule-sub">
-                          连接 {{ rule.connect_timeout_seconds }}s · 读取
-                          {{ rule.read_timeout_seconds }}s
+                        <div class="proxy-entry">
+                          <span class="proxy-entry-url">{{ formatRuleBackend(rule) }}</span>
+                          <button type="button" class="icon-button proxy-entry-action" :aria-label="`复制后端服务 ${formatRuleBackend(rule)}`" title="复制后端服务地址" @click="copyProxyAddress(formatRuleBackend(rule), '后端服务地址')"><PhCopy :size="16" aria-hidden="true" /></button>
                         </div>
                       </td>
                       <td class="hide-mobile">
@@ -1020,25 +1103,11 @@ onBeforeUnmount(() => {
                   </tbody>
                 </table>
               </div>
-              <div v-else class="empty-state">
-                <div class="empty-icon">⇄</div>
-                <h3>
-                  {{ selectedGroup !== 'all' ? "此分组暂无匹配的规则" : state.rules.length ? "没有匹配的规则" : "还没有代理规则" }}
-                </h3>
-                <p>
-                  {{
-                    state.rules.length
-                      ? "调整关键词、协议或启用状态后重试。"
-                      : "添加第一条规则，将域名或端口转发到 NAS、Docker 或局域网服务。"
-                  }}
-                </p>
+              <div v-else class="group-empty">此分组暂无规则，点击“添加规则”创建。</div>
               </div>
             </article>
-            <div class="notice section-gap">
-              只允许监听 1024–65535 的非特权端口，默认 HTTP 端口为
-              {{ state.settings.default_http_port }}。这可以避免使用 root
-              权限，也不会抢占飞牛系统的 80/443。
-            </div></template
+            <article v-if="!groupedRuleSections.length" class="card empty-state"><h3>没有匹配的规则</h3><p>调整分组、关键词、协议或状态筛选后重试。</p></article>
+            </template
           >
           <template v-else-if="page === 'certificates'"
             ><div class="toolbar">
@@ -1056,7 +1125,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <article class="card">
-              <ACMEJobs @changed="loadCore(true)" @action="acmeAction" />
+              <ACMEJobs ref="acmeJobsPanel" :certificates="state.certificates" @changed="loadCore(true)" @action="acmeAction" />
               <div v-if="state.certificates.length" class="table-wrap">
                 <table class="table">
                   <thead>
@@ -1072,23 +1141,16 @@ onBeforeUnmount(() => {
                     <tr v-for="cert in state.certificates" :key="cert.id">
                       <td>
                         <div class="rule-name">{{ cert.name }}</div>
-                        <div class="rule-sub">{{ cert.serial_number }}</div>
                       </td>
                       <td>
                         <div>
                           {{ (cert.dns_names ?? []).join(", ") || cert.subject || "—" }}
                         </div>
-                        <div class="rule-sub">{{ cert.subject }}</div>
                       </td>
                       <td>
-                        <span
-                          class="badge"
-                          :class="certificateState(cert.not_after).className"
-                          >{{ certificateState(cert.not_after).label }}</span
-                        >
-                        <div class="rule-sub">
-                          {{ formatDate(cert.not_before, true) }} ～
-                          {{ formatDate(cert.not_after, true) }}
+                        <div class="certificate-validity">
+                          <span class="badge" :class="certificateState(cert.not_after).className">{{ certificateState(cert.not_after).label }}</span>
+                          <span class="certificate-validity-dates">{{ formatDate(cert.not_before, true) }} ～ {{ formatDate(cert.not_after, true) }}</span>
                         </div>
                       </td>
                       <td>
@@ -1097,12 +1159,16 @@ onBeforeUnmount(() => {
                         }}</code>
                       </td>
                       <td>
+                        <div class="certificate-row-actions">
+                        <button class="button ghost small" @click="acmeJobsPanel?.showDetails(cert.id)">详情</button>
+                        <button class="button ghost small" @click="acmeJobsPanel?.showEdit(cert.id)">修改</button>
                         <button
                           class="button danger-ghost small"
                           @click="deleteCertificate(cert.id, cert.name)"
                         >
                           删除
                         </button>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -1141,12 +1207,13 @@ onBeforeUnmount(() => {
                   <option v-for="limit in [100, 200, 500, 1000, 2000]" :key="limit" :value="limit">最近 {{ limit }} 行</option>
                 </AppSelect>
                 <input v-model="logSearch" class="input" type="search" :placeholder="`搜索最近 ${logLineLimit} 行日志…`" aria-label="搜索日志内容" @keydown.enter.prevent="jumpLogMatch($event.shiftKey ? -1 : 1)" @keydown.esc.prevent="logSearch = ''" />
-                <span class="log-search-count" aria-live="polite">{{ logSearch ? searchedLogs.count ? `${activeLogMatch + 1} / ${searchedLogs.count}` : '无匹配' : '' }}</span>
-                <button class="button ghost small" :disabled="!searchedLogs.count" aria-label="上一个匹配" title="上一个匹配（Shift+Enter）" @click="jumpLogMatch(-1)">↑</button>
-                <button class="button ghost small" :disabled="!searchedLogs.count" aria-label="下一个匹配" title="下一个匹配（Enter）" @click="jumpLogMatch(1)">↓</button>
+                <span v-if="logSearch" class="log-search-count" aria-live="polite">{{ logSearch ? searchedLogs.count ? `${activeLogMatch + 1} / ${searchedLogs.count}` : '无匹配' : '' }}</span>
+                <button v-if="logSearch" class="button ghost small log-match-button" :disabled="!searchedLogs.count" aria-label="上一个匹配" title="上一个匹配（Shift+Enter）" @click="jumpLogMatch(-1)"><PhArrowUp :size="18" weight="bold" aria-hidden="true" /></button>
+                <button v-if="logSearch" class="button ghost small log-match-button" :disabled="!searchedLogs.count" aria-label="下一个匹配" title="下一个匹配（Enter）" @click="jumpLogMatch(1)"><PhArrowDown :size="18" weight="bold" aria-hidden="true" /></button>
                 <button v-if="logSearch" class="button ghost small" @click="logSearch = ''">清除</button>
+                <label class="checkbox-row log-wrap-toggle"><input v-model="logWrap" type="checkbox" />自动换行</label>
               </div>
-              <pre ref="logView" class="log-view"><template v-if="logLines.length"><template v-for="(line, lineIndex) in searchedLogs.lines" :key="lineIndex"><span v-for="(token, tokenIndex) in line" :key="tokenIndex" :data-log-match="token.matchIndex" :class="[token.tone ? `log-token-${token.tone}` : undefined, { 'log-search-hit': token.matchIndex !== undefined, 'log-search-current': token.matchIndex !== undefined && token.matchIndex === activeLogMatch }]">{{ token.text }}</span>{{ lineIndex < highlightedLogLines.length - 1 ? '\n' : '' }}</template></template><template v-else>{{ logsLoading ? "正在读取…" : "暂无日志。" }}</template></pre>
+              <pre ref="logView" class="log-view" :class="{ 'is-wrapped': logWrap }"><template v-if="logLines.length"><template v-for="(line, lineIndex) in searchedLogs.lines" :key="lineIndex"><span v-for="(token, tokenIndex) in line" :key="tokenIndex" :data-log-match="token.matchIndex" :class="[token.tone ? `log-token-${token.tone}` : undefined, { 'log-search-hit': token.matchIndex !== undefined, 'log-search-current': token.matchIndex !== undefined && token.matchIndex === activeLogMatch }]">{{ token.text }}</span>{{ lineIndex < highlightedLogLines.length - 1 ? '\n' : '' }}</template></template><template v-else>{{ logsLoading ? "正在读取…" : "暂无日志。" }}</template></pre>
             </article></template
           >
           <template v-else-if="page === 'revisions'"
@@ -1283,17 +1350,14 @@ onBeforeUnmount(() => {
                   复制当前文件
                 </button>
               </header>
-              <div class="code-tabs">
-                <button
-                  v-for="key in configKeys"
-                  :key="key"
-                  class="code-tab"
-                  :class="{ active: key === configTab }"
-                  @click="configTab = key"
-                >
-                  {{ key === "master" ? "nginx.conf" : key }}
-                </button>
-              </div>
+              <nav class="config-file-selectors" aria-label="配置文件分类">
+                <button class="button ghost" :class="{ 'config-category-active': configTab === 'master' }" :aria-pressed="configTab === 'master'" @click="configTab = 'master'">主配置</button>
+                <AppSelect v-for="category in configFileGroups" :key="category.id" class="select config-category-select" :class="{ 'config-category-active': category.files.some(file => file.key === configTab) }" :aria-label="category.name" :model-value="category.files.some(file => file.key === configTab) ? configTab : ''" @update:model-value="configTab = $event">
+                  <option value="" disabled>{{ category.name }}</option>
+                  <option v-for="file in category.files" :key="file.key" :value="file.key">{{ file.label }}</option>
+                </AppSelect>
+              </nav>
+              <div class="config-current-file">{{ configTab === 'master' ? 'nginx.conf' : configTab }}</div>
               <pre class="code-view">{{
                 config ? configText : "正在读取…"
               }}</pre>
@@ -1369,7 +1433,7 @@ onBeforeUnmount(() => {
           v-if="modal === 'rule'"
           :rule="editingRule"
           :groups="ruleGroups"
-          :initial-group="selectedGroup === 'all' ? '' : selectedGroup"
+          :initial-group="newRuleGroup"
           :settings="state!.settings"
           :certificates="state!.certificates"
           :upstream-pools="state!.upstream_pools"

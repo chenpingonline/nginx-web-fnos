@@ -100,7 +100,7 @@ onBeforeUnmount(() => { close(); clearTimeout(searchTimer); });
 .app-select.select { position: relative; padding-right: 30px; }
 .app-select::after { content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-70%) rotate(45deg); pointer-events: none; }
 .app-select { text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.app-select-menu { z-index: 10000; overflow-y: auto; padding: 5px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-solid); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); font-size: 13px; scrollbar-width: thin; }
+.app-select-menu { z-index: 10000; overflow-y: auto; padding: 5px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-solid); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); font-size: 15px; scrollbar-width: thin; }
 .app-select-option { min-height: 32px; display: flex; gap: 7px; align-items: center; padding: 6px 9px; border-radius: 5px; cursor: pointer; line-height: 20px; overflow-wrap: anywhere; }
 .app-select-option > span:last-child { min-width: 0; }
 .app-select-option.highlighted { background: var(--surface-soft); }

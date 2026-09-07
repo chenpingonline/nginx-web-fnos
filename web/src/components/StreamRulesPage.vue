@@ -3,6 +3,7 @@ import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import {
   PhArrowClockwise,
+  PhShareNetwork,
   PhPlusCircle,
   PhX,
 } from "@phosphor-icons/vue";
@@ -133,17 +134,6 @@ watch(
 );
 </script>
 <template>
-  <div class="toolbar rule-filters" role="search" aria-label="TCP/UDP 规则筛选">
-    <input v-model="search" class="input search-input" type="search" aria-label="搜索 TCP/UDP 规则" placeholder="搜索名称、监听地址、端口或目标" />
-    <AppSelect v-model="protocolFilter" class="select" aria-label="TCP/UDP 协议筛选">
-      <option value="all">全部协议</option><option value="tcp">TCP</option><option value="udp">UDP</option>
-    </AppSelect>
-    <AppSelect v-model="enabledFilter" class="select" aria-label="TCP/UDP 启用状态筛选">
-      <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
-    </AppSelect>
-    <button class="button ghost" :disabled="!hasFilters" @click="resetFilters">重置筛选</button>
-    <span class="filter-count">{{ filteredRules.length }} / {{ rules.length }} 条</span>
-  </div>
   <div class="toolbar">
     <div class="notice">
       四层代理独立于 HTTP 规则，适用于 SSH、数据库、MQTT、游戏服务和 HTTPS SNI
@@ -156,6 +146,17 @@ watch(
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加 TCP/UDP 规则
     </button>
+  </div>
+  <div class="toolbar rule-filters" role="search" aria-label="TCP/UDP 规则筛选">
+    <input v-model="search" class="input search-input" type="search" aria-label="搜索 TCP/UDP 规则" placeholder="搜索名称、监听地址、端口或目标" />
+    <AppSelect v-model="protocolFilter" class="select" aria-label="TCP/UDP 协议筛选">
+      <option value="all">全部协议</option><option value="tcp">TCP</option><option value="udp">UDP</option>
+    </AppSelect>
+    <AppSelect v-model="enabledFilter" class="select" aria-label="TCP/UDP 启用状态筛选">
+      <option value="all">全部状态</option><option value="enabled">已启用</option><option value="disabled">已停用</option>
+    </AppSelect>
+    <button class="button ghost" :disabled="!hasFilters" @click="resetFilters">重置筛选</button>
+    <span class="filter-count">{{ filteredRules.length }} / {{ rules.length }} 条</span>
   </div>
   <article class="card proxy-rule-card">
     <div v-if="filteredRules.length" class="table-wrap">
@@ -237,12 +238,13 @@ watch(
   </article>
   <div v-if="open" class="modal-backdrop" @mousedown.self="open = false">
     <section
-      class="modal stream-modal"
+      class="modal rule-modal stream-modal"
       role="dialog"
       aria-modal="true"
       aria-labelledby="stream-title"
     >
       <header class="modal-header">
+        <PhShareNetwork class="stream-heading-icon" :size="32" aria-hidden="true" />
         <div>
           <h2 id="stream-title">
             {{ editing ? "编辑" : "添加" }} TCP/UDP 规则
@@ -260,31 +262,14 @@ watch(
         </button>
       </header>
       <div class="modal-body">
-        <form id="stream-rule-form" class="form-grid modal-form-grid" @submit.prevent="submit">
-          <div class="field">
-            <label>名称</label
-            ><input
-              v-model.trim="form.name"
-              class="input"
-              required
-              maxlength="80"
-              autofocus
-            />
+        <form id="stream-rule-form" class="form-grid modal-form-grid stream-form" @submit.prevent="submit">
+          <div class="stream-basics">
+            <div class="field"><label for="stream-name">规则名称</label><input id="stream-name" v-model.trim="form.name" class="input" required maxlength="80" autofocus /></div>
+            <div class="field"><label for="stream-protocol">协议</label><AppSelect id="stream-protocol" v-model="form.protocol" class="select"><option value="tcp">TCP</option><option value="udp">UDP</option></AppSelect></div>
+            <label class="checkbox-row stream-enabled"><input v-model="form.enabled" type="checkbox" />启用</label>
           </div>
-          <div class="field">
-            <label>状态</label
-            ><label class="checkbox-row"
-              ><input v-model="form.enabled" type="checkbox" />启用规则</label
-            >
-          </div>
-          <div class="form-section">监听入口</div>
-          <div class="field">
-            <label>协议</label
-            ><AppSelect v-model="form.protocol" class="select">
-              <option value="tcp">TCP</option>
-              <option value="udp">UDP</option>
-            </AppSelect>
-          </div>
+          <div class="form-section"><span>监听设置</span><small>设置接收连接的地址与端口</small></div>
+          <section class="stream-settings-panel" aria-label="监听设置">
           <div class="field">
             <label>监听地址</label
             ><input
@@ -325,7 +310,9 @@ watch(
               placeholder="仅在接收 PROXY Protocol 时填写"
             ></textarea>
           </div>
-          <div class="form-section">后端服务</div>
+          </section>
+          <div class="form-section"><span>后端服务</span><small>选择连接需要转发的位置</small></div>
+          <section class="stream-settings-panel" aria-label="后端服务">
           <div class="field full">
             <label>Stream 后端服务组</label
             ><AppSelect v-model="form.upstream_pool_id" class="select">
@@ -361,6 +348,9 @@ watch(
                 required
               /></div
           ></template>
+          </section>
+          <div class="form-section"><span>连接设置</span><small>调整连接和会话的最长等待时间</small></div>
+          <section class="stream-settings-panel" aria-label="连接设置">
           <div class="field">
             <label>连接超时（秒）</label
             ><input
@@ -391,7 +381,9 @@ watch(
               max="1000"
             />
           </div>
-          <div class="form-section">TLS</div>
+          </section>
+          <div class="form-section"><span>TLS 设置</span><small>配置加密连接与 SNI 透传</small></div>
+          <section class="stream-settings-panel" aria-label="TLS 设置">
           <div class="field">
             <label>TLS 模式</label
             ><AppSelect
@@ -418,7 +410,7 @@ watch(
             </AppSelect>
           </div>
           <template v-if="form.tls_mode === 'passthrough'"
-            ><div class="form-section">SNI 分流</div>
+            ><div class="stream-subheading full">SNI 分流</div>
             <div
               v-for="(route, index) in form.sni_routes"
               :key="index"
@@ -471,7 +463,9 @@ watch(
               </button>
             </div></template
           >
-          <div class="form-section">安全与日志</div>
+          </section>
+          <div class="form-section"><span>安全与日志</span><small>控制访问范围与连接记录</small></div>
+          <section class="stream-settings-panel" aria-label="安全与日志">
           <div class="field">
             <label>日志与连接限制</label
             ><label class="checkbox-row"
@@ -494,8 +488,39 @@ watch(
             <label>拒绝 IP / CIDR</label
             ><textarea v-model="denyText" class="textarea"></textarea>
           </div>
+          </section>
         </form>
       </div>
     </section>
   </div>
 </template>
+
+<style scoped>
+.stream-heading-icon { color: var(--accent); flex-shrink: 0; }
+.stream-form { gap: 13px 48px; }
+.stream-basics { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 44px; }
+#stream-rule-form .stream-basics > .field { grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.stream-enabled { white-space: nowrap; }
+.stream-form > .form-section { position: relative; min-height: 38px; margin-top: 5px; padding: 7px 0 6px 12px; display: flex; align-items: center; gap: 14px; border: 0; color: var(--text); }
+.stream-form > .form-section::before { content: ""; position: absolute; left: 0; width: 2px; height: 20px; border-radius: 999px; background: var(--accent); }
+.stream-form > .form-section::after { content: ""; height: 1px; flex: 1; background: var(--line); }
+.stream-form > .form-section > span { font-size: 18px; font-weight: 660; white-space: nowrap; }
+.stream-form > .form-section > small { color: var(--text-muted); font-size: 12px; font-weight: 450; }
+.stream-settings-panel { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 48px; padding: 20px 24px; border: 1px solid color-mix(in srgb, var(--text) 24%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--surface-soft) 55%, var(--surface)); }
+#stream-rule-form .field { grid-template-columns: 112px minmax(0, 1fr); gap: 4px 10px; }
+.stream-form .field > label:first-child { min-height: 38px; font-size: 15px; font-weight: 620; }
+.stream-form .input, .stream-form .select { min-height: 38px; border-radius: 8px; font-size: 15px; }
+.stream-form .textarea { min-height: 66px; border-radius: 8px; font-size: 15px; }
+.stream-form .input[type="number"] { width: min(100%, 145px); }
+.stream-form .checkbox-row { min-height: 38px; gap: 8px; font-size: 15px; }
+.stream-form .checkbox-row input { width: 17px; height: 17px; }
+.stream-form .field > .checkbox-row { grid-column: 2; }
+.stream-subheading { font-size: 15px; font-weight: 620; padding-top: 8px; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .stream-basics, .stream-settings-panel { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .stream-settings-panel { padding: 16px 12px; }
+  .stream-form > .form-section { flex-wrap: wrap; gap: 8px; }
+  #stream-rule-form .field { grid-template-columns: minmax(0, 1fr); }
+  .stream-form .field > .checkbox-row { grid-column: 1; }
+}
+</style>

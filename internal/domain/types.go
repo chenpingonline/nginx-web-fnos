@@ -43,6 +43,7 @@ type Settings struct {
 }
 
 type ProxyRule struct {
+	ListenType            string            `json:"listen_type,omitempty"`
 	GroupID               string            `json:"group_id,omitempty"`
 	InheritFields         []string          `json:"inherit_fields,omitempty"`
 	ID                    string            `json:"id"`
@@ -231,6 +232,9 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 }
 
 func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map[string]UpstreamPool) error {
+	if err := ValidateListenType(rule.ListenType); err != nil {
+		return err
+	}
 	if !idPattern.MatchString(rule.ID) {
 		return errors.New("规则 ID 格式不正确")
 	}
@@ -377,7 +381,7 @@ func ValidateState(state State) error {
 		domains  map[string]string
 		catchAll string
 	}
-	ports := make(map[int]*portInfo)
+	ports := make(map[string]*portInfo)
 	ids := make(map[string]struct{})
 
 	for _, rule := range state.Rules {
@@ -396,25 +400,28 @@ func ValidateState(state State) error {
 		if !rule.Enabled {
 			continue
 		}
-		info, ok := ports[rule.ListenPort]
-		if !ok {
-			info = &portInfo{tls: rule.TLS, domains: make(map[string]string)}
-			ports[rule.ListenPort] = info
-		} else if info.tls != rule.TLS {
-			return fmt.Errorf("端口 %d 不能同时承载 HTTP 与 HTTPS 规则", rule.ListenPort)
-		}
-		for _, domain := range rule.Domains {
-			if domain == "*" {
-				if info.catchAll != "" && info.catchAll != rule.ID {
-					return fmt.Errorf("端口 %d 只能有一条默认规则", rule.ListenPort)
+		for _, family := range ListenFamilies(rule.ListenType) {
+			key := fmt.Sprintf("%s/%d", family, rule.ListenPort)
+			info, ok := ports[key]
+			if !ok {
+				info = &portInfo{tls: rule.TLS, domains: make(map[string]string)}
+				ports[key] = info
+			} else if info.tls != rule.TLS {
+				return fmt.Errorf("端口 %d 不能同时承载 HTTP 与 HTTPS 规则", rule.ListenPort)
+			}
+			for _, domain := range rule.Domains {
+				if domain == "*" {
+					if info.catchAll != "" && info.catchAll != rule.ID {
+						return fmt.Errorf("端口 %d 只能有一条默认规则", rule.ListenPort)
+					}
+					info.catchAll = rule.ID
+					continue
 				}
-				info.catchAll = rule.ID
-				continue
+				if previous, exists := info.domains[domain]; exists && previous != rule.ID {
+					return fmt.Errorf("端口 %d 上的域名 %s 被多条规则重复使用", rule.ListenPort, domain)
+				}
+				info.domains[domain] = rule.ID
 			}
-			if previous, exists := info.domains[domain]; exists && previous != rule.ID {
-				return fmt.Errorf("端口 %d 上的域名 %s 被多条规则重复使用", rule.ListenPort, domain)
-			}
-			info.domains[domain] = rule.ID
 		}
 	}
 	streamPorts := make(map[string]string)
@@ -431,8 +438,16 @@ func ValidateState(state State) error {
 		}
 		streamPorts[key] = rule.Name
 		if rule.Protocol == "tcp" && (rule.ListenAddress == "*" || rule.ListenAddress == "0.0.0.0" || rule.ListenAddress == "::") {
-			if _, exists := ports[rule.ListenPort]; exists {
-				return fmt.Errorf("Stream TCP 端口 %d 与 HTTP 规则冲突", rule.ListenPort)
+			for _, family := range []string{"ipv4", "ipv6"} {
+				if family == "ipv4" && rule.ListenAddress == "::" {
+					continue
+				}
+				if family == "ipv6" && rule.ListenAddress != "::" {
+					continue
+				}
+				if _, exists := ports[fmt.Sprintf("%s/%d", family, rule.ListenPort)]; exists {
+					return fmt.Errorf("Stream TCP 端口 %d 与 HTTP 规则冲突", rule.ListenPort)
+				}
 			}
 		}
 	}

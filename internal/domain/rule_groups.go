@@ -9,6 +9,7 @@ import (
 // RuleGroup provides live defaults; resolved values stay on rules for rendering
 // and for preserving access settings when a rule leaves its group.
 type RuleGroup struct {
+	ListenType    string `json:"listen_type,omitempty"`
 	ID            string `json:"id"`
 	Name          string `json:"name"`
 	ListenPort    int    `json:"listen_port"`
@@ -24,6 +25,8 @@ func ResolveRuleGroup(rule *ProxyRule, groups []RuleGroup) {
 		}
 		for _, field := range rule.InheritFields {
 			switch field {
+			case "listen_type":
+				rule.ListenType = group.ListenType
 			case "listen_port":
 				rule.ListenPort = group.ListenPort
 			case "tls":
@@ -49,6 +52,9 @@ func ValidateRuleGroups(state State) error {
 		certs[cert.ID] = true
 	}
 	for _, group := range state.RuleGroups {
+		if err := ValidateListenType(group.ListenType); err != nil {
+			return err
+		}
 		name := strings.TrimSpace(group.Name)
 		if !ValidID(group.ID) || groups[group.ID] {
 			return errors.New("分组 ID 无效或重复")
@@ -82,7 +88,7 @@ func ValidateRuleGroups(state State) error {
 			}
 			fields[field] = true
 			switch field {
-			case "listen_port", "tls", "certificate_id", "http2":
+			case "listen_type", "listen_port", "tls", "certificate_id", "http2":
 			default:
 				return errors.New("不支持的分组继承字段")
 			}

@@ -426,7 +426,7 @@ watch(
   background: transparent;
   color: var(--text-secondary, var(--text-muted));
   font: inherit;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 16px;
   cursor: pointer;
   white-space: nowrap;
@@ -434,7 +434,7 @@ watch(
 }
 .legend-item small {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 .legend-item.series-muted {
   opacity: 0.42;
@@ -458,7 +458,7 @@ watch(
   display: flex;
   justify-content: space-between;
   min-height: 16px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .chart-scale {
@@ -470,7 +470,7 @@ watch(
   text-align: right;
   padding-right: 12px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   transform: translateY(-0.5em);
@@ -532,7 +532,7 @@ svg {
   color: var(--text-muted);
   background: var(--surface);
   border-radius: 9px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .chart-empty strong {
   color: var(--text);
@@ -550,7 +550,7 @@ svg {
   color: var(--text);
   border: 1px solid var(--line-strong);
   box-shadow: 0 3px 14px rgb(25 54 40 / 8%);
-  font-size: 11px;
+  font-size: 13px;
   pointer-events: none;
 }
 .chart-tooltip.tooltip-left {
@@ -581,7 +581,7 @@ svg {
   justify-content: space-between;
   margin-top: 5px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 .compact {
@@ -604,15 +604,15 @@ svg {
     column-gap: 14px;
   }
   .legend-item {
-    font-size: 11px;
+    font-size: 13px;
     gap: 5px;
   }
   .legend-item small {
-    font-size: 9px;
+    font-size: 11px;
   }
   .chart-scale {
     padding-right: 7px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .right-scale {
     padding-left: 6px;
@@ -624,13 +624,13 @@ svg {
     line-height: 1.6;
   }
   .chart-times {
-    font-size: 10px;
+    font-size: 12px;
   }
   .chart-times span:nth-child(even) {
     visibility: hidden;
   }
   .chart-tooltip {
-    font-size: 10px;
+    font-size: 12px;
     padding: 8px;
   }
   .tooltip-row strong {

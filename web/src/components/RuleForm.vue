@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ListenTypePicker from "./ListenTypePicker.vue";
 import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, watch } from "vue";
 import type {
@@ -74,6 +75,7 @@ const form = reactive<ProxyRuleInput>({
   locations: [],
 });
 const inheritanceOptions: { key: GroupField; label: string }[] = [
+  { key: "listen_type", label: "监听类型" },
   { key: "tls", label: "入口协议" }, { key: "listen_port", label: "监听端口" },
   { key: "certificate_id", label: "证书" }, { key: "http2", label: "HTTP/2" },
 ];
@@ -82,6 +84,7 @@ const inherits = (field: GroupField) => Boolean(selectedGroup.value && form.inhe
 function syncInherited() {
   const group = selectedGroup.value;
   if (!group) return;
+  if (inherits("listen_type")) form.listen_type = group.listen_type || "ipv4";
   if (inherits("tls")) form.tls = group.tls;
   if (inherits("listen_port")) form.listen_port = group.listen_port;
   if (inherits("certificate_id")) form.certificate_id = group.certificate_id;
@@ -100,6 +103,7 @@ watch(
   (rule) => {
     Object.assign(
       form,
+      { listen_type: "ipv4" },
       rule ?? {
         name: "",
         enabled: true,
@@ -169,7 +173,31 @@ function changeTLS() {
   syncInherited();
   if (!form.tls) form.certificate_id = "";
 }
+function parseBackendAddress(value: string) {
+  const raw = value.trim();
+  const hasScheme = /^https?:\/\//i.test(raw);
+  // Leave plain hosts and unbracketed IPv6 unchanged.
+  if (!hasScheme && !/^(?:\[[^\]]+\]|[^:/\s]+):\d+$/.test(raw)) return null;
+  try {
+    const url = new URL(hasScheme ? raw : `${form.upstream_scheme}://${raw}`);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    const port = Number(url.port || (url.protocol === 'https:' ? 443 : 80));
+    if (!url.hostname || port < 1 || port > 65535) return null;
+    return { upstream_host: url.hostname.replace(/^\[|\]$/g, ''), upstream_port: port, upstream_scheme: url.protocol === 'https:' ? 'https' as const : 'http' as const };
+  } catch { return null; }
+}
+function normalizeBackendAddress() {
+  const parsed = parseBackendAddress(form.upstream_host);
+  if (parsed) Object.assign(form, parsed);
+}
+function pasteBackendAddress(event: ClipboardEvent) {
+  const parsed = parseBackendAddress(event.clipboardData?.getData('text') || '');
+  if (!parsed) return;
+  event.preventDefault();
+  Object.assign(form, parsed);
+}
 function submit() {
+  if (!form.upstream_pool_id) normalizeBackendAddress();
   Object.assign(form.root_location, {
     upstream_scheme: form.upstream_scheme,
     upstream_pool_id: form.upstream_pool_id,
@@ -195,18 +223,15 @@ function addLocation() {
 </script>
 <template>
   <form id="proxy-rule-form" class="form-grid modal-form-grid rule-form-grid" @submit.prevent="submit">
-    <div class="field full">
+    <div class="rule-basics-row">
+    <div class="field">
       <label for="rule-group">所属分组</label>
       <AppSelect id="rule-group" :model-value="form.group_id || ''" class="select" @update:model-value="changeGroup">
         <option value="">未分组</option><option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
       </AppSelect>
-      <div v-if="selectedGroup" class="field-help group-inheritance">
-        <span>继承分组设置（取消勾选可自定义）：</span>
-        <label v-for="option in inheritanceOptions" :key="option.key" class="checkbox-row"><input v-model="form.inherit_fields" type="checkbox" :value="option.key" />{{ option.label }}</label>
-        <span v-if="rule">移动分组时保留原配置，勾选后才使用分组默认值。</span>
-      </div>
+
     </div>
-    <div class="field primary-field primary-left">
+    <div class="field">
       <label for="rule-name">规则名称</label
       ><input
         id="rule-name"
@@ -217,15 +242,19 @@ function addLocation() {
         autofocus
       />
     </div>
-    <div class="field primary-field primary-right">
-      <label>规则状态</label
-      ><label class="checkbox-row"
-        ><input v-model="form.enabled" type="checkbox" /> 启用此规则</label
-      >
+    <label class="checkbox-row rule-enabled" title="启用或停用此规则">
+      <input v-model="form.enabled" type="checkbox" aria-label="启用此规则" />启用
+    </label>
     </div>
+      <div v-if="selectedGroup" class="field-help group-inheritance full">
+        <span>继承分组设置（取消勾选可自定义）：</span>
+        <label v-for="option in inheritanceOptions" :key="option.key" class="checkbox-row"><input v-model="form.inherit_fields" type="checkbox" :value="option.key" />{{ option.label }}</label>
+        <span v-if="rule">移动分组时保留原配置，勾选后才使用分组默认值。</span>
+      </div>
     <div class="form-section">
       <span>监听设置</span><small>定义访问域名、监听端口与协议</small>
     </div>
+    <section class="rule-settings-panel" aria-label="监听设置">
     <div class="field full section-content entry-domain-field">
       <label for="rule-domains">访问域名 / IP</label
       ><textarea
@@ -239,6 +268,7 @@ function addLocation() {
         >多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。</span
       >
     </div>
+    <div class="field full section-content"><label>监听类型</label><ListenTypePicker v-model="form.listen_type" :disabled="inherits('listen_type')" /><span class="field-help">IPv6 入口可以转发到 IPv4 后端；需放行对应端口。</span></div>
     <div class="field section-content section-left">
       <label for="listen-port">监听端口</label
       ><input
@@ -280,9 +310,11 @@ function addLocation() {
         ><input v-model="form.http2" :disabled="inherits('http2')" type="checkbox" /> 启用 HTTP/2</label
       >
     </div>
+    </section>
     <div class="form-section">
       <span>后端服务</span><small>选择请求需要转发到的位置</small>
     </div>
+    <section class="rule-settings-panel" aria-label="后端服务">
     <div class="target-service-fields full section-content">
       <div class="field target-pool-field">
         <label for="upstream-pool">后端服务组</label
@@ -320,11 +352,13 @@ function addLocation() {
         <label for="upstream-host">目标主机</label
         ><input
           id="upstream-host"
+          @paste="pasteBackendAddress"
+          @blur="normalizeBackendAddress"
           v-model.trim="form.upstream_host"
           class="input"
           required
-          placeholder="127.0.0.1 或 192.168.1.20"
-        />
+          placeholder="IP、域名或 http://192.168.1.22:2330"
+        /><span class="field-help">粘贴完整地址可自动填写协议和端口；手动输入后移开焦点即可识别。</span>
       </div>
       <div v-if="!form.upstream_pool_id" class="field">
         <label for="upstream-port">目标端口</label
@@ -349,9 +383,11 @@ function addLocation() {
         SSL/TLS 证书</label
       >
     </div>
+    </section>
     <div class="form-section">
       <span>代理能力</span><small>控制请求头、连接升级与传输方式</small>
     </div>
+    <section class="rule-settings-panel" aria-label="代理能力">
     <div class="field section-content section-left">
       <label>请求 Host</label
       ><label class="checkbox-row"
@@ -383,9 +419,11 @@ function addLocation() {
         max="102400"
       /><span class="field-help">0 表示不限制。</span>
     </div>
+    </section>
     <div class="form-section">
       <span>超时设置</span><small>调整连接和响应的最长等待时间</small>
     </div>
+    <section class="rule-settings-panel" aria-label="超时设置">
     <div class="field section-content section-left">
       <label>连接超时（秒）</label
       ><input
@@ -422,9 +460,11 @@ function addLocation() {
         ><input v-model="applyAfter" type="checkbox" /> 保存后立即应用</label
       >
     </div>
+    </section>
     <div class="form-section">
       <span>访问限流</span><small>复用限流参数，每条规则独立计算额度</small>
     </div>
+    <section class="rule-settings-panel" aria-label="访问限流">
     <div class="field full section-content entry-domain-field">
       <label for="rate-limit-policy">限流策略</label
       ><AppSelect
@@ -444,19 +484,23 @@ function addLocation() {
         >同一策略可供多条规则复用，但每条规则分别计数、互不占用额度。</span
       >
     </div>
+    </section>
     <div class="form-section">
       <span>根路径与高级能力</span><small>设置缓存、重写、鉴权与内容处理</small>
     </div>
+    <section class="rule-settings-panel" aria-label="根路径与高级能力">
     <div class="full location-card section-content">
       <div class="location-card-title"><strong>根路径 /</strong><span>缓存、静态网站、重写、鉴权与内容处理</span></div>
       <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" root />
     </div>
+    </section>
     <div class="form-section section-actions">
       <span>自定义 Location</span><small>为指定路径覆盖独立代理规则</small
       ><button type="button" class="button ghost compact" @click="addLocation">
         添加路径
       </button>
     </div>
+    <section class="rule-settings-panel" aria-label="自定义 Location">
     <div
       v-if="form.locations.length === 0"
       class="empty-inline full section-content"
@@ -471,11 +515,35 @@ function addLocation() {
       </div>
       <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" />
     </div>
+    </section>
   </form>
 </template>
 
 <style scoped>
+.rule-enabled { align-self: center; white-space: nowrap; }
+.rule-basics-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 44px; align-items: start; }
+#proxy-rule-form .rule-basics-row > .field { grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: center; }
+.rule-form-grid .rule-basics-row > .field > label:first-child { font-size: 15px; font-weight: 620; white-space: nowrap; }
+.rule-form-grid .rule-basics-row #rule-name { width: 100%; }
+@media (max-width: 760px) { .rule-basics-row { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
+
+.rule-settings-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 48px;
+  padding: 20px 24px;
+  border: 1px solid color-mix(in srgb, var(--text) 24%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 55%, var(--surface));
+}
+.rule-settings-panel > .field:not(.standalone-field) > label:first-child { min-height: 38px; font-size: 15px; font-weight: 620; }
+@media (max-width: 760px) {
+  .rule-settings-panel { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px 12px; }
+}
+
 .group-inheritance { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
-.group-inheritance .checkbox-row { font-size: 12px; font-weight: 400; }
+.group-inheritance .checkbox-row { font-size: 14px; font-weight: 400; }
 .group-inheritance > span:last-child { flex-basis: 100%; }
 </style>

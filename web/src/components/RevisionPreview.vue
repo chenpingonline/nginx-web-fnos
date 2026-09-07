@@ -91,16 +91,16 @@ const strategies: Record<string, string> = { round_robin: "轮询", least_conn: 
 .preview-body { padding: 20px; overflow-y: auto; min-height: 0; }
 .preview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .preview-stats div { display: flex; align-items: baseline; gap: 8px; }
-.preview-stats strong { font-size: 22px; }
+.preview-stats strong { font-size: 24px; }
 .preview-stats span, .preview-muted, .preview-label, dt { color: var(--text-muted); }
 .preview-section { margin-top: 20px; }
-h3 { font-size: 13px; margin: 0 0 10px; }
+h3 { font-size: 15px; margin: 0 0 10px; }
 .preview-rule { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-top: 8px; overflow-wrap: anywhere; }
 .preview-rule-heading { display: flex; align-items: center; gap: 10px; }
 .preview-route { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 12px; margin-top: 12px; line-height: 1.7; }
-.preview-label { display: block; font-size: 11px; }
+.preview-label { display: block; font-size: 13px; }
 .route-arrow { color: var(--text-muted); }
-.preview-features { margin: 10px 0 0; color: var(--text-muted); font-size: 11px; }
+.preview-features { margin: 10px 0 0; color: var(--text-muted); font-size: 13px; }
 .preview-paths { margin-top: 10px; }
 summary { cursor: pointer; line-height: 1.8; }
 .preview-path { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }

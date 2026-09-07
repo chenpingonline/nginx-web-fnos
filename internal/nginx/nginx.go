@@ -496,20 +496,39 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 			}
 			return item.rules[i].Name < item.rules[j].Name
 		})
-		hasCatchAll := false
-		for _, rule := range item.rules {
-			if len(rule.Domains) == 1 && rule.Domains[0] == "*" {
-				hasCatchAll = true
-				break
+
+		for _, family := range []string{"ipv4", "ipv6"} {
+			familyItem := *item
+			familyItem.rules = nil
+			hasCatchAll := false
+			for _, rule := range item.rules {
+				for _, selected := range domain.ListenFamilies(rule.ListenType) {
+					if selected != family {
+						continue
+					}
+					familyItem.rules = append(familyItem.rules, rule)
+					if len(rule.Domains) == 1 && rule.Domains[0] == "*" {
+						hasCatchAll = true
+					}
+				}
 			}
-		}
-		if !hasCatchAll {
-			defaultConf, err := m.renderDefaultServer(*item, certs)
+			if hasCatchAll || (len(familyItem.rules) == 0 && (len(item.rules) > 0 || family == "ipv6")) {
+				continue
+			}
+			if len(familyItem.rules) > 0 {
+				familyItem.tls = familyItem.rules[0].TLS
+			}
+			defaultConf, err := m.renderDefaultServer(familyItem, certs, family)
 			if err != nil {
 				return "", nil, err
 			}
-			files[fmt.Sprintf("000-default-%05d.conf", port)] = defaultConf
+			name := fmt.Sprintf("000-default-%05d.conf", port)
+			if family == "ipv6" {
+				name = fmt.Sprintf("000-default-%05d-ipv6.conf", port)
+			}
+			files[name] = defaultConf
 		}
+
 		for index, rule := range item.rules {
 			content, err := m.renderRuleServer(rule, certs, pools)
 			if err != nil {
@@ -952,7 +971,7 @@ func (m *Manager) renderDefaultServer(item struct {
 	port  int
 	tls   bool
 	rules []ProxyRule
-}, certs map[string]CertificateMeta) (string, error) {
+}, certs map[string]CertificateMeta, family string) (string, error) {
 	var builder strings.Builder
 	builder.WriteString("server {\n")
 	if item.tls {
@@ -967,12 +986,12 @@ func (m *Manager) renderDefaultServer(item struct {
 		if err := requireFiles(certFile, keyFile); err != nil {
 			return "", err
 		}
-		fmt.Fprintf(&builder, "    listen %d ssl default_server;\n", item.port)
+		writeHTTPListeners(&builder, family, item.port, " ssl default_server")
 		builder.WriteString("    http2 on;\n")
 		fmt.Fprintf(&builder, "    ssl_certificate %s;\n", nginxQuote(certFile))
 		fmt.Fprintf(&builder, "    ssl_certificate_key %s;\n", nginxQuote(keyFile))
 	} else {
-		fmt.Fprintf(&builder, "    listen %d default_server;\n", item.port)
+		writeHTTPListeners(&builder, family, item.port, " default_server")
 	}
 	builder.WriteString("    server_name _;\n")
 	builder.WriteString("    return 404;\n")
@@ -991,7 +1010,7 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 	if catchAll {
 		listenSuffix += " default_server"
 	}
-	fmt.Fprintf(&builder, "    listen %d%s;\n", rule.ListenPort, listenSuffix)
+	writeHTTPListeners(&builder, rule.ListenType, rule.ListenPort, listenSuffix)
 	if rule.TLS && rule.HTTP2 {
 		builder.WriteString("    http2 on;\n")
 	}
@@ -1339,4 +1358,14 @@ func ensureTrailingSlash(path string) string {
 		return path
 	}
 	return path + string(os.PathSeparator)
+}
+
+func writeHTTPListeners(builder *strings.Builder, listenType string, port int, suffix string) {
+	for _, family := range domain.ListenFamilies(listenType) {
+		if family == "ipv6" {
+			fmt.Fprintf(builder, "    listen [::]:%d%s;\n", port, suffix)
+		} else {
+			fmt.Fprintf(builder, "    listen %d%s;\n", port, suffix)
+		}
+	}
 }

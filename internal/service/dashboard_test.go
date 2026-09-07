@@ -149,3 +149,30 @@ func TestDashboardKeepsLastApplyFailure(t *testing.T) {
 		t.Fatal("application failure missing from dashboard")
 	}
 }
+
+func TestDashboardHTTPListenFamilies(t *testing.T) {
+	for kind, want := range map[string]string{"": "0.0.0.0:9560", "ipv6": "[::]:9560", "dual": "0.0.0.0:9560, [::]:9560"} {
+		if got := dashboardHTTPListenAddress(kind, 9560); got != want {
+			t.Fatalf("%s: %s", kind, got)
+		}
+	}
+}
+
+func TestDashboardURLsPreserveSchemesAndIPv6(t *testing.T) {
+	r := domain.ProxyRule{TLS: true, ListenPort: 9560, Domains: []string{"music.example.com", "2001:db8::1"}, UpstreamScheme: "http", UpstreamHost: "192.168.1.88", UpstreamPort: 4533}
+	urls := dashboardEntryURLs(r)
+	if len(urls) != 2 || urls[0] != "https://music.example.com:9560" || urls[1] != "https://[2001:db8::1]:9560" {
+		t.Fatal(urls)
+	}
+	if got := dashboardTargetURL(r); got != "http://192.168.1.88:4533" {
+		t.Fatal(got)
+	}
+	r.RootLocation = domain.LocationSettings{BackendType: "proxy", UpstreamScheme: "https", UpstreamHost: "::1", UpstreamPort: 8443}
+	if got := dashboardTargetURL(r); got != "https://[::1]:8443" {
+		t.Fatal(got)
+	}
+	r.RootLocation.UpstreamPoolID = "pool"
+	if got := dashboardTargetURL(r); got != "" {
+		t.Fatal("pool is not a direct URL", got)
+	}
+}
