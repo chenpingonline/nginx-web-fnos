@@ -58,15 +58,17 @@ func TestCacheCleanupAndLogRotationStayInsideAppData(t *testing.T) {
 	}
 }
 
-func TestUpdateSettingsValidatesBeforePersisting(t *testing.T) {
+func TestUpdateSettingsAcceptsStandardPorts(t *testing.T) {
 	service := testService(t)
-	invalid := service.State().Settings
-	invalid.DefaultHTTPPort = 80
-	if err := service.UpdateSettings(invalid); err == nil {
-		t.Fatal("expected privileged port to be rejected")
+	settings := service.State().Settings
+	settings.DefaultHTTPPort = 80
+	settings.DefaultHTTPSPort = 443
+	if err := service.UpdateSettings(settings); err != nil {
+		t.Fatalf("expected standard ports to be accepted: %v", err)
 	}
-	if got := service.State().Settings.DefaultHTTPPort; got != 9080 {
-		t.Fatalf("invalid settings changed persisted state: %d", got)
+	got := service.State().Settings
+	if got.DefaultHTTPPort != 80 || got.DefaultHTTPSPort != 443 {
+		t.Fatalf("standard ports were not persisted: %+v", got)
 	}
 }
 

@@ -286,7 +286,7 @@ watch(
               v-model.number="form.listen_port"
               class="input"
               type="number"
-              min="1024"
+              min="1"
               max="65535"
               required
             />

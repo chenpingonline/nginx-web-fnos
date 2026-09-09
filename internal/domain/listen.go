@@ -2,6 +2,10 @@ package domain
 
 import "errors"
 
+func ValidListenPort(port int) bool {
+	return port == 80 || port == 443 || port >= 1024 && port <= 65535
+}
+
 // Empty values preserve IPv4 behavior for existing configurations and backups.
 func ListenFamilies(value string) []string {
 	if value == "dual" {

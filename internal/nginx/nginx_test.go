@@ -1,6 +1,7 @@
 package nginx
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,7 +69,7 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 			t.Fatalf("generated config contains system path %s", forbidden)
 		}
 	}
-	for _, expected := range []string{paths.NginxPID, paths.NginxErrorLog, "listen 19080", "proxy_pass http://[::1]:8080", "proxy_set_header Upgrade"} {
+	for _, expected := range []string{"user nginx-web nginx-web;", paths.NginxPID, paths.NginxErrorLog, "listen 19080", "proxy_pass http://[::1]:8080", "proxy_set_header Upgrade"} {
 		if !strings.Contains(all, expected) {
 			t.Fatalf("generated config missing %q:\n%s", expected, all)
 		}
@@ -84,6 +85,70 @@ func TestLastNginxErrorIgnoresNotice(t *testing.T) {
 	if got := lastNginxError(lines); !strings.Contains(got, "upstream timed out") {
 		t.Fatalf("unexpected error line: %q", got)
 	}
+}
+
+func TestRemoveStaleUnixSocket(t *testing.T) {
+	socketPath := testUnixSocketPath(t)
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unixListener, ok := listener.(*net.UnixListener)
+	if !ok {
+		t.Fatal("expected Unix listener")
+	}
+	unixListener.SetUnlinkOnClose(false)
+	if err := listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeStaleUnixSocket(socketPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(socketPath); !os.IsNotExist(err) {
+		t.Fatalf("stale Socket was not removed: %v", err)
+	}
+}
+
+func TestRemoveStaleUnixSocketPreservesActiveListener(t *testing.T) {
+	socketPath := testUnixSocketPath(t)
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	if err := removeStaleUnixSocket(socketPath); err == nil || !strings.Contains(err.Error(), "正被其他进程使用") {
+		t.Fatalf("expected active Socket conflict, got %v", err)
+	}
+	if _, err := os.Lstat(socketPath); err != nil {
+		t.Fatalf("active Socket was removed: %v", err)
+	}
+}
+
+func TestRemoveStaleUnixSocketPreservesRegularFile(t *testing.T) {
+	socketPath := testUnixSocketPath(t)
+	if err := os.WriteFile(socketPath, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := removeStaleUnixSocket(socketPath); err == nil || !strings.Contains(err.Error(), "非 Socket 文件") {
+		t.Fatalf("expected regular-file conflict, got %v", err)
+	}
+	data, err := os.ReadFile(socketPath)
+	if err != nil || string(data) != "keep" {
+		t.Fatalf("regular file was changed: %q, %v", data, err)
+	}
+}
+
+func testUnixSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "nws-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return filepath.Join(dir, "status.sock")
 }
 
 func TestRenderAdvancedRuntimePoolAndRateLimit(t *testing.T) {

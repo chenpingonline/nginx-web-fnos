@@ -2,6 +2,19 @@ package domain
 
 import "testing"
 
+func TestValidListenPort(t *testing.T) {
+	for _, port := range []int{80, 443, 1024, 65535} {
+		if !ValidListenPort(port) {
+			t.Fatalf("expected port %d to be allowed", port)
+		}
+	}
+	for _, port := range []int{0, 1, 79, 81, 442, 444, 1023, 65536} {
+		if ValidListenPort(port) {
+			t.Fatalf("expected port %d to be rejected", port)
+		}
+	}
+}
+
 func TestListenFamilyConflicts(t *testing.T) {
 	s := DefaultState()
 	a := testRule("0123456789ab", "A", "example.com", 19080)

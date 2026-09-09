@@ -25,9 +25,8 @@ const emit = defineEmits<{
 }>();
 const minutes = ref(props.initialMinutes);
 const selected = ref(props.initialRule);
-const metric = ref<"error_rate" | "client_error_rate" | "server_error_rate">(
-  "error_rate",
-);
+type ErrorMetric = "error_rate" | "client_error_rate" | "server_error_rate";
+const metric = ref<ErrorMetric>("error_rate");
 const page = ref(1);
 const { data, error, fetching, stats, rules, load } = useDashboardData({
   minutes,
@@ -83,7 +82,12 @@ const metricNames = {
   error_rate: "总错误率",
   client_error_rate: "4xx 请求错误率",
   server_error_rate: "5xx 服务端错误率",
-};
+} satisfies Record<ErrorMetric, string>;
+const metricColors = {
+  error_rate: "color-mix(in srgb, var(--warning) 45%, var(--danger))",
+  client_error_rate: "var(--warning)",
+  server_error_rate: "var(--danger)",
+} satisfies Record<ErrorMetric, string>;
 const incomplete = computed(
   () => hasCoverage.value && counts.value?.client_errors == null,
 );
@@ -228,6 +232,7 @@ function date(value: string | null | undefined) {
         :points="stats?.points ?? []"
         :metric="metric"
         :label="metricNames[metric]"
+        :color="metricColors[metric]"
         unit="%"
         :loading="fetching && !stats"
       />
@@ -508,7 +513,7 @@ h1 {
   display: inline-block;
 }
 .total-dot {
-  background: var(--accent);
+  background: color-mix(in srgb, var(--warning) 45%, var(--danger));
 }
 .client-dot {
   background: var(--warning);

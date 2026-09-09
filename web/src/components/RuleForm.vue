@@ -277,10 +277,10 @@ function addLocation() {
         v-model.number="form.listen_port"
         class="input"
         type="number"
-        min="1024"
+        min="1"
         max="65535"
         required
-      /><span class="field-help">仅允许非特权端口。</span>
+      /><span class="field-help">支持 80、443 及 1024–65535；80/443 需确保未被 fnOS 或其他服务占用。</span>
     </div>
     <div class="field section-content section-right">
       <label>入口协议</label

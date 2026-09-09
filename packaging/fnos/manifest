@@ -1,5 +1,5 @@
 appname                    = nginx-web
-version                    = 0.2.0
+version                    = 0.2.8
 display_name               = nginx-web
 desc                       = fnOS 原生 Nginx 反向代理可视化管理工具。独立运行，不修改飞牛系统 Nginx。
 maintainer                 = chenping
@@ -13,5 +13,5 @@ disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 支持 IPv4/IPv6 双栈监听与证书域名重新签发，优化分组管理、代理配置、日志浏览和配置文件分类，统一界面布局与地址操作。
+changelog                  = 修复 FN Connect 子路径代理中页面样式、图片、表单及站内链接的根路径丢失问题，并保留外部链接原地址。
 micro_app                  = true

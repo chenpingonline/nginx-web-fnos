@@ -38,12 +38,27 @@ func TestValidateStateRejectsDuplicateDomain(t *testing.T) {
 	}
 }
 
-func TestValidateStateRejectsPrivilegedPort(t *testing.T) {
+func TestValidateStateAcceptsHTTPAndHTTPSStandardPorts(t *testing.T) {
 	state := DefaultState()
-	rule := testRule("0123456789ab", "A", "demo.example.com", 443)
-	state.Rules = []ProxyRule{rule}
-	if err := ValidateState(state); err == nil || !strings.Contains(err.Error(), "非特权端口") {
-		t.Fatalf("expected privileged-port error, got %v", err)
+	state.Settings.DefaultHTTPPort = 80
+	state.Settings.DefaultHTTPSPort = 443
+	state.Rules = []ProxyRule{
+		testRule("0123456789ab", "HTTP", "http.example.com", 80),
+		testRule("abcdef012345", "HTTPS", "https.example.com", 443),
+	}
+	state.Rules[1].TLS = true
+	state.Rules[1].CertificateID = "0123456789ab"
+	state.Certificates = []CertificateMeta{{ID: "0123456789ab", Name: "test"}}
+	if err := ValidateState(state); err != nil {
+		t.Fatalf("expected ports 80 and 443 to be accepted, got %v", err)
+	}
+}
+
+func TestValidateStateRejectsZeroListenPort(t *testing.T) {
+	state := DefaultState()
+	state.Rules = []ProxyRule{testRule("0123456789ab", "A", "demo.example.com", 81)}
+	if err := ValidateState(state); err == nil || !strings.Contains(err.Error(), "80、443") {
+		t.Fatalf("expected invalid listen-port error, got %v", err)
 	}
 }
 

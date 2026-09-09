@@ -983,7 +983,7 @@ onBeforeUnmount(() => {
                 class="badge"
                 :class="state.dirty ? 'warning' : 'success'"
                 >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span>
-              <span class="rule-port-hint">监听端口 1024–65535，不占用系统 80/443</span>
+              <span class="rule-port-hint">支持 80、443 及 1024–65535；使用 80/443 前请先关闭 fnOS 对应端口的占用或重定向</span>
               <span class="spacer"></span
               ><button class="button ghost" :disabled="busy" @click="loadCore()">
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新

@@ -8,6 +8,7 @@ const props = defineProps<{
   metric?: TrafficMetric;
   label?: string;
   unit?: string;
+  color?: string;
   series?: TrafficSeries[];
   loading?: boolean;
   compact?: boolean;
@@ -25,7 +26,7 @@ const allSeries = computed<TrafficSeries[]>(() =>
           key: props.metric ?? "rps",
           label: props.label ?? "请求速率",
           unit: props.unit ?? "req/s",
-          color: "var(--accent)",
+          color: props.color ?? "var(--accent)",
           area: true,
         },
       ],

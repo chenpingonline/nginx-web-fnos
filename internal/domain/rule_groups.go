@@ -62,8 +62,8 @@ func ValidateRuleGroups(state State) error {
 		if name == "" || len([]rune(name)) > 80 || names[strings.ToLower(name)] {
 			return errors.New("分组名称不能为空、超过 80 字或重复")
 		}
-		if group.ListenPort < 1024 || group.ListenPort > 65535 {
-			return errors.New("分组监听端口必须为 1024–65535")
+		if !ValidListenPort(group.ListenPort) {
+			return errors.New("分组监听端口仅允许 80、443 或 1024–65535")
 		}
 		if group.TLS && !certs[group.CertificateID] {
 			return fmt.Errorf("分组 %q 需要选择有效证书", name)

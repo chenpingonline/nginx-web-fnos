@@ -358,6 +358,9 @@ func (m *Manager) startUnlocked() (ApplyResult, error) {
 	if output, err := m.testConfigUnlocked(m.paths.NginxMaster); err != nil {
 		return ApplyResult{}, fmt.Errorf("启动前配置校验失败: %w\n%s", err, output)
 	}
+	if err := removeStaleUnixSocket(m.paths.StatusSocket()); err != nil {
+		return ApplyResult{}, fmt.Errorf("清理 Nginx 状态 Socket 失败: %w", err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	output, err := m.runCommand(ctx, "-p", ensureTrailingSlash(m.paths.NginxPrefix), "-c", m.paths.NginxMaster)
@@ -373,6 +376,35 @@ func (m *Manager) startUnlocked() (ApplyResult, error) {
 	}
 	lines, _ := fileutil.TailLines(m.paths.NginxErrorLog, 30)
 	return ApplyResult{}, fmt.Errorf("Nginx 启动后未检测到主进程: %s", strings.Join(lines, "\n"))
+}
+
+func removeStaleUnixSocket(socketPath string) error {
+	info, err := os.Lstat(socketPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("路径已被非 Socket 文件占用: %s", socketPath)
+	}
+
+	connection, err := net.DialTimeout("unix", socketPath, 300*time.Millisecond)
+	if err == nil {
+		_ = connection.Close()
+		return fmt.Errorf("Socket 正被其他进程使用: %s", socketPath)
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Errorf("无法确认 Socket 是否失效: %w", err)
+	}
+	if err := os.Remove(socketPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) reloadUnlocked() (ApplyResult, error) {
@@ -589,7 +621,8 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	if state.Settings.MultiAccept {
 		multiAccept = "on"
 	}
-	master := fmt.Sprintf(`daemon on;
+	master := fmt.Sprintf(`user nginx-web nginx-web;
+daemon on;
 master_process on;
 worker_processes %s;
 %s
