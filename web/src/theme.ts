@@ -1,5 +1,14 @@
 import { TrimApp } from '@trimjs/web-app';
 
+type Theme = 'dark' | 'light';
+
+function parseHostTheme(payload: unknown): Theme | undefined {
+  if (payload === 'dark' || payload === 'light') return payload;
+  if (!payload || typeof payload !== 'object' || !('theme' in payload)) return undefined;
+  const theme = payload.theme;
+  return theme === 'dark' || theme === 'light' ? theme : undefined;
+}
+
 // The fnOS host theme takes priority over the browser's preference.
 export function followSystemTheme(): () => void {
   const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -9,7 +18,12 @@ export function followSystemTheme(): () => void {
   let hostReady = false;
   let subscribed = false;
   let sdk: TrimApp | undefined;
-  const onHostTheme = (theme: 'dark' | 'light') => {
+  const onHostTheme = (payload: unknown) => {
+    const theme = parseHostTheme(payload);
+    if (!theme) {
+      console.warn('[nginx-web] 无法识别飞牛主题事件。', payload);
+      return;
+    }
     hostRevision += 1;
     hostTheme = true;
     apply(theme);

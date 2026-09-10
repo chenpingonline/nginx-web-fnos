@@ -9,6 +9,7 @@
 通过 fnOS 桌面管理 HTTP/HTTPS 代理、TCP/UDP 转发、SSL 证书、后端服务组与访问统计。
 
 [![Release](https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?display_name=tag)](https://github.com/chenpingonline/nginx-web-fnos/releases)
+[![Downloads](https://img.shields.io/github/downloads/chenpingonline/nginx-web-fnos/total?label=downloads)](https://github.com/chenpingonline/nginx-web-fnos/releases)
 ![fnOS](https://img.shields.io/badge/fnOS-x86__64%20%7C%20ARM64-2ea44f)
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)

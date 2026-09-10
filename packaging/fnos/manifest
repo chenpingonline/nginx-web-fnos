@@ -1,5 +1,5 @@
 appname                    = nginx-web
-version                    = 0.2.9
+version                    = 0.2.12
 display_name               = nginx-web
 desc                       = fnOS 原生 Nginx 反向代理可视化管理工具。独立运行，不修改飞牛系统 Nginx。
 maintainer                 = chenping
@@ -13,5 +13,5 @@ disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 优化 Nginx 状态 Socket 恢复、飞牛主题同步和错误率图表语义配色。
+changelog                  = 修复飞牛主题事件对象载荷无法实时应用的问题。
 micro_app                  = true
