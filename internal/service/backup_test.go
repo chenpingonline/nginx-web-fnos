@@ -87,7 +87,7 @@ func TestInvalidBackupLeavesStateUntouched(t *testing.T) {
 	for _, mutate := range []func(*Backup){
 		func(b *Backup) { b.Version = 99 },
 		func(b *Backup) { b.State.SchemaVersion = 999 },
-		func(b *Backup) { b.State.Settings.DefaultHTTPPort = 65536 },
+		func(b *Backup) { b.State.Settings.DefaultHTTPPort = 80 },
 		func(b *Backup) { b.Certificates = []BackupCertificate{{ID: "../../escape"}} },
 	} {
 		data, _ := json.Marshal(backup)

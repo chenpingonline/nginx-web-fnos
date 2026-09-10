@@ -241,8 +241,8 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if len([]rune(rule.Name)) < 1 || len([]rune(rule.Name)) > 80 {
 		return errors.New("规则名称长度必须为 1 到 80 个字符")
 	}
-	if !ValidListenPort(rule.ListenPort) {
-		return errors.New("监听端口仅允许 80、443 或 1024 到 65535")
+	if rule.ListenPort < 1024 || rule.ListenPort > 65535 {
+		return errors.New("第一版仅允许监听 1024 到 65535 的非特权端口")
 	}
 	if len(rule.Domains) == 0 {
 		return errors.New("至少需要填写一个访问域名或 IP")
@@ -320,10 +320,10 @@ func ValidateState(state State) error {
 	if err := ValidateRuleGroups(state); err != nil {
 		return err
 	}
-	if !ValidListenPort(state.Settings.DefaultHTTPPort) {
+	if state.Settings.DefaultHTTPPort < 1024 || state.Settings.DefaultHTTPPort > 65535 {
 		return errors.New("默认 HTTP 端口不合法")
 	}
-	if !ValidListenPort(state.Settings.DefaultHTTPSPort) {
+	if state.Settings.DefaultHTTPSPort < 1024 || state.Settings.DefaultHTTPSPort > 65535 {
 		return errors.New("默认 HTTPS 端口不合法")
 	}
 	if state.Settings.RevisionLimit < 1 || state.Settings.RevisionLimit > 100 {

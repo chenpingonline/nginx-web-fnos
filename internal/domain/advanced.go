@@ -713,8 +713,8 @@ func ValidateStreamRule(rule StreamRule, certs map[string]CertificateMeta, pools
 	if rule.Protocol != "tcp" && rule.Protocol != "udp" {
 		return errors.New("Stream 协议只能是 tcp 或 udp")
 	}
-	if !ValidListenPort(rule.ListenPort) {
-		return errors.New("Stream 监听端口仅允许 80、443 或 1024 到 65535")
+	if rule.ListenPort < 1024 || rule.ListenPort > 65535 {
+		return errors.New("Stream 监听端口必须为 1024 到 65535")
 	}
 	if rule.ListenAddress != "*" && net.ParseIP(rule.ListenAddress) == nil {
 		return errors.New("Stream 监听地址必须是 IP 或 *")

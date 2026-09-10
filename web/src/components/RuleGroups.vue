@@ -55,7 +55,7 @@ async function remove() {
       <label for="group-name">分组名称</label><input ref="nameInput" id="group-name" v-model.trim="form.name" class="input" maxlength="80" required autofocus />
       <label for="group-protocol">默认协议</label><AppSelect id="group-protocol" :model-value="form.tls ? 'https' : 'http'" class="select" @update:model-value="form.tls = $event === 'https'"><option value="http">HTTP</option><option value="https">HTTPS</option></AppSelect>
       <label>监听类型</label><ListenTypePicker v-model="form.listen_type" />
-      <label for="group-port">访问端口</label><input id="group-port" v-model.number="form.listen_port" class="input" type="number" min="1" max="65535" required />
+      <label for="group-port">访问端口</label><input id="group-port" v-model.number="form.listen_port" class="input" type="number" min="1024" max="65535" required />
       <template v-if="form.tls">
        <label for="group-cert">默认证书</label><div><AppSelect id="group-cert" v-model="form.certificate_id" class="select" required><option value="">请选择证书</option><option v-for="cert in certificates" :key="cert.id" :value="cert.id">{{ cert.name }}</option></AppSelect><span class="field-help">证书应覆盖组内规则的访问域名。</span></div>
        <label for="group-http2">HTTP/2</label><label class="checkbox-row"><input id="group-http2" v-model="form.http2" type="checkbox" />启用 HTTP/2</label>

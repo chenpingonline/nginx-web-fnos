@@ -37,8 +37,8 @@ func New(service *appservice.AppService, web fs.FS) *API {
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.setSecurityHeaders(w)
 	if r.URL.Path == gatewayPrefix {
-		a.setSecurityHeaders(w)
 		http.Redirect(w, r, gatewayPrefix+"/", http.StatusTemporaryRedirect)
 		return
 	}
@@ -49,11 +49,6 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if cleanPath == "" {
 		cleanPath = "/"
 	}
-	if strings.HasPrefix(cleanPath, "/proxy/") {
-		a.handleGatewayProxy(w, r, cleanPath)
-		return
-	}
-	a.setSecurityHeaders(w)
 	if cleanPath == "/healthz" {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": domain.AppVersion})
 		return

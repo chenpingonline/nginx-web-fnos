@@ -65,15 +65,6 @@ func TestTLSListenSuffix(t *testing.T) {
 	}
 }
 
-func TestRenderStandardHTTPAndHTTPSPorts(t *testing.T) {
-	var b strings.Builder
-	writeHTTPListeners(&b, "ipv4", 80, "")
-	writeHTTPListeners(&b, "ipv4", 443, " ssl")
-	if b.String() != "    listen 80;\n    listen 443 ssl;\n" {
-		t.Fatal(b.String())
-	}
-}
-
 func TestIPv6ToIPv4WithRealNginx(t *testing.T) {
 	bin := os.Getenv("NGINX_TEST_BIN")
 	if bin == "" {

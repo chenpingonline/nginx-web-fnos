@@ -13,5 +13,5 @@ disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 修复 FN Connect 子路径代理中页面样式、图片、表单及站内链接的根路径丢失问题，并保留外部链接原地址。
+changelog                  = 优化 Nginx 状态 Socket 恢复、飞牛主题同步和错误率图表语义配色。
 micro_app                  = true

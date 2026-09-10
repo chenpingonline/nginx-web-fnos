@@ -69,7 +69,7 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 			t.Fatalf("generated config contains system path %s", forbidden)
 		}
 	}
-	for _, expected := range []string{"user nginx-web nginx-web;", paths.NginxPID, paths.NginxErrorLog, "listen 19080", "proxy_pass http://[::1]:8080", "proxy_set_header Upgrade"} {
+	for _, expected := range []string{paths.NginxPID, paths.NginxErrorLog, "listen 19080", "proxy_pass http://[::1]:8080", "proxy_set_header Upgrade"} {
 		if !strings.Contains(all, expected) {
 			t.Fatalf("generated config missing %q:\n%s", expected, all)
 		}

@@ -621,8 +621,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 	if state.Settings.MultiAccept {
 		multiAccept = "on"
 	}
-	master := fmt.Sprintf(`user nginx-web nginx-web;
-daemon on;
+	master := fmt.Sprintf(`daemon on;
 master_process on;
 worker_processes %s;
 %s
