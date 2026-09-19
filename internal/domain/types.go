@@ -96,12 +96,18 @@ type State struct {
 	UpstreamPools     []UpstreamPool    `json:"upstream_pools"`
 	RateLimitPolicies []RateLimitPolicy `json:"rate_limit_policies"`
 	StreamRules       []StreamRule      `json:"stream_rules"`
+	CustomConfigs     []CustomConfig    `json:"custom_configs,omitempty"`
 	Dirty             bool              `json:"dirty"`
 	DraftRevisionID   string            `json:"draft_revision_id,omitempty"`
 	LastAppliedAt     *time.Time        `json:"last_applied_at,omitempty"`
 	LastApplyMessage  string            `json:"last_apply_message,omitempty"`
 	LastApplyError    string            `json:"last_apply_error,omitempty"`
 	UpdatedAt         time.Time         `json:"updated_at"`
+}
+
+type CustomConfig struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 type Revision struct {
@@ -152,6 +158,7 @@ func DefaultState() State {
 		UpstreamPools:     []UpstreamPool{},
 		RateLimitPolicies: []RateLimitPolicy{},
 		StreamRules:       []StreamRule{},
+		CustomConfigs:     []CustomConfig{},
 		Dirty:             true,
 		UpdatedAt:         now,
 	}
@@ -318,6 +325,9 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 func ValidateState(state State) error {
 	ApplyStateDefaults(&state)
 	if err := ValidateRuleGroups(state); err != nil {
+		return err
+	}
+	if err := ValidateCustomConfigs(state.CustomConfigs); err != nil {
 		return err
 	}
 	if state.Settings.DefaultHTTPPort < 1024 || state.Settings.DefaultHTTPPort > 65535 {

@@ -74,6 +74,39 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 			t.Fatalf("generated config missing %q:\n%s", expected, all)
 		}
 	}
+	metricsStart := strings.Index(master, "log_format fnproxy_metrics")
+	if metricsStart < 0 {
+		t.Fatal("generated config is missing the fixed request-analysis log format")
+	}
+	metricsEnd := strings.Index(master[metricsStart:], ";")
+	metricsFormat := master[metricsStart : metricsStart+metricsEnd]
+	for _, expected := range []string{"$limit_req_status", "$limit_conn_status", "$fnproxy_limit_policy", "$request_method", "$uri", "$status", "$request_time", "$upstream_addr", "$upstream_status", "$upstream_header_time", "$upstream_response_time"} {
+		if !strings.Contains(metricsFormat, expected) {
+			t.Fatalf("request-analysis log format missing %q: %s", expected, metricsFormat)
+		}
+	}
+	for _, forbidden := range []string{"$request_uri", "$args", "$remote_addr", "$http_cookie", "$request_body"} {
+		if strings.Contains(metricsFormat, forbidden) {
+			t.Fatalf("request-analysis log format records sensitive field %q: %s", forbidden, metricsFormat)
+		}
+	}
+}
+
+func TestRenderIncludesCustomHTTPAndStreamConfigs(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{NginxConfD: filepath.Join(root, "conf.d"), NginxPID: filepath.Join(root, "nginx.pid"), NginxErrorLog: filepath.Join(root, "error.log"), MimeTypes: filepath.Join(root, "mime.types"), NginxTempDir: filepath.Join(root, "tmp"), NginxCacheDir: filepath.Join(root, "cache")}
+	state := domain.DefaultState()
+	state.CustomConfigs = []domain.CustomConfig{{Name: "custom-http.conf", Content: "server { listen 18080; }\n"}, {Name: "custom-stream.stream", Content: "server { listen 19090; proxy_pass 127.0.0.1:90; }\n"}}
+	master, files, err := New(paths).render(state, paths.NginxConfD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files["custom-http.conf"] != state.CustomConfigs[0].Content || files["custom-stream.stream"] != state.CustomConfigs[1].Content {
+		t.Fatal("custom config missing", files)
+	}
+	if !strings.Contains(master, "stream {") || !strings.Contains(master, "*.stream") {
+		t.Fatal("custom stream include missing", master)
+	}
 }
 
 func TestLastNginxErrorIgnoresNotice(t *testing.T) {

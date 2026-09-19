@@ -50,6 +50,14 @@ func New(dir string, deploy DeployFunc) (*Manager, error) {
 		if json.Unmarshal(b, &r) != nil || !domain.ValidID(r.Job.ID) || filepath.Base(p) != r.Job.ID+".json" {
 			return nil, errors.New("ACME 任务文件损坏")
 		}
+		// Older releases exposed the Let's Encrypt staging endpoint as a named CA.
+		// Preserve those tasks as ordinary custom-directory jobs while removing
+		// staging as a selectable and API-supported certificate authority.
+		migrated := r.Input.CA == "staging"
+		if migrated {
+			r.Input.CA = "custom"
+			r.Job.CA = "custom"
+		}
 		if err := validate(&r.Input); err != nil {
 			return nil, fmt.Errorf("ACME 任务 %s 配置无效", r.Job.ID)
 		}
@@ -58,7 +66,13 @@ func New(dir string, deploy DeployFunc) (*Manager, error) {
 			r.Job.Message = "上次任务中断，等待恢复"
 			r.Job.NextAttempt = m.now()
 		}
-		m.records[r.Job.ID] = &r
+		if migrated {
+			if err := m.save(&r); err != nil {
+				return nil, err
+			}
+		} else {
+			m.records[r.Job.ID] = &r
+		}
 	}
 	return m, nil
 }

@@ -28,7 +28,7 @@ async function submit() {
     value.name = form.name; value.domains = value.domains.map(d => d.trim()).filter(Boolean);
     value.credentials.token = ''; value.credentials.access_id = ''; value.credentials.secret = '';
     value.dns_config = Object.fromEntries(Object.entries(value.dns_config ?? {}).filter(([,v]) => v.trim() !== ''));
-    if(value.ca === 'letsencrypt' || value.ca === 'staging') { value.credentials.eab_kid = ''; value.credentials.eab_hmac = ''; }
+    if(value.ca === 'letsencrypt') { value.credentials.eab_kid = ''; value.credentials.eab_hmac = ''; }
     emit('acme',value); return;
   }
   const input: CertificateInput = { name: form.name, method: method.value, certificate: "", private_key: "" };

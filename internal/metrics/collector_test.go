@@ -31,6 +31,83 @@ func appendLog(t *testing.T, path string, now time.Time, rule string, status int
 	fmt.Fprintf(f, "{\"time\":%.3f,\"rule\":%q,\"status\":%d,\"bytes\":256}\n", float64(now.UnixMilli())/1000, rule, status)
 }
 
+func appendAnalysisLog(t *testing.T, path string, now time.Time, rule, method, uri string, status int, requestTime float64, upstream, upstreamStatus, upstreamHeaderTime, upstreamTime string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	record := map[string]any{
+		"time":                 float64(now.UnixMilli()) / 1000,
+		"rule":                 rule,
+		"method":               method,
+		"uri":                  uri,
+		"status":               status,
+		"bytes":                512,
+		"request_time":         requestTime,
+		"upstream":             upstream,
+		"upstream_status":      upstreamStatus,
+		"upstream_header_time": upstreamHeaderTime,
+		"upstream_time":        upstreamTime,
+	}
+	data, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRequestAnalysisAggregationIsolationAndPersistence(t *testing.T) {
+	c, now := collectorFixture(t)
+	c.Collect(now, &Sample{PID: 1, Requests: 1}, true)
+	appendAnalysisLog(t, c.logPath, now.Add(time.Second), "alpha", "get", "/api/items", 200, 0.2, "127.0.0.1:8080", "200", "0.100", "0.150")
+	appendAnalysisLog(t, c.logPath, now.Add(2*time.Second), "alpha", "POST", "/missing", 404, 0.4, "127.0.0.1:8080", "404", "0.200", "0.300")
+	appendAnalysisLog(t, c.logPath, now.Add(3*time.Second), "beta", "GET", "/api/items", 502, 1.2, "127.0.0.1:9090", "502", "0.900", "1.100")
+	appendAnalysisLog(t, c.logPath, now.Add(4*time.Second), "beta", "GET", "/socket", 101, 4, "127.0.0.1:9090", "101", "0.020", "4.000")
+	c.Collect(now.Add(5*time.Second), &Sample{PID: 1, Requests: 6}, true)
+
+	all := c.Snapshot(now.Add(5*time.Second), 15, "")
+	assertRate(t, "average request time", all.Analysis.AverageRequestTimeMillis, 600)
+	assertRate(t, "average upstream header time", all.Analysis.AverageUpstreamHeaderTimeMillis, 400)
+	assertRate(t, "average upstream time", all.Analysis.AverageUpstreamTimeMillis, 1550.0/3)
+	if all.Analysis.SlowRequests != 1 || len(all.Analysis.Recent) != 3 {
+		t.Fatalf("slow/error samples were not retained: %+v", all.Analysis)
+	}
+	if len(all.Analysis.StatusCodes) != 4 || all.Analysis.StatusCodes[0].Count != 1 {
+		t.Fatalf("status codes were not aggregated: %+v", all.Analysis.StatusCodes)
+	}
+	if len(all.Analysis.Paths) != 3 || all.Analysis.Paths[0].Key != "/api/items" || all.Analysis.Paths[0].Requests != 2 {
+		t.Fatalf("path ranking is incorrect: %+v", all.Analysis.Paths)
+	}
+	if all.Counts.Requests != 4 || all.Counts.TimedRequests != 3 || math.Abs(all.Counts.RequestTimeMillis-1800) > 0.000001 {
+		t.Fatalf("latency totals were not exposed on counts: %+v", all.Counts)
+	}
+	if all.Counts.TimedUpstreamHeaders != 3 || math.Abs(all.Counts.UpstreamHeaderTimeMillis-1200) > 0.000001 || all.Analysis.MaxRequestTimeMillis == nil || *all.Analysis.MaxRequestTimeMillis != 1200 {
+		t.Fatalf("101 connection lifetime polluted HTTP latency totals: counts=%+v analysis=%+v", all.Counts, all.Analysis)
+	}
+	if all.Analysis.Recent[0].Status != 101 || all.Analysis.Recent[0].RequestTimeMillis == nil || *all.Analysis.Recent[0].RequestTimeMillis != 4000 || all.Analysis.Recent[0].UpstreamHeaderTime == nil || *all.Analysis.Recent[0].UpstreamHeaderTime != 20 {
+		t.Fatalf("101 connection duration was not retained separately: %+v", all.Analysis.Recent)
+	}
+
+	alpha := c.Snapshot(now.Add(5*time.Second), 15, "alpha")
+	assertRate(t, "selected average request time", alpha.Analysis.AverageRequestTimeMillis, 300)
+	if len(alpha.Analysis.Recent) != 1 || alpha.Analysis.Recent[0].Status != 404 || len(alpha.Analysis.Methods) != 2 {
+		t.Fatalf("selected request analysis leaked another rule: %+v", alpha.Analysis)
+	}
+
+	c.Flush(now.Add(5 * time.Second))
+	restored := New(c.logPath, c.historyPath, now.Add(6*time.Second)).Snapshot(now.Add(6*time.Second), 15, "")
+	if len(restored.Analysis.Paths) != 3 || len(restored.Analysis.Recent) != 3 || restored.Analysis.MaxRequestTimeMillis == nil || *restored.Analysis.MaxRequestTimeMillis != 1200 || restored.Analysis.AverageUpstreamHeaderTimeMillis == nil || *restored.Analysis.AverageUpstreamHeaderTimeMillis != 400 {
+		t.Fatalf("request analysis checkpoint was not restored: %+v", restored.Analysis)
+	}
+	if len(restored.Analysis.StatusCodes) != 4 || len(restored.Analysis.Methods) != 2 || len(restored.Analysis.Backends) != 2 {
+		t.Fatalf("status, method, and backend analysis was not restored: %+v", restored.Analysis)
+	}
+}
+
 func TestSamplingExcludesSelfTrafficAndLeavesGaps(t *testing.T) {
 	c, now := collectorFixture(t)
 	c.Collect(now, &Sample{PID: 7, Requests: 10, Connections: 2}, true)
@@ -271,6 +348,66 @@ func TestLegacyHistoryPreservesUnknownClientErrorsAndTimeScopes(t *testing.T) {
 		if value, ok := payload[key]; !ok || value != nil {
 			t.Fatalf("unknown %s must be explicit JSON null", key)
 		}
+	}
+}
+
+func TestLegacy101LatencyMigrationPreservesTrafficData(t *testing.T) {
+	c, now := collectorFixture(t)
+	minute := now.Add(-time.Minute).Unix() / 60 * 60
+	duration := 4188680.0
+	clientErrors := uint64(0)
+	timing := AnalysisCount{
+		Requests:             2,
+		TimedRequests:        2,
+		RequestTimeMillis:    duration + 200,
+		TimedUpstreams:       2,
+		UpstreamTimeMillis:   duration + 150,
+		TimedUpstreamHeaders: 2,
+		UpstreamHeaderMillis: 120,
+		MaxRequestTimeMillis: duration,
+	}
+	legacy := checkpoint{
+		Version: 1,
+		Since:   now.Add(-time.Hour),
+		Buckets: map[int64]*Bucket{
+			minute: {
+				Time:   minute,
+				Counts: Counts{Requests: 2, ClientErrors: &clientErrors, TimedRequests: 2, RequestTimeMillis: duration + 200, TimedUpstreams: 2, UpstreamTimeMillis: duration + 150, TimedUpstreamHeaders: 2, UpstreamHeaderTimeMillis: 120},
+				Rules: map[string]Counts{
+					"socket": {Requests: 2, ClientErrors: &clientErrors, TimedRequests: 2, RequestTimeMillis: duration + 200, TimedUpstreams: 2, UpstreamTimeMillis: duration + 150, TimedUpstreamHeaders: 2, UpstreamHeaderTimeMillis: 120},
+				},
+				Analysis: map[string]analysisBucket{
+					"":       {Counts: timing, Slow: 1, StatusCodes: map[string]uint64{"101": 1, "200": 1}, Paths: map[string]AnalysisCount{"/socket": timing}, Backends: map[string]AnalysisCount{"127.0.0.1:5666": timing}},
+					"socket": {Counts: timing, Slow: 1, StatusCodes: map[string]uint64{"101": 1, "200": 1}, Paths: map[string]AnalysisCount{"/socket": timing}, Backends: map[string]AnalysisCount{"127.0.0.1:5666": timing}},
+				},
+			},
+		},
+		Recent: []RequestSample{{Time: time.Unix(minute+30, 0), Rule: "socket", Method: "GET", URI: "/socket", Status: 101, RequestTimeMillis: &duration, Upstream: "127.0.0.1:5666", UpstreamTimeMillis: &duration}},
+	}
+	data, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(c.historyPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c = New(c.logPath, c.historyPath, now)
+	if c.data.Version != checkpointVersion {
+		t.Fatalf("checkpoint was not upgraded: version=%d", c.data.Version)
+	}
+	all := c.Snapshot(now, 15, "")
+	if all.Counts.Requests != 2 || len(all.Analysis.StatusCodes) != 2 || len(all.Analysis.Paths) != 1 || len(all.Analysis.Backends) != 1 {
+		t.Fatalf("traffic dimensions were discarded during migration: %+v", all)
+	}
+	if all.Counts.TimedRequests != 0 || all.Counts.TimedUpstreams != 0 || all.Counts.TimedUpstreamHeaders != 0 || all.Analysis.AverageRequestTimeMillis != nil || all.Analysis.AverageUpstreamHeaderTimeMillis != nil || all.Analysis.AverageUpstreamTimeMillis != nil || all.Analysis.MaxRequestTimeMillis != nil || all.Analysis.SlowRequests != 0 {
+		t.Fatalf("legacy 101 latency was not cleared: counts=%+v analysis=%+v", all.Counts, all.Analysis)
+	}
+	if len(all.Analysis.Recent) != 1 || all.Analysis.Recent[0].RequestTimeMillis == nil || *all.Analysis.Recent[0].RequestTimeMillis != duration {
+		t.Fatalf("101 connection duration was lost during migration: %+v", all.Analysis.Recent)
+	}
+	scoped := c.Snapshot(now, 15, "socket")
+	if scoped.Counts.Requests != 2 || scoped.Counts.TimedRequests != 0 || scoped.Analysis.AverageRequestTimeMillis != nil || scoped.Analysis.SlowRequests != 0 {
+		t.Fatalf("rule-scoped 101 latency was not migrated: %+v", scoped)
 	}
 }
 

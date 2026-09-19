@@ -94,28 +94,30 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
       </div>
     </details>
 
-    <details class="advanced-box full">
+    <details class="advanced-box full access-control-box">
       <summary>路径重写与访问控制</summary>
       <div class="form-grid compact-grid">
-        <div class="field"><label>允许 IP/CIDR</label><textarea class="textarea small" :value="model.allow.join('\n')" @change="setList('allow', $event)"></textarea></div>
-        <div class="field"><label>拒绝 IP/CIDR</label><textarea class="textarea small" :value="model.deny.join('\n')" @change="setList('deny', $event)"></textarea></div>
+        <div class="field"><label>允许 IP/CIDR</label><textarea class="textarea small access-list-textarea" :value="model.allow.join('\n')" @change="setList('allow', $event)"></textarea></div>
+        <div class="field"><label>拒绝 IP/CIDR</label><textarea class="textarea small access-list-textarea" :value="model.deny.join('\n')" @change="setList('deny', $event)"></textarea></div>
         <div v-for="(item, index) in model.rewrites" :key="index" class="inline-editor full">
           <input v-model="item.pattern" class="input" placeholder="正则" /><input v-model="item.replacement" class="input" placeholder="目标" />
-          <AppSelect v-model="item.flag" class="select"><option value="last">last</option><option value="break">break</option><option value="redirect">302</option><option value="permanent">301</option></AppSelect>
+          <AppSelect v-model="item.flag" class="select rewrite-flag-select"><option value="last">last</option><option value="break">break</option><option value="redirect">302</option><option value="permanent">301</option></AppSelect>
           <button type="button" class="button danger compact" @click="model.rewrites.splice(index, 1)">删除</button>
         </div>
         <button type="button" class="button ghost compact fit" @click="addRewrite">添加 Rewrite</button>
       </div>
     </details>
 
-    <details class="advanced-box full">
+    <details class="advanced-box full security-settings-box">
       <summary>鉴权、安全与 WebDAV</summary>
       <div class="form-grid compact-grid">
-        <label class="checkbox-row field"><input v-model="model.basic_auth" type="checkbox" /> Basic Auth</label>
+        <div class="security-toggle-row full">
+          <label class="checkbox-row"><input v-model="model.basic_auth" type="checkbox" /> Basic Auth</label>
+          <label class="checkbox-row"><input v-model="model.secure_link.enabled" type="checkbox" /> Secure Link</label>
+        </div>
+        <div class="field full auth-request-field"><label>Auth Request URI</label><input v-model.trim="model.auth_request" class="input" placeholder="/_auth" /></div>
         <div v-if="model.basic_auth" class="field"><label>认证提示</label><input v-model="model.basic_auth_realm" class="input" /></div>
         <div v-if="model.basic_auth" class="field full"><label>htpasswd 绝对路径</label><input v-model.trim="model.basic_auth_file" class="input" placeholder="/vol1/.../.htpasswd" required /></div>
-        <div class="field"><label>Auth Request URI</label><input v-model.trim="model.auth_request" class="input" placeholder="/_auth" /></div>
-        <label class="checkbox-row field"><input v-model="model.secure_link.enabled" type="checkbox" /> Secure Link</label>
         <div v-if="model.secure_link.enabled" class="field"><label>签名参数</label><input v-model.trim="model.secure_link.argument" class="input" /></div>
         <div v-if="model.secure_link.enabled" class="field"><label>签名密钥</label><input v-model="model.secure_link.secret" class="input" type="password" required /></div>
         <label v-if="model.backend_type === 'static'" class="checkbox-row field"><input v-model="model.dav.enabled" type="checkbox" /> WebDAV 写入</label>
@@ -124,19 +126,21 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
       </div>
     </details>
 
-    <details class="advanced-box full">
+    <details class="advanced-box full header-processing-box">
       <summary>Header、内容处理与旁路</summary>
       <div class="form-grid compact-grid">
         <div v-for="(item, index) in model.request_headers" :key="`req-${index}`" class="inline-editor full">
           <input v-model.trim="item.name" class="input" placeholder="请求 Header" /><input v-model="item.value" class="input" placeholder="值；空值表示不转发" /><button type="button" class="button danger compact" @click="model.request_headers.splice(index, 1)">删除</button>
         </div>
-        <button type="button" class="button ghost compact fit" @click="addHeader('request_headers')">添加请求 Header</button>
         <div v-for="(item, index) in model.response_headers" :key="`resp-${index}`" class="inline-editor full">
           <input v-model.trim="item.name" class="input" placeholder="响应 Header" /><input v-model="item.value" class="input" placeholder="值" /><label class="checkbox-row"><input v-model="item.always" type="checkbox" />always</label><button type="button" class="button danger compact" @click="model.response_headers.splice(index, 1)">删除</button>
         </div>
-        <button type="button" class="button ghost compact fit" @click="addHeader('response_headers')">添加响应 Header</button>
         <div v-for="(item, index) in model.sub_filters" :key="`sub-${index}`" class="inline-editor full"><input v-model="item.search" class="input" placeholder="替换前" /><input v-model="item.replacement" class="input" placeholder="替换后" /><button type="button" class="button danger compact" @click="model.sub_filters.splice(index, 1)">删除</button></div>
-        <button type="button" class="button ghost compact fit" @click="model.sub_filters.push({ search: '', replacement: '' })">添加内容替换</button>
+        <div class="header-action-stack full">
+          <button type="button" class="button ghost compact fit header-add-button" @click="addHeader('request_headers')">添加请求 Header</button>
+          <button type="button" class="button ghost compact fit header-add-button" @click="addHeader('response_headers')">添加响应 Header</button>
+          <button type="button" class="button ghost compact fit header-add-button" @click="model.sub_filters.push({ search: '', replacement: '' })">添加内容替换</button>
+        </div>
         <div class="field"><label>响应前追加 URI</label><input v-model.trim="model.addition_before" class="input" placeholder="/_before" /></div>
         <div class="field"><label>响应后追加 URI</label><input v-model.trim="model.addition_after" class="input" placeholder="/_after" /></div>
         <div class="field"><label>镜像 URI</label><input v-model.trim="model.mirror" class="input" placeholder="/_mirror" /></div>

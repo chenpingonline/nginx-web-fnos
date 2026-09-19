@@ -41,12 +41,13 @@ type NginxStatus = domain.NginxStatus
 type ApplyResult = domain.ApplyResult
 
 type AppService struct {
-	paths   Paths
-	store   *Store
-	nginx   *NginxManager
-	mu      sync.Mutex
-	metrics *metrics.Collector
-	acme    *acmemanager.Manager
+	paths         Paths
+	store         *Store
+	nginx         *NginxManager
+	mu            sync.Mutex
+	metrics       *metrics.Collector
+	streamMetrics *metrics.StreamCollector
+	acme          *acmemanager.Manager
 }
 
 type Overview struct {
@@ -84,10 +85,11 @@ func New(paths Paths) (*AppService, error) {
 		return nil, fmt.Errorf("加载应用数据失败: %w", err)
 	}
 	service := &AppService{
-		paths:   paths,
-		store:   store,
-		nginx:   nginxmanager.New(paths),
-		metrics: metrics.New(paths.MetricsLog(), paths.MetricsHistory(), time.Now()),
+		paths:         paths,
+		store:         store,
+		nginx:         nginxmanager.New(paths),
+		metrics:       metrics.New(paths.MetricsLog(), paths.MetricsHistory(), time.Now()),
+		streamMetrics: metrics.NewStream(paths.StreamMetricsLog(), paths.StreamMetricsHistory(), time.Now()),
 	}
 	service.acme, err = acmemanager.New(filepath.Join(paths.VarDir, "acme"), service.deployACME)
 	if err != nil {
@@ -616,6 +618,33 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 	return result, nil
 }
 
+// DiscardDraft restores the last known applied configuration without touching
+// the running Nginx process or creating another configuration revision.
+func (s *AppService) DiscardDraft() (State, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	current := s.store.Snapshot()
+	if !current.Dirty {
+		return State{}, errors.New("当前没有待放弃的草稿")
+	}
+	applied, ok := s.appliedState(current)
+	if !ok {
+		return State{}, errors.New("找不到已应用配置，无法安全放弃当前草稿")
+	}
+	// Certificates are global assets rather than generated Nginx draft data.
+	// Keep the current inventory, matching configuration-history restoration.
+	applied.Certificates = current.Certificates
+	applied.Dirty = false
+	applied.DraftRevisionID = ""
+	applied.LastAppliedAt = current.LastAppliedAt
+	applied.LastApplyMessage = "已放弃未应用的草稿修改"
+	applied.LastApplyError = ""
+	if err := s.store.Replace(applied); err != nil {
+		return State{}, err
+	}
+	return s.store.Snapshot(), nil
+}
+
 func (s *AppService) NginxStart() (ApplyResult, error) {
 	return s.nginx.Start()
 }
@@ -772,7 +801,7 @@ func (s *AppService) RotateLogs(force bool) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	settings := s.store.Snapshot().Settings.Logging
-	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog, s.paths.MetricsLog()}
+	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog, s.paths.MetricsLog(), s.paths.StreamMetricsLog()}
 	rotated := false
 	for _, logPath := range paths {
 		info, err := os.Stat(logPath)

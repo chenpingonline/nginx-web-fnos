@@ -292,6 +292,7 @@ export interface State {
   settings: Settings;
   rules: ProxyRule[];
   stream_rules: StreamRule[];
+  custom_configs: CustomConfig[];
   certificates: CertificateMeta[];
   upstream_pools: UpstreamPool[];
   rate_limit_policies: RateLimitPolicy[];
@@ -301,6 +302,7 @@ export interface State {
   last_apply_error?: string;
   updated_at: string;
 }
+export interface CustomConfig { name: string; content: string }
 export interface Revision {
   id: string;
   created_at: string;
@@ -338,8 +340,33 @@ export interface MetricCounts {
   errors: number;
   bytes: number;
   last_seen?: string;
+  timed_requests?: number;
+  request_time_ms?: number;
+  timed_upstreams?: number;
+  upstream_time_ms?: number;
+  timed_upstream_headers?: number;
+  upstream_header_time_ms?: number;
+}
+export interface LimitPolicySnapshot {
+ id: string; name: string; rule_name: string; settings: RateLimitSettings;
+}
+export interface LimitCounts {
+ covered: number; rejected: number; request_rejected: number; connection_rejected: number; delayed: number;
+}
+export interface LimitRule extends LimitCounts {
+ rule: string; policy?: LimitPolicySnapshot; policy_changed: boolean; last_seen: string;
+}
+export interface LimitAnalysis extends LimitCounts {
+ total: number; rate: number | null; affected_rules: number; rules: LimitRule[]; recent: RequestSample[];
 }
 export interface MetricPoint {
+ sessions?: number | null;
+ sent?: number | null;
+ received?: number | null;
+ errors?: number | null;
+ limit_request_rejected: number | null;
+ limit_connection_rejected: number | null;
+ limit_delayed: number | null;
   time: string;
   rps: number | null;
   response_rps: number | null;
@@ -348,6 +375,53 @@ export interface MetricPoint {
   client_error_rate: number | null;
   server_error_rate: number | null;
   requests: number | null;
+  average_request_time_ms: number | null;
+  average_upstream_header_time_ms: number | null;
+  average_upstream_time_ms: number | null;
+}
+export interface RequestAnalysisRank {
+  key: string;
+  requests: number;
+  client_errors: number;
+  errors: number;
+  bytes: number;
+  average_request_time_ms: number | null;
+  average_upstream_header_time_ms: number | null;
+  average_upstream_time_ms: number | null;
+  max_request_time_ms: number | null;
+}
+export interface RequestAnalysisValue {
+  key: string;
+  count: number;
+}
+export interface RequestSample {
+ limit_req_status?: string;
+ limit_conn_status?: string;
+ limit_policy?: LimitPolicySnapshot;
+  time: string;
+  rule: string;
+  method?: string;
+  uri?: string;
+  status: number;
+  bytes: number;
+  request_time_ms: number | null;
+  upstream?: string;
+  upstream_status?: string;
+  upstream_header_time_ms: number | null;
+  upstream_time_ms: number | null;
+}
+export interface RequestAnalysis {
+ limits?: LimitAnalysis;
+  average_request_time_ms: number | null;
+  average_upstream_header_time_ms: number | null;
+  average_upstream_time_ms: number | null;
+  max_request_time_ms: number | null;
+  slow_requests: number;
+  status_codes: RequestAnalysisValue[];
+  methods: RequestAnalysisValue[];
+  paths: RequestAnalysisRank[];
+  backends: RequestAnalysisRank[];
+  recent: RequestSample[];
 }
 export interface DashboardRule {
   entry_urls?: string[];
@@ -363,6 +437,7 @@ export interface DashboardRule {
   counts: MetricCounts | null;
 }
 export interface DashboardData {
+ stream_metrics: StreamMetrics;
   overview: Overview;
   monitoring_ready: boolean;
   access_logging: boolean;
@@ -381,6 +456,7 @@ export interface DashboardData {
     error_rate: number | null; client_error_rate: number | null;
     server_error_rate: number | null; observed_seconds: number;
     rules: Record<string, MetricCounts>; points: MetricPoint[];
+    analysis: RequestAnalysis;
   };
 }
 export interface GeneratedConfig {
@@ -412,7 +488,7 @@ export interface Toast {
 
 export interface ACMEInput {
   name: string;
-  ca: 'letsencrypt' | 'zerossl' | 'staging' | 'custom';
+  ca: 'letsencrypt' | 'zerossl' | 'custom';
   directory_url: string;
   email: string;
   domains: string[];
@@ -433,3 +509,17 @@ export interface ACMEJob {
 export interface DNSProviderField { multiline: boolean; key: string; description: string; advanced: boolean; secret: boolean }
 export interface DNSProvider { group: string; code: string; name: string; description: string; url: string; fields: DNSProviderField[] }
 export interface DNSCatalog { version: string; providers: DNSProvider[] }
+
+export interface StreamCounts {
+ sessions: number; errors: number; rejected: number; sent: number; received: number; duration: number;
+}
+export interface StreamSample {
+ time: string; rule: string; protocol: string; status: number; sent: number; received: number; duration: number; client: string; upstream: string; limit: string;
+}
+export interface StreamMetrics extends StreamCounts {
+ active_connections: number | null;
+ since: string; ready: boolean; logging_rules: string[]; issue?: string;
+ rules: (StreamCounts & { rule: string; protocol: string })[];
+ points: (StreamCounts & { time: string })[];
+ recent: StreamSample[];
+}

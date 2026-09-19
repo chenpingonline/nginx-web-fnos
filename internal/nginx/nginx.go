@@ -2,6 +2,8 @@ package nginx
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -582,6 +584,12 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 		}
 		files[fmt.Sprintf("%03d-%05d-%s.stream", index+10, rule.ListenPort, rule.ID)] = content
 	}
+	for _, config := range state.CustomConfigs {
+		if _, exists := files[config.Name]; exists {
+			return "", nil, fmt.Errorf("自定义配置文件与系统生成文件重名: %s", config.Name)
+		}
+		files[config.Name] = config.Content
+	}
 
 	workerProcesses := "auto"
 	if state.Settings.WorkerProcesses > 0 {
@@ -604,10 +612,27 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 		logFormat = "log_format fnproxy " + nginxDirectiveQuote(state.Settings.Logging.CustomFormat) + ";"
 	}
 	// A separate, fixed format keeps aggregation independent of custom access logs.
-	// No client address, URL, cookies or credentials are recorded here.
+	// It records only the normalized path (without query parameters), never client
+	// addresses, headers, cookies, request bodies or credentials.
 	logFormat += `
     map $host $fnproxy_rule_id { default "default"; }
-    log_format fnproxy_metrics escape=json '{"time":$msec,"rule":"$fnproxy_rule_id","status":$status,"bytes":$body_bytes_sent}';`
+    log_format fnproxy_metrics escape=json '{"time":$msec,"rule":"$fnproxy_rule_id","method":"$request_method","uri":"$uri","status":$status,"bytes":$body_bytes_sent,"request_time":$request_time,"upstream":"$upstream_addr","upstream_status":"$upstream_status","upstream_header_time":"$upstream_header_time","upstream_time":"$upstream_response_time","limit_req_status":"$limit_req_status","limit_conn_status":"$limit_conn_status","limit_policy":"$fnproxy_limit_policy"}';`
+	// Embed a bounded snapshot in the applied config so later edits or deletions
+	// cannot rewrite the meaning of historical limit events.
+	logFormat += "\n    map $fnproxy_rule_id $fnproxy_limit_policy { default \"\";\n"
+	for _, rule := range state.Rules {
+		policy, ok := policies[rule.RateLimitPolicyID]
+		if !ok || !rule.Enabled {
+			continue
+		}
+		snapshot, err := json.Marshal(domain.RateLimitSnapshot{ID: policy.ID, Name: policy.Name, RuleName: rule.Name, Settings: rule.RateLimit})
+		if err != nil {
+			return "", nil, err
+		}
+		logFormat += fmt.Sprintf("        %s %s;\n", nginxQuote(rule.ID), nginxQuote(base64.StdEncoding.EncodeToString(snapshot)))
+	}
+	logFormat += "    }\n"
+
 	aio := "off"
 	if state.Settings.FileAIO {
 		aio = "on"
@@ -689,6 +714,7 @@ http {
 	if hasStreamConfig(state) {
 		master += fmt.Sprintf(`
 stream {
+    # fnproxy_stream_metrics_v1
     log_format fnproxy_stream '$remote_addr [$time_local] $protocol $status '
                               '$bytes_sent $bytes_received $session_time '
                               '"$upstream_addr" "$ssl_preread_server_name"';
@@ -700,6 +726,11 @@ stream {
 }
 
 func hasStreamConfig(state State) bool {
+	for _, config := range state.CustomConfigs {
+		if strings.HasSuffix(config.Name, ".stream") {
+			return true
+		}
+	}
 	for _, rule := range state.StreamRules {
 		if rule.Enabled {
 			return true
@@ -725,6 +756,13 @@ func streamTarget(poolID, host string, port int) string {
 
 func renderStreamPrelude(state State) string {
 	var builder strings.Builder
+	for _, rule := range state.StreamRules {
+		if rule.Enabled && rule.AccessLog {
+			fmt.Fprintf(&builder, `log_format fnproxy_stream_metrics_%s escape=json '{"time":$msec,"rule":"%s","protocol":"$protocol","status":$status,"sent":$bytes_sent,"received":$bytes_received,"duration":$session_time,"client":"$remote_addr","upstream":"$upstream_addr","limit":"$limit_conn_status"}';
+`, rule.ID, rule.ID)
+		}
+	}
+
 	for _, pool := range state.UpstreamPools {
 		if pool.Protocol != "stream" {
 			continue
@@ -841,6 +879,7 @@ func (m *Manager) renderStreamRule(rule domain.StreamRule, certs map[string]Cert
 	}
 	if rule.AccessLog {
 		fmt.Fprintf(&builder, "    access_log %s fnproxy_stream;\n", nginxQuote(m.paths.NginxStreamLog))
+		fmt.Fprintf(&builder, "    access_log %s fnproxy_stream_metrics_%s buffer=32k flush=1s;\n", nginxQuote(m.paths.StreamMetricsLog()), rule.ID)
 	} else {
 		builder.WriteString("    access_log off;\n")
 	}

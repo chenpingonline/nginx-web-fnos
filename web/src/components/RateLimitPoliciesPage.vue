@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, toRaw } from "vue";
+import { computed, reactive, ref, toRaw } from "vue";
 import {
   PhArrowClockwise,
   PhPlusCircle,
@@ -19,6 +19,8 @@ const emit = defineEmits<{
   save: [value: RateLimitPolicyInput, id: string, done: (saved?: RateLimitPolicy, error?: string) => void];
   remove: [policy: RateLimitPolicy];
   refresh: [];
+  inspect: [];
+  configure: [];
 }>();
 const editing = ref<RateLimitPolicy | null>(null);
 const open = ref(false);
@@ -34,6 +36,27 @@ const blank = (): RateLimitPolicyInput => ({
   },
 });
 const form = reactive<RateLimitPolicyInput>(blank());
+const requestsPerSecond = computed(() => Number(form.settings.requests_per_second) || 0);
+const burst = computed(() => Number(form.settings.burst) || 0);
+const connections = computed(() => Number(form.settings.connections) || 0);
+const downloadKBps = computed(() => Number(form.settings.download_kbps) || 0);
+const editingUsageCount = computed(() => editing.value ? usageCount(editing.value.id) : 0);
+const requestOutcome = computed(() => {
+  const rate = requestsPerSecond.value;
+  const capacity = burst.value;
+  if (capacity <= 0) {
+    return `同一客户端 IP 平均每秒处理 ${rate} 个请求；超出平均速率的请求将返回 503。`;
+  }
+  return form.settings.no_delay
+    ? `同一客户端 IP 平均每秒处理 ${rate} 个请求，可额外容纳 ${capacity} 个突发请求；突发容量内立即处理，容量耗尽后返回 503。`
+    : `同一客户端 IP 平均每秒处理 ${rate} 个请求；超出平均速率的请求会在 ${capacity} 个突发容量内排队，队列满后返回 503。`;
+});
+const connectionOutcome = computed(() => connections.value > 0
+  ? `同一客户端 IP 最多允许 ${connections.value} 个正在处理的并发请求，超过后返回 503。`
+  : "不限制单个客户端 IP 的并发请求数。");
+const downloadOutcome = computed(() => downloadKBps.value > 0
+  ? `每个响应的下载速度限制为 ${downloadKBps.value} KB/s；多个并行下载的速度会叠加。`
+  : "不限制单个响应的下载速度。");
 
 function show(policy: RateLimitPolicy | null = null) {
   saveError.value = "";
@@ -76,6 +99,7 @@ function savedResult(saved?: RateLimitPolicy, error?: string) {
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
+    <button class="button ghost" @click="emit('inspect')">查看请求分析</button>
     <button class="button primary" @click="show()">
       <PhPlusCircle :size="17" aria-hidden="true" />添加限流策略
     </button>
@@ -172,37 +196,44 @@ function savedResult(saved?: RateLimitPolicy, error?: string) {
             <span>请求频率</span><small>限制单个客户端 IP 的请求速度</small>
           </div>
           <div class="field">
-            <label for="policy-rps">每秒请求数</label
+            <label for="policy-rps">平均请求速率</label
             ><input
               id="policy-rps"
               v-model.number="form.settings.requests_per_second"
+              aria-describedby="policy-rps-help"
               class="input"
               type="number"
               min="1"
               max="100000"
               required
-            />
+            /><span id="policy-rps-help" class="field-help">同一客户端 IP 长期允许的平均请求数（次/秒）。</span>
           </div>
           <div class="field">
-            <label for="policy-burst">突发请求数</label
+            <label for="policy-burst">突发容量</label
             ><input
               id="policy-burst"
               v-model.number="form.settings.burst"
+              aria-describedby="policy-burst-help"
               class="input"
               type="number"
               min="0"
               max="100000"
               required
-            />
+            /><span id="policy-burst-help" class="field-help">短时间超过平均速率时，最多额外容纳的请求数。</span>
           </div>
-          <div class="field full standalone-field">
-            <label class="checkbox-row"
-              ><input v-model="form.settings.no_delay" type="checkbox" />
-              不延迟突发请求</label
-            ><span class="field-help policy-burst-help"
-              >关闭后，突发请求会在允许范围内排队处理。</span
-            >
-          </div>
+          <fieldset class="policy-mode-field full">
+            <legend>超额请求处理</legend>
+            <div class="policy-mode-options">
+              <label class="policy-mode-option" :class="{ selected: form.settings.no_delay }">
+                <input v-model="form.settings.no_delay" type="radio" :value="true" />
+                <span><strong>立即处理突发请求</strong><small>容量内不排队，容量耗尽后拒绝</small></span>
+              </label>
+              <label class="policy-mode-option" :class="{ selected: !form.settings.no_delay }">
+                <input v-model="form.settings.no_delay" type="radio" :value="false" />
+                <span><strong>排队平滑处理</strong><small>容量内排队，队列满后拒绝</small></span>
+              </label>
+            </div>
+          </fieldset>
           <div class="form-section full">
             <span>连接与带宽</span><small>0 表示不限制对应项目</small>
           </div>
@@ -211,27 +242,74 @@ function savedResult(saved?: RateLimitPolicy, error?: string) {
             ><input
               id="policy-connections"
               v-model.number="form.settings.connections"
+              aria-describedby="policy-connections-help"
               class="input"
               type="number"
               min="0"
               max="100000"
-            />
+            /><span id="policy-connections-help" class="field-help">仅统计已经开始处理请求的连接。</span>
           </div>
           <div class="field">
-            <label for="policy-download">下载限速（KB/s）</label
+            <label for="policy-download">单请求限速（KB/s）</label
             ><input
               id="policy-download"
               v-model.number="form.settings.download_kbps"
+              aria-describedby="policy-download-help"
               class="input"
               type="number"
               min="0"
               max="1048576"
-            />
+            /><span id="policy-download-help" class="field-help">按单个响应计算，并行下载的速度会叠加。</span>
           </div>
-
+          <section class="policy-impact full" aria-live="polite" aria-atomic="true">
+            <strong>按当前配置，将发生什么？</strong>
+            <ul>
+              <li>{{ requestOutcome }}</li>
+              <li>{{ connectionOutcome }}</li>
+              <li>{{ downloadOutcome }}</li>
+            </ul>
+          </section>
+          <section class="policy-scope full">
+            <div>
+              <strong>应用范围</strong>
+              <p v-if="editing">
+                当前已应用到 {{ editingUsageCount }} 条 HTTP(S) 代理规则，额度按规则分别计算。
+              </p>
+              <p v-else>保存后还需在 HTTP(S) 代理规则中选择此策略，未绑定时不会影响现有流量。</p>
+            </div>
+            <button type="button" class="button ghost small" @click="open = false; emit('configure')">
+              查看代理规则
+            </button>
+          </section>
         </form>
       </div>
     </section>
   </div>
   </Teleport>
 </template>
+
+<style scoped>
+.policy-modal .form-section > small { margin-left: 10px; }
+.policy-mode-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.policy-mode-field legend { margin-bottom: 7px; padding: 0; color: var(--text); font-size: 14px; font-weight: 640; }
+.policy-mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.policy-mode-option { min-width: 0; padding: 10px 11px; display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-solid); cursor: pointer; transition: .15s ease; }
+.policy-mode-option:hover { border-color: var(--accent); }
+.policy-mode-option.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px rgba(35,163,122,.08); }
+.policy-mode-option input { margin: 2px 0 0; accent-color: var(--accent); }
+.policy-mode-option span { min-width: 0; display: grid; gap: 3px; }
+.policy-mode-option strong { font-size: 13px; line-height: 1.35; }
+.policy-mode-option small { color: var(--text-muted); font-size: 12px; font-weight: 400; line-height: 1.4; }
+.policy-impact { padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 10px; background: var(--accent-soft); }
+.policy-impact > strong { color: var(--accent-dark); font-size: 14px; }
+.policy-impact ul { margin: 7px 0 0; padding-left: 19px; color: var(--text-muted); font-size: 12px; line-height: 1.55; }
+.policy-scope { padding: 10px 12px; display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-soft); }
+.policy-scope > div { min-width: 0; margin-right: auto; }
+.policy-scope strong { font-size: 13px; }
+.policy-scope p { margin: 3px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.policy-scope .button { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .policy-mode-options { grid-template-columns: 1fr; }
+  .policy-scope { align-items: flex-start; flex-direction: column; }
+}
+</style>

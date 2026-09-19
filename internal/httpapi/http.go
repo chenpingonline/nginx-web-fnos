@@ -128,6 +128,28 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeJSON(w, http.StatusOK, a.service.Overview())
 	case apiPath == "/api/state" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.State())
+	case apiPath == "/api/custom-configs" && r.Method == http.MethodPost:
+		var input domain.CustomConfig
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		config, err := a.service.SaveCustomConfig("", input)
+		writeResult(w, http.StatusCreated, config, err)
+	case strings.HasPrefix(apiPath, "/api/custom-configs/"):
+		name := strings.TrimPrefix(apiPath, "/api/custom-configs/")
+		if r.Method == http.MethodPut {
+			var input domain.CustomConfig
+			if !decodeJSON(w, r, &input) {
+				return
+			}
+			config, err := a.service.SaveCustomConfig(name, input)
+			writeResult(w, http.StatusOK, config, err)
+		} else if r.Method == http.MethodDelete {
+			err := a.service.DeleteCustomConfig(name)
+			writeResult(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	case apiPath == "/api/rule-groups" && r.Method == http.MethodPost:
 		var input domain.RuleGroup
 		if !decodeJSON(w, r, &input) {
@@ -286,6 +308,9 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		}
 		result, err := a.service.Apply(input.Summary)
 		writeResult(w, http.StatusOK, result, err)
+	case apiPath == "/api/draft" && r.Method == http.MethodDelete:
+		state, err := a.service.DiscardDraft()
+		writeResult(w, http.StatusOK, state, err)
 	case apiPath == "/api/nginx/start" && r.Method == http.MethodPost:
 		result, err := a.service.NginxStart()
 		writeResult(w, http.StatusOK, result, err)

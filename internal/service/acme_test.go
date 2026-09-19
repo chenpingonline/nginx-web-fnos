@@ -23,7 +23,7 @@ import (
 
 func TestDeleteCertificateRemovesTaskAfterReferenceChecks(t *testing.T) {
 	s := testService(t)
-	job, err := s.ACME().Create(acmemanager.Input{Name: "test", CA: "staging", Email: "admin@example.com", Domains: []string{"example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: acmemanager.Credentials{Token: "test-token"}})
+	job, err := s.ACME().Create(acmemanager.Input{Name: "test", CA: "letsencrypt", Email: "admin@example.com", Domains: []string{"example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: acmemanager.Credentials{Token: "test-token"}})
 	if err != nil {
 		t.Fatal(err)
 	}

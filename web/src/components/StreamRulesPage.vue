@@ -136,7 +136,7 @@ watch(
 <template>
   <div class="toolbar">
     <div class="notice">
-      四层代理独立于 HTTP 规则，适用于 SSH、数据库、MQTT、游戏服务和 HTTPS SNI
+      四层代理，适用于 SSH、数据库、MQTT、游戏服务和 HTTPS SNI
       透传。
     </div>
     <span class="spacer"></span>
@@ -189,7 +189,6 @@ watch(
             </td>
             <td>
               <div class="rule-name">{{ rule.name }}</div>
-              <div class="rule-sub">{{ rule.id }}</div>
             </td>
             <td>
               <span class="badge info">{{ rule.protocol.toUpperCase() }}</span>

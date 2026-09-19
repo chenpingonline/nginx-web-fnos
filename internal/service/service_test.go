@@ -1,9 +1,11 @@
 package service
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
@@ -117,6 +119,56 @@ func TestRestoredDraftSourcePersistsAcrossEditsAndReopen(t *testing.T) {
 	}
 	if got := reopened.State(); got.DraftRevisionID != id || got.Settings.RevisionLimit != 30 {
 		t.Fatal("failed restore changed current draft")
+	}
+}
+
+func TestDiscardDraftRestoresAppliedStateWithoutCreatingRevision(t *testing.T) {
+	service := testService(t)
+	applied := service.State()
+	now := time.Now().UTC()
+	applied.LastAppliedAt = &now
+	applied.LastApplyMessage = "配置已应用"
+	if err := service.store.Replace(applied); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(applied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(service.paths.AppliedState(), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	settings := applied.Settings
+	settings.RevisionLimit = 30
+	if err = service.UpdateSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.store.Update(func(state *State) error {
+		state.DraftRevisionID = "restored-source"
+		state.Certificates = append(state.Certificates, CertificateMeta{ID: "0123456789abcdef", Name: "draft-certificate"})
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	discarded, err := service.DiscardDraft()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if discarded.Dirty || discarded.DraftRevisionID != "" || discarded.Settings.RevisionLimit != applied.Settings.RevisionLimit {
+		t.Fatalf("draft was not restored to applied state: %+v", discarded)
+	}
+	if len(discarded.Certificates) != 1 || discarded.Certificates[0].Name != "draft-certificate" {
+		t.Fatalf("discard removed current certificate inventory: %+v", discarded.Certificates)
+	}
+	if discarded.LastApplyMessage != "已放弃未应用的草稿修改" || discarded.LastApplyError != "" {
+		t.Fatalf("discard status was not recorded: %+v", discarded)
+	}
+	revisions, err := service.ListRevisions()
+	if err != nil || len(revisions) != 0 {
+		t.Fatalf("discard created configuration history: %v, %+v", err, revisions)
+	}
+	if _, err = service.DiscardDraft(); err == nil {
+		t.Fatal("discard accepted without a pending draft")
 	}
 }
 

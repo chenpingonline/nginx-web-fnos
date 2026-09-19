@@ -21,7 +21,7 @@ import (
 )
 
 func validInput() Input {
-	return Input{Name: "test", CA: "staging", Email: "admin@example.com", Domains: []string{"example.com", "*.example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: Credentials{Token: "secret-token-test"}}
+	return Input{Name: "test", CA: "letsencrypt", Email: "admin@example.com", Domains: []string{"example.com", "*.example.com"}, Provider: "cloudflare", KeyType: "ec256", AcceptTerms: true, Credentials: Credentials{Token: "secret-token-test"}}
 }
 func TestRemoveForCertificate(t *testing.T) {
 	m, err := New(t.TempDir(), nil)
@@ -172,7 +172,7 @@ func TestDurableIssueRetryDeployAndSecretIsolation(t *testing.T) {
 	}
 }
 func TestValidation(t *testing.T) {
-	cases := []func(*Input){func(i *Input) { i.Domains = []string{"127.0.0.1"} }, func(i *Input) { i.Domains = []string{"foo.*.com"} }, func(i *Input) { i.AcceptTerms = false }, func(i *Input) { i.CA = "zerossl" }, func(i *Input) { i.CA = "custom"; i.DirectoryURL = "http://example.com/acme" }, func(i *Input) { i.Email = "" }, func(i *Input) { i.Provider = "shell" }, func(i *Input) { i.PropagationSeconds = 1801 }, func(i *Input) { i.Credentials.EABKID = "only-kid" }}
+	cases := []func(*Input){func(i *Input) { i.Domains = []string{"127.0.0.1"} }, func(i *Input) { i.Domains = []string{"foo.*.com"} }, func(i *Input) { i.AcceptTerms = false }, func(i *Input) { i.CA = "staging" }, func(i *Input) { i.CA = "zerossl" }, func(i *Input) { i.CA = "custom"; i.DirectoryURL = "http://example.com/acme" }, func(i *Input) { i.Email = "" }, func(i *Input) { i.Provider = "shell" }, func(i *Input) { i.PropagationSeconds = 1801 }, func(i *Input) { i.Credentials.EABKID = "only-kid" }}
 	for n, change := range cases {
 		in := validInput()
 		change(&in)
@@ -196,6 +196,37 @@ func TestValidation(t *testing.T) {
 		if _, e := dnsProvider(in); e != nil {
 			t.Fatal("provider initialization", p, e)
 		}
+	}
+}
+func TestNewMigratesLegacyStagingJobToCustom(t *testing.T) {
+	dir := t.TempDir()
+	in := validInput()
+	in.CA = "custom"
+	in.DirectoryURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	if err := validate(&in); err != nil {
+		t.Fatal(err)
+	}
+	id := "0123456789abcdef0123456789abcdef"
+	record := Record{Input: in, Job: Job{ID: id, Name: in.Name, CA: "staging", Domains: in.Domains, Provider: in.Provider, KeyType: in.KeyType, Enabled: true, Status: "queued", NextAttempt: time.Now(), UpdatedAt: time.Now()}}
+	record.Input.CA = "staging"
+	raw, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(dir, id+".json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := m.List()
+	if len(jobs) != 1 || jobs[0].CA != "custom" {
+		t.Fatal("legacy CA was not migrated", jobs)
+	}
+	stored, err := os.ReadFile(filepath.Join(dir, id+".json"))
+	if err != nil || strings.Contains(string(stored), `"ca":"staging"`) {
+		t.Fatal("legacy CA migration was not persisted", err)
 	}
 }
 func TestJobSingleFlightAndInterruptedRecovery(t *testing.T) {

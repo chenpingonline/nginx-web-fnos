@@ -29,7 +29,7 @@ func TestACMEAPIProtectsCredentialsAndRequiresAdmin(t *testing.T) {
 		t.Fatal(e)
 	}
 	api := New(s, webassets.Assets)
-	body := `{"name":"test","ca":"staging","email":"admin@example.com","domains":["example.com"],"provider":"cloudflare","key_type":"ec256","accept_terms":true,"dns_config":{"CF_DNS_API_TOKEN":"never-return-this"}}`
+	body := `{"name":"test","ca":"letsencrypt","email":"admin@example.com","domains":["example.com"],"provider":"cloudflare","key_type":"ec256","accept_terms":true,"dns_config":{"CF_DNS_API_TOKEN":"never-return-this"}}`
 	call := func(method, path, body string, admin bool) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if admin {

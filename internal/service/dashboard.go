@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strconv"
@@ -41,15 +42,16 @@ type CertificateAlert struct {
 }
 
 type Dashboard struct {
-	Overview        Overview           `json:"overview"`
-	Metrics         metrics.Result     `json:"metrics"`
-	MonitoringReady bool               `json:"monitoring_ready"`
-	AccessLogging   bool               `json:"access_logging"`
-	AppliedKnown    bool               `json:"applied_known"`
-	AppliedCount    int                `json:"applied_count"`
-	AppliedPorts    []int              `json:"applied_ports"`
-	Rules           []DashboardRule    `json:"rules"`
-	Certificates    []CertificateAlert `json:"certificates"`
+	StreamMetrics   metrics.StreamResult `json:"stream_metrics"`
+	Overview        Overview             `json:"overview"`
+	Metrics         metrics.Result       `json:"metrics"`
+	MonitoringReady bool                 `json:"monitoring_ready"`
+	AccessLogging   bool                 `json:"access_logging"`
+	AppliedKnown    bool                 `json:"applied_known"`
+	AppliedCount    int                  `json:"applied_count"`
+	AppliedPorts    []int                `json:"applied_ports"`
+	Rules           []DashboardRule      `json:"rules"`
+	Certificates    []CertificateAlert   `json:"certificates"`
 }
 
 func (s *AppService) appliedState(state State) (State, bool) {
@@ -80,7 +82,7 @@ func (s *AppService) monitoringConfig() (bool, bool) {
 func (s *AppService) MaintainMetrics(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	defer func() { s.metrics.Flush(time.Now()) }()
+	defer func() { s.metrics.Flush(time.Now()); s.streamMetrics.Flush(time.Now()) }()
 	collect := func() {
 		ready, logging := s.monitoringConfig()
 		var sample *metrics.Sample
@@ -90,6 +92,7 @@ func (s *AppService) MaintainMetrics(ctx context.Context) {
 			}
 		}
 		s.metrics.Collect(time.Now(), sample, ready && logging)
+		s.streamMetrics.Collect(time.Now())
 	}
 	collect()
 	for {
@@ -111,6 +114,29 @@ func (s *AppService) Dashboard(minutes int, selected string) Dashboard {
 	ready, logging := s.monitoringConfig()
 	stats := s.metrics.Snapshot(now, minutes, selected)
 	d := Dashboard{Overview: s.Overview(), Metrics: stats, MonitoringReady: ready, AccessLogging: logging, AppliedKnown: known, AppliedPorts: []int{}, Rules: []DashboardRule{}, Certificates: []CertificateAlert{}}
+	d.StreamMetrics = s.streamMetrics.Snapshot(now, minutes, selected)
+	activeRules := state.StreamRules
+	if known {
+		activeRules = applied.StreamRules
+	}
+	if d.Overview.Nginx.Running {
+		d.StreamMetrics.ActiveConnections = countActiveTCPConnections(activeRules, selected, "/proc/net/tcp", "/proc/net/tcp6")
+	} else {
+		zero := uint64(0)
+		d.StreamMetrics.ActiveConnections = &zero
+	}
+	master, _ := os.ReadFile(s.paths.NginxMaster)
+	d.StreamMetrics.Ready = strings.Contains(string(master), "# fnproxy_stream_metrics_v1")
+	files, _ := filepath.Glob(filepath.Join(s.paths.NginxConfD, "*.stream"))
+	for _, path := range files {
+		content, _ := os.ReadFile(path)
+		for _, line := range strings.Split(string(content), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) >= 3 && fields[0] == "access_log" && strings.HasPrefix(fields[2], "fnproxy_stream_metrics_") {
+				d.StreamMetrics.LoggingRules = append(d.StreamMetrics.LoggingRules, strings.TrimPrefix(fields[2], "fnproxy_stream_metrics_"))
+			}
+		}
+	}
 	if known {
 		d.AppliedCount = domain.EnabledRuleCount(applied)
 		d.AppliedPorts = domain.ActivePorts(applied)

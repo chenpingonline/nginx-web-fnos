@@ -150,3 +150,8 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+func (p Paths) StreamMetricsLog() string { return filepath.Join(p.NginxLogDir, "stream-metrics.log") }
+func (p Paths) StreamMetricsHistory() string {
+	return filepath.Join(p.VarDir, "metrics", "stream-history.json")
+}

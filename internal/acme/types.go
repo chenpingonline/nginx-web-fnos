@@ -102,8 +102,6 @@ func validate(in *Input) error {
 	switch in.CA {
 	case "letsencrypt":
 		in.DirectoryURL = "https://acme-v02.api.letsencrypt.org/directory"
-	case "staging":
-		in.DirectoryURL = "https://acme-staging-v02.api.letsencrypt.org/directory"
 	case "zerossl":
 		in.DirectoryURL = "https://acme.zerossl.com/v2/DV90"
 	case "custom":

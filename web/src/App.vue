@@ -38,7 +38,7 @@ import RuleGroups from "./components/RuleGroups.vue";
 import type { RuleGroup } from "./types";
 import RuleForm from "./components/RuleForm.vue";
 import DashboardPage from "./components/DashboardPage.vue";
-import ErrorDetailsPage from "./components/ErrorDetailsPage.vue";
+import ErrorDetailsPage from "./components/AnalysisPage.vue";
 import CertificateForm from "./components/CertificateForm.vue";
 import UpstreamPoolsPage from "./components/UpstreamPoolsPage.vue";
 import RateLimitPoliciesPage from "./components/RateLimitPoliciesPage.vue";
@@ -49,6 +49,7 @@ import StreamRulesPage from "./components/StreamRulesPage.vue";
 import type {
   ApplyResult,
   CertificateInput,
+  CustomConfig,
   GeneratedConfig,
   LogResponse,
   LogType,
@@ -83,7 +84,7 @@ type SidebarIconName =
   | "history"
   | "config"
   | "settings";
-const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string }[] = [
+const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string; groupLabel?: string }[] = [
   {
     id: "dashboard",
     icon: "overview",
@@ -95,6 +96,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
     icon: "http",
     label: "HTTP(S) 代理",
     subtitle: "管理域名、监听端口与后端服务",
+    groupLabel: "代理配置",
   },
   {
     id: "streams",
@@ -120,14 +122,14 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string 
     label: "SSL/TLS 证书",
     subtitle: "管理证书导入、ACME 申请与自动续期",
   },
-  { id: "errors", icon: "requests", label: "请求详情", subtitle: "查看 HTTP 请求统计与错误趋势" },
+  { id: "errors", icon: "requests", label: "请求分析", subtitle: "分析 HTTP / HTTPS 请求、性能与异常", groupLabel: "监控分析" },
   {
     id: "logs",
     icon: "logs",
     label: "运行日志",
     subtitle: "查看 Nginx 与管理服务日志",
   },
-  { id: "backup", icon: "backup", label: "备份与恢复", subtitle: "导出配置备份并恢复为草稿" },
+  { id: "backup", icon: "backup", label: "备份与恢复", groupLabel: "配置管理", subtitle: "导出配置备份并恢复为草稿" },
   {
     id: "revisions",
     icon: "history",
@@ -346,17 +348,20 @@ async function copyProxyAddress(value: string, label: string) {
 }
 const configKeys = computed(() => [
   "master",
-  ...Object.keys(config.value?.files ?? {}).sort(),
+  ...new Set([...Object.keys(config.value?.files ?? {}), ...(state.value?.custom_configs ?? []).map(item => item.name)]),
 ]);
+const customConfigNames = computed(() => new Set((state.value?.custom_configs ?? []).map(item => item.name)));
+const selectedCustomConfig = computed(() => state.value?.custom_configs?.find(item => item.name === configTab.value));
 const configFileGroups = computed(() => {
   const categories = [
     { id: 'system', name: '系统配置', files: [] as { key: string; label: string }[] },
     { id: 'http', name: 'HTTP(S) 代理', files: [] as { key: string; label: string }[] },
     { id: 'stream', name: 'TCP/UDP 代理', files: [] as { key: string; label: string }[] },
+    { id: 'custom', name: '自定义配置', files: [] as { key: string; label: string }[] },
   ];
   for (const key of configKeys.value.filter(key => key !== 'master')) {
     const match = key.match(/^\d+-(\d+)-([a-f0-9]+)\.(conf|stream)$/i);
-    const kind = match ? match[3] === 'stream' ? 'stream' : 'http' : 'system';
+    const kind = customConfigNames.value.has(key) || key.startsWith('custom-') ? 'custom' : match ? match[3] === 'stream' ? 'stream' : 'http' : 'system';
     let label = key;
     if (match) {
       const candidates = kind === 'stream' ? state.value?.stream_rules : state.value?.rules;
@@ -374,10 +379,38 @@ const configFileGroups = computed(() => {
   return categories.filter(category => category.files.length);
 });
 const configText = computed(() =>
-  configTab.value === "master"
+  selectedCustomConfig.value?.content ?? (configTab.value === "master"
     ? (config.value?.master ?? "")
-    : (config.value?.files[configTab.value] ?? ""),
+    : (config.value?.files[configTab.value] ?? "")),
 );
+const configCopied = ref(false);
+let configCopiedTimer: number | undefined;
+const customConfigOpen = ref(false);
+const customConfigOriginal = ref("");
+const customConfigForm = reactive<CustomConfig>({ name: "custom-config.conf", content: "server {\n    listen 8080;\n    server_name example.com;\n    return 200;\n}\n" });
+function openCustomConfig(config?: CustomConfig) {
+  customConfigOriginal.value = config?.name ?? "";
+  customConfigForm.name = config?.name ?? "custom-config.conf";
+  customConfigForm.content = config?.content ?? "server {\n    listen 8080;\n    server_name example.com;\n    return 200;\n}\n";
+  customConfigOpen.value = true;
+}
+async function saveCustomConfig() {
+  const original = customConfigOriginal.value;
+  const saved = await mutate(() => request<CustomConfig>(original ? `/custom-configs/${encodeURIComponent(original)}` : "/custom-configs", { method: original ? "PUT" : "POST", body: jsonBody(customConfigForm) }));
+  if (!saved) return;
+  customConfigOpen.value = false;
+  configTab.value = saved.name;
+  toast("自定义配置已保存为草稿，请校验后应用", "success");
+  await loadCore(true);
+}
+async function deleteCustomConfig(config: CustomConfig) {
+  if (!(await ask("删除自定义配置", `确定删除“${config.name}”吗？删除将保存为草稿，应用后才会从 Nginx 配置中移除。`))) return;
+  const deleted = await mutate(() => request(`/custom-configs/${encodeURIComponent(config.name)}`, { method: "DELETE" }));
+  if (deleted === undefined) return;
+  configTab.value = "master";
+  toast("自定义配置已删除，等待应用", "success");
+  await loadCore(true);
+}
 
 
 function toast(message: string, type: Toast["type"] = "") {
@@ -514,6 +547,18 @@ async function applyConfiguration() {
     await loadCore(true);
   }
 }
+async function discardDraft() {
+  if (!(await ask(
+    "放弃当前草稿",
+    "确定放弃当前全部未应用修改吗？草稿将恢复为 Nginx 正在使用的配置，此操作无法撤销，但不会重载 Nginx 或删除配置历史。",
+  ))) return;
+  const result = await mutate(() => request<State>("/draft", { method: "DELETE" }));
+  if (result) {
+    toast("当前草稿已放弃", "success");
+    showDraftPreview.value = false;
+    await loadCore(true);
+  }
+}
 function openRule(rule: ProxyRule | null = null) {
   editingRule.value = rule;
   newRuleGroup.value = selectedGroup.value === "all" ? "" : selectedGroup.value;
@@ -564,11 +609,6 @@ async function importCertificate(value: CertificateInput) {
 async function createACME(value: ACMEInput) {
   const saved = await mutate(() => request('/acme', { method: 'POST', body: jsonBody(value) }));
   if (saved !== undefined) { modal.value = null; toast('ACME 任务已创建，将在后台申请证书', 'success'); }
-}
-async function acmeAction(id: string, action: string) {
-  if (action === 'delete' && !await ask('移除 ACME 任务', '将删除申请配置和凭据并停止自动续期，已导入的证书会保留。')) return;
-  const result = await mutate(() => request(`/acme/${id}${action === 'delete' ? '' : '/' + action}`, { method: action === 'delete' ? 'DELETE' : 'POST' }));
-  if (result !== undefined) toast('ACME 任务已更新', 'success');
 }
 function ask(title: string, message: string) {
   confirmBox.title = title;
@@ -816,7 +856,12 @@ async function toggleStreamRule(rule: StreamRule, enabled: boolean) {
 async function copyConfig() {
   try {
     await navigator.clipboard.writeText(configText.value);
-    toast("配置已复制", "success");
+    configCopied.value = true;
+    if (configCopiedTimer) window.clearTimeout(configCopiedTimer);
+    configCopiedTimer = window.setTimeout(() => {
+      configCopied.value = false;
+      configCopiedTimer = undefined;
+    }, 1800);
   } catch {
     toast("浏览器不允许复制，请手动选择文本", "error");
   }
@@ -836,6 +881,11 @@ watch(page, (value) => {
   else stopLogs();
   if (value === "config") void loadConfig();
 });
+watch(configTab, () => {
+  configCopied.value = false;
+  if (configCopiedTimer) window.clearTimeout(configCopiedTimer);
+  configCopiedTimer = undefined;
+});
 watch(menuOpen, (value) => document.body.classList.toggle("menu-open", value));
 function keydown(event: KeyboardEvent) {
   if (event.key === "Escape") {
@@ -852,6 +902,7 @@ onBeforeUnmount(() => {
   stopTheme();
   stopScrollActivity();
   stopLogs();
+  if (configCopiedTimer) window.clearTimeout(configCopiedTimer);
   document.removeEventListener("keydown", keydown);
   document.body.classList.remove("menu-open");
 });
@@ -861,18 +912,21 @@ onBeforeUnmount(() => {
   <div class="app-shell">
     <aside class="sidebar">
       <nav class="nav" aria-label="主导航">
+        <template v-for="item in pages" :key="item.id">
+          <h2 v-if="item.groupLabel" class="nav-group-label">{{ item.groupLabel }}</h2>
         <button
-          v-for="item in pages"
-          :key="item.id"
           type="button"
           class="nav-item"
           :class="{ active: page === item.id }"
+          :aria-current="page === item.id ? 'page' : undefined"
           @click="setPage(item.id)"
         >
           <SidebarIcon :name="item.icon" class="nav-icon" />
           <span>{{ item.label }}</span>
         </button>
+        </template>
       </nav>
+      <div class="sidebar-bottom">
       <div class="sidebar-footer">
         <div class="mini-status">
           <span
@@ -897,14 +951,15 @@ onBeforeUnmount(() => {
                 : overview.nginx.running
                   ? overview.dirty
                     ? "运行中 · 有未应用变更"
-                    : "Nginx 正常运行"
-                  : "Nginx 已停止"
+                    : "运行中"
+                  : "已停止"
           }}</span>
         </div>
         <div class="version-row">
           <span>v{{ overview?.app_version ?? appVersion }}</span
           ><span>Nginx {{ overview?.nginx_version ?? "1.30.4" }}</span>
         </div>
+      </div>
       </div>
     </aside>
     <div class="workspace">
@@ -935,8 +990,9 @@ onBeforeUnmount(() => {
         <template v-else-if="overview && state">
           <DashboardPage v-if="page === 'dashboard'"
             :overview="overview" :busy="busy" :updated-at="state.updated_at"
+            :certificates="state.certificates"
             :initial-minutes="errorScope.minutes" initial-rule=""
-            @overview="overview = $event" @add="openRule()" @apply="applyConfiguration"
+            @overview="overview = $event" @add="openRule()"
             @test="runNginxAction('test')" @reload="runNginxAction('reload')" @start="runNginxAction('start')"
             @stop="stopNginx"
             @copy="copyProxyAddress"
@@ -977,6 +1033,8 @@ onBeforeUnmount(() => {
               @save="saveRateLimitPolicy"
               @remove="removeRateLimitPolicy"
               @refresh="loadCore()"
+              @inspect="setPage('errors')"
+              @configure="setPage('rules')"
           /></template>
           <template v-else-if="page === 'rules'"
             ><div class="toolbar"><span
@@ -1023,7 +1081,7 @@ onBeforeUnmount(() => {
                   <button type="button" class="button ghost small group-toggle" :aria-expanded="!collapsedGroups.has(section.id)" :aria-controls="`group-rules-${section.id || 'ungrouped'}`" :aria-label="`${collapsedGroups.has(section.id) ? '展开' : '收起'}分组 ${section.name}`" @click="toggleGroupExpanded(section.id)"><PhCaretRight v-if="collapsedGroups.has(section.id)" :size="15" aria-hidden="true" /><PhCaretDown v-else :size="15" aria-hidden="true" />{{ collapsedGroups.has(section.id) ? '展开' : '收起' }}</button>
                   <h3>{{ section.name }}</h3><span class="proxy-group-count">{{ section.rules.length }} 条规则</span><p v-if="section.group" :title="groupDescription(section.group)">{{ groupDescription(section.group) }}</p>
                 </div>
-                <div class="table-actions"><button v-if="section.group" class="button ghost small" :disabled="busy" @click="groupPanel?.show(section.group)">编辑分组</button><button class="button ghost small" :disabled="busy" @click="addRuleToGroup(section.id)"><PhPlusCircle :size="15" />添加规则</button></div>
+                <div class="table-actions"><button v-if="section.group" class="button secondary small" :disabled="busy" @click="groupPanel?.show(section.group)">编辑分组</button><button class="button secondary small" :disabled="busy" @click="addRuleToGroup(section.id)"><PhPlusCircle :size="15" />添加规则</button></div>
               </header>
               <div v-show="!collapsedGroups.has(section.id)" :id="`group-rules-${section.id || 'ungrouped'}`">
               <div v-if="section.rules.length" class="table-wrap">
@@ -1112,7 +1170,7 @@ onBeforeUnmount(() => {
           <template v-else-if="page === 'certificates'"
             ><div class="toolbar">
               <div class="notice">
-                nginx-web 只保存 PEM
+                只保存 PEM
                 文件，不会把私钥返回到浏览器。证书目录权限为
                 0700，私钥文件权限为 0600。
               </div>
@@ -1125,7 +1183,7 @@ onBeforeUnmount(() => {
               </button>
             </div>
             <article class="card">
-              <ACMEJobs ref="acmeJobsPanel" :certificates="state.certificates" @changed="loadCore(true)" @action="acmeAction" />
+              <ACMEJobs ref="acmeJobsPanel" :certificates="state.certificates" @changed="loadCore(true)" />
               <div v-if="state.certificates.length" class="table-wrap">
                 <table class="table">
                   <thead>
@@ -1233,6 +1291,15 @@ onBeforeUnmount(() => {
                 <button class="button ghost small" @click="page = 'rules'">编辑代理规则</button>
                 <button
                   v-if="state.dirty"
+                  class="button danger-ghost small"
+                  :disabled="busy"
+                  title="恢复为当前正在生效的配置，不会重载 Nginx"
+                  @click="discardDraft"
+                >
+                  放弃草稿
+                </button>
+                <button
+                  v-if="state.dirty"
                   class="button primary small"
                   :disabled="busy"
                   title="将当前草稿应用到 Nginx，并生成新的历史版本"
@@ -1328,8 +1395,7 @@ onBeforeUnmount(() => {
             ><article class="card">
               <header class="card-header">
                 <div>
-                  <h2>生成的只读配置</h2>
-                  <p>配置由结构化规则生成，避免直接写入危险指令</p>
+                  <p>系统文件由结构化规则生成并保持只读；高级需求可单独管理自定义配置</p>
                 </div>
                 <span class="spacer"></span
                 ><button class="button ghost small" :disabled="busy" @click="loadConfig">
@@ -1346,9 +1412,9 @@ onBeforeUnmount(() => {
                 >
                   <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
                 </button>
-                <button class="button ghost small" @click="copyConfig">
-                  复制当前文件
-                </button>
+                <button v-if="selectedCustomConfig" class="button secondary small" :disabled="busy" @click="openCustomConfig(selectedCustomConfig)">编辑自定义配置</button>
+                <button v-if="selectedCustomConfig" class="button danger-ghost small" :disabled="busy" @click="deleteCustomConfig(selectedCustomConfig)">删除自定义配置</button>
+                <button class="button secondary small" :disabled="busy" @click="openCustomConfig()"><PhPlusCircle :size="14" />新建自定义配置</button>
               </header>
               <nav class="config-file-selectors" aria-label="配置文件分类">
                 <button class="button ghost" :class="{ 'config-category-active': configTab === 'master' }" :aria-pressed="configTab === 'master'" @click="configTab = 'master'">主配置</button>
@@ -1357,7 +1423,19 @@ onBeforeUnmount(() => {
                   <option v-for="file in category.files" :key="file.key" :value="file.key">{{ file.label }}</option>
                 </AppSelect>
               </nav>
-              <div class="config-current-file">{{ configTab === 'master' ? 'nginx.conf' : configTab }}</div>
+              <div class="config-current-file">
+                <span>{{ configTab === 'master' ? 'nginx.conf' : configTab }}</span>
+                <button
+                  type="button"
+                  class="icon-button config-copy-button"
+                  :aria-label="configCopied ? '配置已复制' : '复制当前配置文件'"
+                  :title="configCopied ? '配置已复制' : '复制当前文件'"
+                  @click="copyConfig"
+                >
+                  <PhCheckCircle v-if="configCopied" class="config-copy-success" :size="16" aria-hidden="true" />
+                  <PhCopy :size="16" aria-hidden="true" />
+                </button>
+              </div>
               <pre class="code-view">{{
                 config ? configText : "正在读取…"
               }}</pre>
@@ -1379,6 +1457,25 @@ onBeforeUnmount(() => {
     </div>
   </div>
   <RevisionPreview v-if="activePreview" :revision="activePreview" :title="showDraftPreview ? '当前草稿预览' : '历史配置预览'" @close="closePreview" />
+  <div v-if="customConfigOpen" class="modal-backdrop" @mousedown.self="!busy && (customConfigOpen = false)">
+    <section class="modal custom-config-modal" role="dialog" aria-modal="true" aria-labelledby="custom-config-title">
+      <header class="modal-header">
+        <div><h2 id="custom-config-title">{{ customConfigOriginal ? '编辑自定义配置' : '新建自定义配置' }}</h2><p>HTTP 配置使用 .conf，TCP/UDP Stream 配置使用 .stream；保存后需校验并应用。</p></div>
+        <button class="icon-button modal-close" aria-label="关闭" :disabled="busy" @click="customConfigOpen = false"><PhX :size="20" /></button>
+      </header>
+      <form class="modal-body custom-config-form" @submit.prevent="saveCustomConfig">
+        <div class="field custom-config-name-field">
+          <label for="custom-config-name">文件名</label>
+          <input id="custom-config-name" v-model.trim="customConfigForm.name" class="input" required maxlength="80" pattern="custom-[A-Za-z0-9][A-Za-z0-9._-]{0,71}\.(conf|stream)" placeholder="custom-1panel.conf" />
+          <span class="field-help">必须以 custom- 开头，并以 .conf 或 .stream 结尾。</span>
+        </div>
+        <label for="custom-config-content">配置内容</label>
+        <textarea id="custom-config-content" v-model="customConfigForm.content" class="textarea custom-config-editor" required spellcheck="false" maxlength="1048576"></textarea>
+        <div class="notice warning">自定义指令不会经过结构化安全限制。应用前会执行 nginx -t；校验失败时不会替换当前运行配置。</div>
+        <footer class="modal-footer"><button type="button" class="button ghost" :disabled="busy" @click="customConfigOpen = false">取消</button><button type="submit" class="button primary" :disabled="busy">{{ busy ? '保存中…' : '保存为草稿' }}</button></footer>
+      </form>
+    </section>
+  </div>
   <div
     v-if="modal"
     class="modal-backdrop"
@@ -1485,4 +1582,9 @@ onBeforeUnmount(() => {
 .draft-restored-title { color: var(--text); font-weight: 600; }
 .table tr.revision-source-row > td { background: var(--warning-soft); }
 .table tr.revision-source-row > td:first-child { box-shadow: inset 3px 0 var(--warning); }
+.custom-config-modal { width: min(960px, 100%); }
+.custom-config-form { display: grid; gap: 10px; }
+.custom-config-form > label { font-weight: 650; }
+.custom-config-editor { min-height: min(52vh, 520px); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.55; tab-size: 4; }
+.custom-config-form .modal-footer { padding: 8px 0 0; }
 </style>

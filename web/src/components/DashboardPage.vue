@@ -7,20 +7,21 @@ import {
   PhWarning, PhGlobe, PhShareNetwork, PhCaretLeft, PhCaretRight,
 } from "@phosphor-icons/vue";
 import { useDashboardData } from "../composables/useDashboardData";
-import type { DashboardData, DashboardRule, MetricCounts, Overview } from "../types";
+import type { CertificateMeta, DashboardData, DashboardRule, MetricCounts, Overview } from "../types";
 import type { TrafficSeries } from "./traffic-chart";
 import TrafficChart from "./TrafficChart.vue";
 import { trafficRanges, trafficPeriod } from "./traffic-ranges";
 
 const props = defineProps<{
   overview: Overview; busy: boolean; updatedAt: string;
+  certificates: CertificateMeta[];
   initialMinutes: number; initialRule: string;
 }>();
 const emit = defineEmits<{
   copy: [value: string, label: string];
-  overview: [value: Overview]; add: []; apply: []; test: []; reload: []; start: []; stop: [];
+  overview: [value: Overview]; add: []; test: []; reload: []; start: []; stop: [];
   errors: [scope: { minutes: number; rule: string }];
-  navigate: [page: "rules" | "streams" | "certificates" | "logs" | "config"];
+  navigate: [page: "rules" | "streams" | "certificates" | "logs" | "revisions" | "config"];
 }>();
 const minutes = ref(props.initialMinutes), selected = ref(props.initialRule);
 const { data, error, fetching, stats, rules, load } = useDashboardData({
@@ -51,8 +52,16 @@ const pageNumbers = computed(() => {
   const start = Math.max(1, Math.min(page.value - 1, pageCount.value - 4));
   return Array.from({ length: Math.min(5, pageCount.value) }, (_, index) => start + index);
 });
+const certificatePage = ref(1);
+const certificatePageCount = computed(() => Math.max(1, Math.ceil(props.certificates.length / 5)));
+const visibleCertificates = computed(() => props.certificates.slice((certificatePage.value - 1) * 5, certificatePage.value * 5));
+const certificatePageNumbers = computed(() => {
+  const start = Math.max(1, Math.min(certificatePage.value - 1, certificatePageCount.value - 4));
+  return Array.from({ length: Math.min(5, certificatePageCount.value) }, (_, index) => start + index);
+});
 watch([search, protocol, configFilter, sort, pageSize], () => { page.value = 1; });
 watch(pageCount, count => { page.value = Math.min(page.value, count); });
+watch(certificatePageCount, count => { certificatePage.value = Math.min(certificatePage.value, count); });
 const chosenName = computed(() => rules.value.find(rule => rule.id === selected.value)?.name);
 const series = computed<TrafficSeries[]>(() => selected.value ? [
   { key: "response_rps", label: "响应速率", color: "#3b82f6", unit: "req/s", area: true },
@@ -90,10 +99,15 @@ function averageRate(rule: DashboardRule) {
   return rule.counts && stats.value && stats.value.observed_seconds > 0
     ? rule.counts.requests / stats.value.observed_seconds : null;
 }
-function certificateText(cert: DashboardData["certificates"][number]) {
-  if (new Date(cert.not_before).getTime() > Date.now()) return "尚未生效";
-  if (new Date(cert.not_after).getTime() <= Date.now()) return "已过期";
-  return cert.days < 1 ? "不足 1 天后到期" : `${cert.days} 天后到期`;
+function certificateDate(value: string) {
+  return new Date(value).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+function certificateState(cert: CertificateMeta) {
+  const now = Date.now(), starts = new Date(cert.not_before).getTime(), expires = new Date(cert.not_after).getTime();
+  if (starts > now) return { label: "尚未生效", className: "danger" };
+  if (expires <= now) return { label: "已过期", className: "danger" };
+  if (expires - now < 30 * 86400000) return { label: "即将到期", className: "warning" };
+  return { label: "有效", className: "success" };
 }
 const issue = computed(() => {
   if (!data.value) return "";
@@ -139,7 +153,7 @@ const issue = computed(() => {
     </div>
     <div v-if="issue || overview.dirty" class="notice warning dashboard-notice">
       <PhWarningCircle :size="18" /><span>{{ issue || "当前草稿尚未应用，正在转发的服务仍使用上次生效配置。" }}</span>
-      <button v-if="overview.dirty" class="button secondary small" :disabled="busy" @click="emit('apply')">保存并应用</button>
+      <button v-if="overview.dirty" class="button secondary small" @click="emit('navigate', 'revisions')">查看详情<PhArrowRight :size="15" aria-hidden="true" /></button>
     </div>
 
     <section class="card traffic-card" :aria-busy="fetching">
@@ -231,14 +245,28 @@ const issue = computed(() => {
     </section>
 
     <section class="card certificate-attention" :class="{ 'has-alert': data?.certificates.length }">
-      <h2>证书状态</h2>
-      <div class="certificate-summary">
-        <PhWarning v-if="data?.certificates.length" :size="23" /><PhCheckCircle v-else :size="22" />
-        <span v-if="!data">{{ error ? "暂时无法读取证书状态" : "正在读取…" }}</span>
-        <template v-else-if="data.certificates.length"><strong>发现 {{ data.certificates.length }} 项需要处理</strong><span class="certificate-preview" :title="data.certificates.map(cert => `${cert.name} · ${certificateText(cert)}`).join('；')">{{ data.certificates[0]!.name }} · {{ certificateText(data.certificates[0]!) }}</span></template>
-        <span v-else>当前在用证书正常</span>
+      <header class="certificate-heading">
+        <h2>证书状态</h2>
         <button class="button secondary small" @click="emit('navigate', 'certificates')">查看证书<PhArrowRight :size="17" /></button>
+      </header>
+      <div v-if="certificates.length" class="certificate-list">
+        <div v-for="cert in visibleCertificates" :key="cert.id" class="certificate-summary" :class="`is-${certificateState(cert).className}`">
+          <PhWarning v-if="certificateState(cert).className !== 'success'" :size="23" />
+          <PhCheckCircle v-else :size="22" />
+          <strong>{{ cert.name }}</strong>
+          <span class="certificate-validity-range">{{ certificateDate(cert.not_before) }} ～ {{ certificateDate(cert.not_after) }}</span>
+          <span class="badge" :class="certificateState(cert).className">{{ certificateState(cert).label }}</span>
+        </div>
       </div>
+      <div v-else class="certificate-summary"><PhCheckCircle :size="22" /><span>还没有证书</span></div>
+      <footer v-if="certificates.length > 5" class="dashboard-pagination certificate-pagination">
+        <span>共 {{ certificates.length }} 张</span>
+        <div>
+          <button class="page-button" :disabled="certificatePage <= 1" aria-label="证书上一页" @click="certificatePage--"><PhCaretLeft :size="15" /></button>
+          <button v-for="number in certificatePageNumbers" :key="number" class="page-button" :class="{ active: certificatePage === number }" :aria-label="`证书第 ${number} 页`" :aria-current="certificatePage === number ? 'page' : undefined" @click="certificatePage = number">{{ number }}</button>
+          <button class="page-button" :disabled="certificatePage >= certificatePageCount" aria-label="证书下一页" @click="certificatePage++"><PhCaretRight :size="15" /></button>
+        </div>
+      </footer>
     </section>
   </div>
 </template>
@@ -337,14 +365,20 @@ h2 { font-size: 19px; font-weight: 570; }
 .page-size { height: 33px; width: 98px; padding-block: 0; font-size: 15px; margin-left: 7px; }
 .certificate-attention { padding: 9px 20px; }
 .certificate-attention h2 { margin: 0; font-size: 17px; font-weight: 500; }
+.certificate-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.certificate-heading .button { flex-shrink: 0; gap: 14px; min-width: 128px; font-size: 15px; font-weight: 450; background: #fff; }
+.certificate-list { display: grid; overflow-x: auto; }
+.certificate-pagination { padding: 8px 0 0; }
 .certificate-summary { display: flex; align-items: center; gap: 14px; padding: 0 8px; color: #414b57; font-size: 15px; min-height: 33px; }
+.certificate-list .certificate-summary + .certificate-summary { border-top: 1px solid var(--line); }
 .certificate-summary > svg { color: var(--accent); flex-shrink: 0; }
-.certificate-summary > strong { font-size: 17px; font-weight: 550; white-space: nowrap; }
-.certificate-summary .button { margin-left: auto; flex-shrink: 0; gap: 14px; min-width: 128px; font-size: 15px; font-weight: 450; background: #fff; }
-.certificate-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.certificate-summary.is-warning > svg { color: var(--warning); }
+.certificate-summary.is-danger > svg { color: var(--danger); }
+.certificate-summary > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 17px; font-weight: 550; white-space: nowrap; }
+.certificate-summary > .badge { flex-shrink: 0; }
+.certificate-validity-range { flex-shrink: 0; color: var(--text-muted); white-space: nowrap; }
 .certificate-attention.has-alert { border-color: #ffe0a6; margin-top: 3px; }
-.has-alert .certificate-summary > strong, .has-alert .certificate-summary > svg { color: var(--warning); }
-.has-alert .certificate-summary .button { border-color: #ffe0a6; }
+.has-alert .certificate-heading .button { border-color: #ffe0a6; }
 .service-facts dt,
 .traffic-metric > span,
 .range-buttons button,
@@ -420,10 +454,10 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--accent); o
   .dashboard-pagination { padding: 8px 14px; flex-wrap: wrap; }
   .dashboard-pagination > div { margin-left: auto; }
   .certificate-attention { padding: 10px 14px; }
-  .certificate-summary { flex-wrap: wrap; padding: 6px 0 0; gap: 8px; }
+  .certificate-summary { flex-wrap: nowrap; padding: 7px 0; gap: 6px 10px; }
   .certificate-summary > strong { font-size: 15px; }
-  .certificate-preview { flex-basis: 100%; order: 1; }
-  .certificate-summary .button { min-width: 102px; gap: 8px; }
+  .certificate-heading { align-items: flex-start; }
+  .certificate-heading .button { min-width: 102px; gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .metric-arrow { transition: none; } }
 </style>

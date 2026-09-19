@@ -65,14 +65,14 @@ const primaryFields = computed(() => selected.value?.fields.filter(f => !isAdvan
 const providerLink = computed(() => selected.value && dnsProviderLink(selected.value.code, selected.value.name));
 </script>
 <template>
-  <div class="field full"><label for="acme-ca">证书颁发机构</label><AppSelect id="acme-ca" :model-value="modelValue.ca" class="select" :disabled="busy" @update:model-value="set('ca', $event)"><option value="letsencrypt">Let’s Encrypt</option><option value="zerossl">ZeroSSL</option><option value="staging">Let’s Encrypt 测试环境</option><option value="custom">自定义 ACME 服务</option></AppSelect><span v-if="modelValue.ca === 'staging'" class="field-help">仅供测试，浏览器不会信任测试证书。</span></div>
+  <div class="field full"><label for="acme-ca">证书颁发机构</label><AppSelect id="acme-ca" :model-value="modelValue.ca" class="select" :disabled="busy" @update:model-value="set('ca', $event)"><option value="letsencrypt">Let’s Encrypt</option><option value="zerossl">ZeroSSL</option><option value="custom">自定义 ACME 服务</option></AppSelect></div>
   <div v-if="modelValue.ca === 'custom'" class="field full"><label for="acme-url">ACME Directory URL</label><input id="acme-url" class="input" type="url" required placeholder="https://ca.example.com/directory" :value="modelValue.directory_url" :disabled="busy" @input="set('directory_url', ($event.target as HTMLInputElement).value)" /></div>
   <template v-if="modelValue.ca === 'zerossl' || modelValue.ca === 'custom'">
     <div class="field full"><label for="acme-kid">EAB KID</label><input id="acme-kid" class="input" :required="modelValue.ca === 'zerossl'" :value="modelValue.credentials.eab_kid" :disabled="busy" autocomplete="off" @input="credential('eab_kid', ($event.target as HTMLInputElement).value)" /></div>
     <div class="field full"><label for="acme-hmac">EAB HMAC Key</label><input id="acme-hmac" class="input" type="password" :required="modelValue.ca === 'zerossl'" :value="modelValue.credentials.eab_hmac" :disabled="busy" autocomplete="new-password" @input="credential('eab_hmac', ($event.target as HTMLInputElement).value)" /><span class="field-help">{{ modelValue.ca === 'zerossl' ? '在 ZeroSSL 控制台生成 EAB 凭据，不能用 DNS Token 代替。' : '仅在证书机构要求 EAB 时填写，两项需同时提供。' }}</span></div>
   </template>
 
-  <div class="field full"><label for="acme-provider">DNS 验证服务商</label><AppSelect id="acme-provider" :model-value="modelValue.provider" class="select" :disabled="busy || loading" @update:model-value="selectProvider"><option v-for="provider in catalog?.providers ?? []" :key="provider.code" :value="provider.code">{{ provider.name }}</option></AppSelect></div>
+  <div class="field full"><label for="acme-provider">DNS 验证服务商</label><AppSelect id="acme-provider" :model-value="modelValue.provider" class="select" searchable search-placeholder="搜索 DNS 服务商" :disabled="busy || loading" @update:model-value="selectProvider"><option v-for="provider in catalog?.providers ?? []" :key="provider.code" :value="provider.code">{{ provider.name }}</option></AppSelect></div>
   <div v-if="loadError" class="full notice warning" role="alert">服务商列表加载失败：{{ loadError }} <button type="button" class="button ghost small" @click="loadProviders">重试</button></div>
   <div v-if="selected" class="full dns-provider-fields">
     <p v-if="providerLink" class="field-help"><a class="dns-credential-link" :href="providerLink.url" target="_blank" rel="noopener noreferrer">{{ providerLink.label }}</a></p>
@@ -89,7 +89,7 @@ const providerLink = computed(() => selected.value && dnsProviderLink(selected.v
   <div class="field full"><label for="acme-dns-timeout">DNS 等待时间（秒）</label><input id="acme-dns-timeout" class="input" type="number" min="30" max="1800" required :value="modelValue.propagation_seconds" :disabled="busy" @input="set('propagation_seconds', Number(($event.target as HTMLInputElement).value))" /></div>
   <label class="checkbox-row full"><input type="checkbox" :checked="modelValue.rotate_key" :disabled="busy" @change="set('rotate_key', ($event.target as HTMLInputElement).checked)" />每次续期更换私钥</label>
   <label class="checkbox-row full"><input type="checkbox" required :checked="modelValue.accept_terms" :disabled="busy" @change="set('accept_terms', ($event.target as HTMLInputElement).checked)" />我同意所选证书机构的服务条款，并授权自动申请和续期</label>
-  <span class="field-help full"><a v-if="modelValue.ca === 'letsencrypt' || modelValue.ca === 'staging'" href="https://letsencrypt.org/repository/" target="_blank" rel="noopener noreferrer">查看 Let’s Encrypt 服务条款</a><a v-else-if="modelValue.ca === 'zerossl'" href="https://zerossl.com/terms/" target="_blank" rel="noopener noreferrer">查看 ZeroSSL 服务条款</a><template v-else>请向自定义证书机构确认服务条款。</template> 申请在后台执行；签发后可绑定到代理规则，后续自动续期。</span>
+  <span class="field-help full"><a v-if="modelValue.ca === 'letsencrypt'" href="https://letsencrypt.org/repository/" target="_blank" rel="noopener noreferrer">查看 Let’s Encrypt 服务条款</a><a v-else-if="modelValue.ca === 'zerossl'" href="https://zerossl.com/terms/" target="_blank" rel="noopener noreferrer">查看 ZeroSSL 服务条款</a><template v-else>请向自定义证书机构确认服务条款。</template> 申请在后台执行；签发后可绑定到代理规则，后续自动续期。</span>
 </template>
 
 <style scoped>

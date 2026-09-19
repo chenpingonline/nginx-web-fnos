@@ -85,5 +85,6 @@ export function useDashboardData(options: {
         : { ...rule, counts: null },
     ),
   );
-  return { data, error, fetching, stats, rules, load };
+  const currentData = computed(() => loadedMinutes.value === options.minutes.value && loadedRule.value === options.selected.value ? data.value : null);
+  return { data, currentData, error, fetching, stats, rules, load };
 }

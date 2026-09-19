@@ -13,6 +13,7 @@ const props = defineProps<{
   loading?: boolean;
   compact?: boolean;
   height?: number;
+  connectGaps?: boolean;
 }>();
 const chartId = useId();
 const hover = ref<number | null>(null);
@@ -95,7 +96,7 @@ const plotted = computed(() =>
     };
     values.forEach((amount, index) => {
       if (amount === null) {
-        finish();
+        if (!props.connectGaps) finish();
         return;
       }
       if (!points.length) first = x(index);
@@ -103,13 +104,15 @@ const plotted = computed(() =>
       points.push(`${last},${y(amount, item)}`);
     });
     finish();
-    const isolated = values.flatMap((amount, index) =>
-      amount !== null &&
-      (index === 0 || values[index - 1] === null) &&
-      (index === values.length - 1 || values[index + 1] === null)
-        ? [{ x: x(index), y: y(amount, item) }]
-        : [],
-    );
+    const visibleValues = values.filter((amount): amount is number => amount !== null);
+    const isolated = values.flatMap((amount, index) => {
+      if (amount === null) return [];
+      const isolatedPoint = props.connectGaps
+        ? visibleValues.length === 1
+        : (index === 0 || values[index - 1] === null) &&
+          (index === values.length - 1 || values[index + 1] === null);
+      return isolatedPoint ? [{ x: x(index), y: y(amount, item) }] : [];
+    });
     return {
       ...item,
       paths,
@@ -281,7 +284,7 @@ watch(
       class="chart-plot"
       tabindex="0"
       role="img"
-      :aria-label="`${description}趋势。左右方向键查看采样点；空白处表示没有采集数据。`"
+      :aria-label="`${description}趋势。左右方向键查看采样点；${connectGaps ? '缺失采样点使用相邻数据连接' : '空白处表示没有采集数据'}。`"
       @pointermove="move"
       @pointerleave="hover = null"
       @keydown="key"

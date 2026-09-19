@@ -4,13 +4,56 @@ import ACMEJobDetails from './ACMEJobDetails.vue';
 import { request, errorMessage, jsonBody } from '../api';
 import type { ACMEJob, CertificateMeta } from '../types';
 const props = defineProps<{ certificates: CertificateMeta[] }>();
-const emit = defineEmits<{ changed: []; action: [id: string, action: string] }>();
+const emit = defineEmits<{ changed: [] }>();
 const jobs = ref<ACMEJob[]>([]);
 const error = ref('');
 let timer: ReturnType<typeof setTimeout>;
 let stopped = false;
 let controller: AbortController | undefined;
 let fingerprint = '';
+type ActionFeedback = { type: 'success' | 'error'; message: string };
+const actionPendingId = ref('');
+const actionFeedback = ref<Record<string, ActionFeedback>>({});
+const feedbackTimers = new Map<string, number>();
+
+function setActionFeedback(id: string, feedback: ActionFeedback) {
+  actionFeedback.value = { ...actionFeedback.value, [id]: feedback };
+  const previous = feedbackTimers.get(id);
+  if (previous) window.clearTimeout(previous);
+  feedbackTimers.set(id, window.setTimeout(() => {
+    const next = { ...actionFeedback.value };
+    delete next[id];
+    actionFeedback.value = next;
+    feedbackTimers.delete(id);
+  }, 2800));
+}
+
+async function performAction(id: string, action: string) {
+  if (actionPendingId.value) return;
+  actionPendingId.value = id;
+  try {
+    await request(`/acme/${id}${action === 'delete' ? '' : '/' + action}`, { method: action === 'delete' ? 'DELETE' : 'POST' });
+    const messages: Record<string, string> = {
+      retry: '续期任务已提交',
+      pause: '自动续期已暂停',
+      resume: '自动续期已启用',
+      delete: 'ACME 任务已移除',
+    };
+    jobs.value = jobs.value.map(job => {
+      if (job.id !== id) return job;
+      if (action === 'retry') return { ...job, status: 'queued', message: '等待执行' };
+      if (action === 'pause') return { ...job, enabled: false, message: '自动续期已暂停' };
+      if (action === 'resume') return { ...job, enabled: true, status: 'queued', message: '自动续期已启用' };
+      return job;
+    });
+    setActionFeedback(id, { type: 'success', message: messages[action] || '任务已更新' });
+    emit('changed');
+  } catch (e) {
+    setActionFeedback(id, { type: 'error', message: errorMessage(e) });
+  } finally {
+    actionPendingId.value = '';
+  }
+}
 
 const selectedId = ref('');
 const editing = ref(false);
@@ -62,10 +105,6 @@ async function showDetails(id: string) {
   detail.value?.showModal();
 }
 function closeDetails() { if (saving.value) return; detail.value?.close(); selectedId.value = ''; returnFocus?.focus(); }
-function detailAction(id: string, action: string) {
-  if (action === 'delete') closeDetails();
-  emit('action', id, action);
-}
 defineExpose({ showDetails, showEdit });
 const date = (value: string) => new Date(value).toLocaleString();
 async function load() {
@@ -80,13 +119,19 @@ async function load() {
   finally { if (!stopped) timer = setTimeout(() => void load(), 3000); }
 }
 onMounted(() => void load());
-onBeforeUnmount(() => { stopped = true; clearTimeout(timer); controller?.abort(); });
+onBeforeUnmount(() => {
+  stopped = true;
+  clearTimeout(timer);
+  controller?.abort();
+  feedbackTimers.forEach(value => window.clearTimeout(value));
+  feedbackTimers.clear();
+});
 </script>
 <template>
   <article v-if="pendingJobs.length || error" class="card acme-jobs">
     <header class="acme-heading"><h3>ACME 自动申请与续期</h3><span class="field-help">{{ pendingJobs.length }} 个任务 · 自动刷新</span></header>
     <p v-if="error" class="notice warning" role="alert">{{ error }}</p>
-    <ACMEJobDetails v-for="job in pendingJobs" :key="job.id" :job="job" @action="(id, action) => emit('action', id, action)" />
+    <ACMEJobDetails v-for="job in pendingJobs" :key="job.id" :job="job" :pending="actionPendingId === job.id" :feedback="actionFeedback[job.id]" @action="performAction" />
   </article>
   <dialog ref="detail" class="modal acme-detail-dialog" aria-labelledby="acme-detail-title" @cancel.prevent="closeDetails">
     <header class="modal-header"><div><h2 id="acme-detail-title">{{ editing ? '修改证书域名' : '证书详情' }}</h2><p>{{ selected?.name }}</p></div><button type="button" class="icon-button" aria-label="关闭证书详情" autofocus @click="closeDetails">×</button></header>
@@ -109,7 +154,7 @@ onBeforeUnmount(() => { stopped = true; clearTimeout(timer); controller?.abort()
       <p v-if="editing && !editJob && !saving && !editError" class="notice warning">此证书未关联 ACME 申请配置，无法直接重新签发。请通过“导入证书”中的 ACME 申请填写域名和 DNS 验证配置。</p>
       <h3>ACME 自动申请与续期</h3>
       <p v-if="error" class="notice warning" role="alert">{{ error }}</p>
-      <ACMEJobDetails v-for="job in selectedJobs" :key="job.id" :job="job" @action="detailAction" />
+      <ACMEJobDetails v-for="job in selectedJobs" :key="job.id" :job="job" :pending="actionPendingId === job.id" :feedback="actionFeedback[job.id]" @action="performAction" />
       <p v-if="!selectedJobs.length && !error" class="field-help">此证书未关联 ACME 自动续期任务。</p>
     </div>
     <footer class="modal-footer">

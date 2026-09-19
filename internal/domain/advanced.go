@@ -312,6 +312,9 @@ func ApplyStateDefaults(state *State) {
 	if state.Rules == nil {
 		state.Rules = []ProxyRule{}
 	}
+	if state.CustomConfigs == nil {
+		state.CustomConfigs = []CustomConfig{}
+	}
 	if state.RateLimitPolicies == nil {
 		state.RateLimitPolicies = []RateLimitPolicy{}
 	}
