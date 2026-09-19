@@ -64,7 +64,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .button > svg { flex: 0 0 auto; }
 .button:hover:not(:disabled) { transform: translateY(-1px); }
 .button:active:not(:disabled) { transform: translateY(0); }
-.button:focus-visible, .nav-item:focus-visible, .quick-action:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(33,173,130,.19); }
+.button:focus-visible, .icon-button:focus-visible, .app-update-github:focus-visible, .nav-item:focus-visible, .quick-action:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(33,173,130,.19); }
 .button.primary { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(27,151,112,.17), inset 0 1px rgba(255,255,255,.18); }
 .button.primary:hover:not(:disabled) { background: var(--accent-dark); }
 .button.secondary { background: rgba(255,255,255,.72); color: var(--text); border-color: var(--line-strong); box-shadow: 0 1px 2px rgba(20,35,50,.035); }
@@ -74,6 +74,9 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .button.small { min-height: 30px; padding: 0 9px; font-size: 13px; }
 .icon-button { border: 0; background: transparent; color: var(--text-muted); width: 36px; height: 36px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 23px; }
 .icon-button:hover { background: var(--surface-soft); color: var(--text); }
+.app-update-github { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: #000; }
+.app-update-github svg { width: 20px; height: 20px; fill: currentColor; }
+html[data-theme="light"] .app-update-github { color: #fff; }
 
 .grid { display: grid; gap: 14px; }
 .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.76); overflow: hidden; backdrop-filter: blur(18px); }

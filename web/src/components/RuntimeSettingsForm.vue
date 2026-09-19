@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppSelect from "./AppSelect.vue";
+import { PhGithubLogo } from "@phosphor-icons/vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import type { Settings } from "../types";
 const props = defineProps<{
@@ -63,6 +64,16 @@ function addSplit() {
           <h2>基础设置</h2>
           <p>默认入口和配置历史</p>
         </div>
+        <a
+          class="app-update-github spacer"
+          href="https://github.com/chenpingonline/nginx-web-fnos"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="打开 nginx-web GitHub 仓库"
+          title="GitHub 仓库"
+        >
+          <PhGithubLogo weight="fill" aria-hidden="true" />
+        </a>
       </header>
       <div class="card-body form-grid">
         <div class="field">

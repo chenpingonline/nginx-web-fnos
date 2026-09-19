@@ -97,10 +97,13 @@ function inspect(rule:string) { selected.value=rule; tab.value='sessions'; }
 .stream-filters .select { width:160px; }
 .stream-detail { background:var(--surface-soft); white-space:normal; overflow-wrap:anywhere; }
 .stream-footer { display:flex; justify-content:flex-end; gap:12px; align-items:center; padding:16px; }
-.stream-analysis .analysis-metric strong { font-size:26px; }
-.stream-analysis .analysis-metrics { grid-template-columns:repeat(5,minmax(0,1fr)); }
-@media(max-width:1100px) { .stream-analysis .analysis-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-@media(max-width:700px) { .stream-filters { flex-wrap:wrap; } .stream-analysis .analysis-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.stream-analysis .analysis-metrics { grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }
+.stream-analysis .analysis-metric { gap:4px; min-height:92px; padding:10px 12px; }
+.stream-analysis .analysis-metric > span { font-size:13px; }
+.stream-analysis .analysis-metric strong { font-size:22px; line-height:1.25; }
+.stream-analysis .analysis-metric small { font-size:11px; line-height:1.35; }
+@media(max-width:850px) { .stream-analysis .analysis-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media(max-width:600px) { .stream-filters { flex-wrap:wrap; } .stream-analysis .analysis-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 </style>
 
 <style scoped src="./analysis-common.css"></style>

@@ -1,5 +1,5 @@
 appname                    = nginx-web
-version                    = 0.2.26
+version                    = 0.2.27
 display_name               = nginx-web
 desc                       = fnOS 原生 Nginx 反向代理可视化管理工具。独立运行，不修改飞牛系统 Nginx。
 maintainer                 = chenping
@@ -13,5 +13,5 @@ disable_authorization_path = true
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 增加当前 TCP 连接数，并将会话时间显示到毫秒。
+changelog                  = 在全局设置中增加 GitHub 仓库入口，并适配亮暗主题。
 micro_app                  = true
