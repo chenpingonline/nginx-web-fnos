@@ -4,6 +4,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FPK="${1:?用法: verify-fpk.sh <file.fpk>}"; WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 tar -xzf "$FPK" -C "$WORK"
 for f in app.tgz manifest cmd/main config/privilege config/resource ICON.PNG ICON_256.PNG; do [[ -e "$WORK/$f" ]] || { echo "FPK 缺少 $f" >&2; exit 1; }; done
+[[ ! -e "$WORK/LICENSE" ]] || { echo 'FPK 根目录不应包含 LICENSE，以免触发安装许可确认页' >&2; exit 1; }
 EXPECTED_MD5="$(awk -F= '$1 ~ /^[[:space:]]*checksum[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2}' "$WORK/manifest")"
 if command -v md5sum >/dev/null 2>&1; then ACTUAL_MD5="$(md5sum "$WORK/app.tgz" | awk '{print $1}')"; else ACTUAL_MD5="$(md5 -q "$WORK/app.tgz")"; fi
 [[ -n "$EXPECTED_MD5" && "$EXPECTED_MD5" == "$ACTUAL_MD5" ]] || { echo 'app.tgz MD5 不匹配' >&2; exit 1; }
@@ -15,7 +16,7 @@ case "$PLATFORM" in
 esac
 [[ -f "$WORK/NGINX_BINARY_SHA256SUMS.txt" ]] || { echo 'FPK 缺少 NGINX_BINARY_SHA256SUMS.txt' >&2; exit 1; }
 mkdir -p "$WORK/app"; tar -xzf "$WORK/app.tgz" -C "$WORK/app"
-for f in bin/nginx-web-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
+for f in bin/nginx-web-server bin/nginx etc/mime.types ui/config ui/images/icon_64.png ui/images/icon_256.png licenses/LICENSE licenses/NGINX_LICENSE licenses/NOTICE licenses/THIRD_PARTY_LICENSES.md; do [[ -e "$WORK/app/$f" ]] || { echo "app.tgz 缺少 $f" >&2; exit 1; }; done
 file "$WORK/app/bin/nginx-web-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
 file "$WORK/app/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构错误' >&2; exit 1; }
 VERSION="$(python3 "$ROOT/scripts/version.py" "$WORK/manifest")"

@@ -44,15 +44,15 @@ file "$APP_STAGE/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 必�
 grep -aFq 'nginx version: nginx/1.30.4' "$APP_STAGE/bin/nginx" || { echo '无法确认 Nginx 1.30.4 版本字符串' >&2; exit 1; }
 NGINX_SHA256="$(sha256_file "$APP_STAGE/bin/nginx")"
 echo '[5/8] 组装 app.tgz'
-mkdir -p "$APP_STAGE/etc"
+mkdir -p "$APP_STAGE/etc" "$APP_STAGE/licenses"
 cp -a "$ROOT/packaging/fnos/app/ui" "$APP_STAGE/"
 cp "$ROOT/third_party/nginx/mime.types" "$APP_STAGE/etc/mime.types"
+cp "$ROOT/LICENSE" "$ROOT/NGINX_LICENSE" "$ROOT/NOTICE" "$ROOT/THIRD_PARTY_LICENSES.md" "$APP_STAGE/licenses/"
 create_archive "$APP_STAGE" "$STAGE/app.tgz"
 if command -v md5sum >/dev/null 2>&1; then APP_MD5="$(md5sum "$STAGE/app.tgz" | awk '{print $1}')"; else APP_MD5="$(md5 -q "$STAGE/app.tgz")"; fi
 echo '[6/8] 组装 FPK 元数据'
 cp -a "$ROOT/packaging/fnos/cmd" "$ROOT/packaging/fnos/config" "$ROOT/packaging/fnos/wizard" "$STAGE/"
 cp "$ROOT/packaging/fnos/ICON.PNG" "$ROOT/packaging/fnos/ICON_256.PNG" "$STAGE/"
-cp "$ROOT/LICENSE" "$ROOT/NGINX_LICENSE" "$ROOT/NOTICE" "$ROOT/THIRD_PARTY_LICENSES.md" "$STAGE/"
 if [[ "$ARCH" == arm64 ]]; then cp "$ROOT/third_party/nginx/arm64/SOURCES.txt" "$STAGE/NGINX_ARM64_SOURCES.txt"; cp "$ROOT/third_party/nginx/arm64/SHA256SUMS.txt" "$STAGE/NGINX_ARM64_SHA256SUMS.txt";
 else cp "$ROOT/third_party/nginx/x86_64/SOURCES.txt" "$STAGE/NGINX_X86_64_SOURCES.txt"; cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA256SUMS.txt"; fi
 printf '%s  nginx\n' "$NGINX_SHA256" > "$STAGE/NGINX_BINARY_SHA256SUMS.txt"
