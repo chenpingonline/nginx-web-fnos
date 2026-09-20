@@ -74,7 +74,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .button.small { min-height: 30px; padding: 0 9px; font-size: 13px; }
 .icon-button { border: 0; background: transparent; color: var(--text-muted); width: 36px; height: 36px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 23px; }
 .icon-button:hover { background: var(--surface-soft); color: var(--text); }
-.app-update-github { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: #000; }
+.app-update-github { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #000; text-decoration: none; transition: background-color .16s ease, border-color .16s ease, color .16s ease; }
+.app-update-github:hover { background: var(--surface-soft); border-color: var(--line-strong); color: var(--text); }
 .app-update-github svg { width: 20px; height: 20px; fill: currentColor; }
 html[data-theme="light"] .app-update-github { color: #fff; }
 
