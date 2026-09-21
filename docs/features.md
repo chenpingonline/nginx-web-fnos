@@ -37,8 +37,8 @@
 - 配置规则名称、一个或多个域名/IP、监听端口及 `*` 默认站点。
 - 配置 HTTP 或 HTTPS 入口、手动选择证书及 HTTP/2。
 - 入口显示完整 URL，支持复制与跳转；后端地址支持复制。目标主机支持粘贴不带业务路径的 HTTP/HTTPS 地址，自动拆分协议、主机和端口。
-- 使用单个 HTTP/HTTPS 后端服务，或选择可复用的 HTTP 后端服务组。
-- 配置后端服务 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
+- 使用单个 HTTP/HTTPS 转发服务，或选择可复用的 HTTP 转发服务组。
+- 配置转发服务 TLS 证书校验、Host 保留、WebSocket、SSE/流式传输、请求体大小及连接/读取/发送超时。
 - 按客户端 IP 限制每秒请求数、突发请求、并发连接数和下载速度。
 - 为根路径和额外 Location 分别选择前缀、精确或正则匹配，并为每个路径配置不同处理方式。
 - Location 后端支持 HTTP 反向代理、静态文件、固定返回/跳转、gRPC、FastCGI、uWSGI、SCGI、Memcached 和 Stub Status。
@@ -46,7 +46,7 @@
 - 支持 HTTP 跳转 HTTPS，以及 `last`、`break`、临时跳转和永久跳转 Rewrite。
 - 支持代理缓存区、磁盘上限、未访问失效、响应有效期、自定义缓存 Key、变量绕过缓存、故障使用过期缓存和大文件 Slice。
 - 支持 IP/CIDR 允许与拒绝、Basic Auth、Auth Request、Secure Link、Referer 防盗链，以及静态 Location 的有限 WebDAV。
-- 支持添加、覆盖或清空后端服务请求 Header，以及通过原生 `add_header` 添加响应 Header。
+- 支持添加、覆盖或清空转发服务请求 Header，以及通过原生 `add_header` 添加响应 Header。
 - 支持 Sub Filter 内容替换、Addition 响应前后追加、Mirror 请求镜像和 SSI。
 
 ### HTTP(S) 监听类型
@@ -59,17 +59,17 @@
 
 - 创建、编辑、启用、停用和删除 TCP/UDP 四层代理规则。
 - 支持 TCP/UDP 协议与启用状态组合筛选，按名称、监听地址、端口、目标服务或 SNI 域名搜索，显示匹配数量并支持一键重置。
-- 配置监听地址、监听端口、单个后端服务或 Stream 后端服务组。
+- 配置监听地址、监听端口、单节点服务或 Stream 转发服务组。
 - 配置连接超时、会话超时和 UDP 响应次数。
-- 支持入口接收和向后端服务发送 PROXY Protocol，并配置可信代理地址。
+- 支持入口接收和向转发服务发送 PROXY Protocol，并配置可信代理地址。
 - TCP 支持关闭 TLS、TLS 终止和 TLS SNI 透传；TLS 终止可选择已导入证书。
-- SNI 透传可按多个域名分流到不同单节点后端服务或 Stream 后端服务组。
+- SNI 透传可按多个域名分流到不同单节点转发服务或 Stream 转发服务组。
 - 支持 Stream 访问日志、单 IP 最大连接数及 IP/CIDR 允许与拒绝。
 - 适用于 SSH、数据库、MQTT、游戏服务和 HTTPS 四层透传等场景。
 
-## 后端服务组
+## 转发服务组
 
-- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的后端服务组，并在多个规则间复用。
+- 分别创建供 HTTP/HTTPS 或 TCP/UDP 使用的转发服务组，并在多个规则间复用。
 - 管理多个服务器节点的主机、端口、权重、最大失败次数、故障恢复时间、备份和停用状态。
 - HTTP 池支持 Round Robin、Least Connections、IP Hash、Hash 和 Random Two Least Connections。
 - Stream 池支持 Round Robin、Least Connections、Hash 和 Random Two Least Connections。
@@ -108,7 +108,7 @@
 
 ## 备份与恢复
 
-- 下载 JSON 备份，包含当前已保存的全局设置、HTTP(S)/TCP/UDP 代理、HTTP(S) 代理分组、后端服务组、限流策略、证书与私钥（包括尚未应用的草稿）。
+- 下载 JSON 备份，包含当前已保存的全局设置、HTTP(S)/TCP/UDP 代理、HTTP(S) 代理分组、转发服务组、限流策略、证书与私钥（包括尚未应用的草稿）。
 - 导入前显示备份时间和数量摘要，确认后恢复为草稿，需手动应用；恢复前自动保存一份配置历史。
 - 保留现有证书及运行中的配置文件；不同的证书材料创建新副本并更新草稿引用，避免改变当前 HTTPS 服务。
 - 备份含明文私钥，请妥善保管。最大 64 MB，仅支持兼容的备份及配置版本。
@@ -147,7 +147,7 @@
 - 页面顶部可随时刷新状态、运行 `nginx -t`，或保存并应用全部草稿。
 - 应用配置时先在隔离候选目录运行 `nginx -t`，通过后再原子替换正式配置。
 - 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
-- 校验重复域名、端口冲突、证书/后端服务组引用、IP/CIDR、路径和指令参数范围。
+- 校验重复域名、端口冲突、证书/转发服务组引用、IP/CIDR、路径和指令参数范围。
 - 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
 - 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
 - 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。

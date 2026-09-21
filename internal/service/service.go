@@ -42,13 +42,15 @@ type NginxStatus = domain.NginxStatus
 type ApplyResult = domain.ApplyResult
 
 type AppService struct {
-	paths         Paths
-	store         *Store
-	nginx         *NginxManager
-	mu            sync.Mutex
-	metrics       *metrics.Collector
-	streamMetrics *metrics.StreamCollector
-	acme          *acmemanager.Manager
+	paths               Paths
+	store               *Store
+	nginx               *NginxManager
+	mu                  sync.Mutex
+	metrics             *metrics.Collector
+	streamMetrics       *metrics.StreamCollector
+	acme                *acmemanager.Manager
+	authMu              sync.RWMutex
+	appliedAuthProfiles []domain.AuthProfile
 }
 
 type Overview struct {
@@ -60,6 +62,7 @@ type Overview struct {
 	EnabledCount     int         `json:"enabled_count"`
 	CertificateCount int         `json:"certificate_count"`
 	Dirty            bool        `json:"dirty"`
+	AppliedKnown     bool        `json:"applied_known"`
 	LastAppliedAt    *time.Time  `json:"last_applied_at,omitempty"`
 	LastApplyMessage string      `json:"last_apply_message,omitempty"`
 	LastApplyError   string      `json:"last_apply_error,omitempty"`
@@ -96,6 +99,7 @@ func New(paths Paths) (*AppService, error) {
 	if err != nil {
 		return nil, err
 	}
+	service.initializeAppliedAuth()
 	return service, nil
 }
 
@@ -108,6 +112,7 @@ func (s *AppService) Prepare() (ApplyResult, error) {
 
 func (s *AppService) Overview() Overview {
 	state := s.store.Snapshot()
+	_, appliedKnown := s.appliedState(state)
 	return Overview{
 		AppName:          domain.AppName,
 		AppVersion:       domain.AppVersion,
@@ -117,6 +122,7 @@ func (s *AppService) Overview() Overview {
 		EnabledCount:     domain.EnabledRuleCount(state),
 		CertificateCount: len(state.Certificates),
 		Dirty:            state.Dirty,
+		AppliedKnown:     appliedKnown,
 		LastAppliedAt:    state.LastAppliedAt,
 		LastApplyMessage: state.LastApplyMessage,
 		LastApplyError:   state.LastApplyError,
@@ -172,7 +178,7 @@ func (s *AppService) CreateUpstreamPool(input UpstreamPool) (UpstreamPool, error
 
 func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (UpstreamPool, error) {
 	if !domain.ValidID(id) {
-		return UpstreamPool{}, errors.New("后端服务组 ID 不合法")
+		return UpstreamPool{}, errors.New("转发服务组 ID 不合法")
 	}
 	var updated UpstreamPool
 	err := s.store.Update(func(state *State) error {
@@ -189,28 +195,28 @@ func (s *AppService) UpdateUpstreamPool(id string, input UpstreamPool) (Upstream
 			updated = input
 			return nil
 		}
-		return errors.New("找不到指定后端服务组")
+		return errors.New("找不到指定转发服务组")
 	})
 	return updated, err
 }
 
 func (s *AppService) DeleteUpstreamPool(id string) error {
 	if !domain.ValidID(id) {
-		return errors.New("后端服务组 ID 不合法")
+		return errors.New("转发服务组 ID 不合法")
 	}
 	return s.store.Update(func(state *State) error {
 		for _, rule := range state.Rules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("后端服务组仍被规则 %q 使用", rule.Name)
+				return fmt.Errorf("转发服务组仍被规则 %q 使用", rule.Name)
 			}
 		}
 		for _, rule := range state.StreamRules {
 			if rule.UpstreamPoolID == id {
-				return fmt.Errorf("后端服务组仍被 Stream 规则 %q 使用", rule.Name)
+				return fmt.Errorf("转发服务组仍被 Stream 规则 %q 使用", rule.Name)
 			}
 			for _, route := range rule.SNIRoutes {
 				if route.UpstreamPoolID == id {
-					return fmt.Errorf("后端服务组仍被 Stream SNI 规则 %q 使用", rule.Name)
+					return fmt.Errorf("转发服务组仍被 Stream SNI 规则 %q 使用", rule.Name)
 				}
 			}
 		}
@@ -221,7 +227,7 @@ func (s *AppService) DeleteUpstreamPool(id string) error {
 				return nil
 			}
 		}
-		return errors.New("找不到指定后端服务组")
+		return errors.New("找不到指定转发服务组")
 	})
 }
 
@@ -614,6 +620,7 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 		return result, fmt.Errorf("Nginx 已应用，但保存应用状态失败: %w", err)
 	}
 	applied := s.store.Snapshot()
+	s.setAppliedAuthProfiles(applied.AuthProfiles)
 	if data, marshalErr := json.Marshal(applied); marshalErr == nil {
 		if persistErr := fileutil.WriteFileAtomic(s.paths.AppliedState(), data, 0o600); persistErr != nil {
 			result.Message += "；首页生效配置记录保存失败"

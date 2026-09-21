@@ -190,6 +190,8 @@ export interface ProxyRuleInput {
   listen_port: number;
   domains: string[];
   tls: boolean;
+  redirect_to_https: boolean;
+  redirect_https_port: number;
   http2: boolean;
   certificate_id: string;
   upstream_scheme: "http" | "https";
@@ -206,8 +208,41 @@ export interface ProxyRuleInput {
   send_timeout_seconds: number;
   client_max_body_mb: number;
   rate_limit: RateLimitSettings;
+  authentication: RuleAuthentication;
   root_location: LocationSettings;
   locations: LocationRule[];
+}
+export interface RuleAuthentication {
+  enabled: boolean;
+  mode: "basic";
+  profile_id: string;
+  forward_authorization: boolean;
+}
+export interface AuthUser {
+  id: string;
+  username: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+export interface AuthProfile {
+  id: string;
+  name: string;
+  realm: string;
+  users: AuthUser[];
+  created_at: string;
+  updated_at: string;
+}
+export interface AuthUserInput {
+  id?: string;
+  username: string;
+  password?: string;
+  enabled: boolean;
+}
+export interface AuthProfileInput {
+  name: string;
+  realm: string;
+  users: AuthUserInput[];
 }
 export interface ProxyRule extends ProxyRuleInput {
   id: string;
@@ -296,6 +331,7 @@ export interface State {
   certificates: CertificateMeta[];
   upstream_pools: UpstreamPool[];
   rate_limit_policies: RateLimitPolicy[];
+  auth_profiles: AuthProfile[];
   dirty: boolean;
   last_applied_at?: string;
   last_apply_message?: string;
@@ -329,6 +365,7 @@ export interface Overview {
   enabled_count: number;
   certificate_count: number;
   dirty: boolean;
+  applied_known: boolean;
   last_applied_at?: string;
   last_apply_message?: string;
   last_apply_error?: string;

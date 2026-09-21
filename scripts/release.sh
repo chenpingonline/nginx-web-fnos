@@ -2,8 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION="$(python3 "$ROOT/scripts/version.py")"
-"$ROOT/scripts/build.sh" x86
-"$ROOT/scripts/build.sh" arm64
+"$ROOT/scripts/build.sh" x86 arm64
 "$ROOT/tests/integration.sh"
 case "$(uname -m)" in
   aarch64|arm64) TEST_ARCH=arm64 ;;

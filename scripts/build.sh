@@ -2,17 +2,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ARCH="${1:-x86}"
 VERSION="$(python3 "$ROOT/scripts/version.py")"
 DIST="$ROOT/dist"
-case "$ARCH" in
-  x86|x86_64|amd64) ARCH="x86"; GOARCH="amd64"; PLATFORM="x86"; FILE_PATTERN='x86-64|x86_64'; OUTPUT_ARCH="x86_64" ;;
-  arm|arm64|aarch64) ARCH="arm64"; GOARCH="arm64"; PLATFORM="arm"; FILE_PATTERN='ARM aarch64|ARM64|aarch64'; OUTPUT_ARCH="arm64" ;;
-  *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
-esac
-WORK="$ROOT/.build/$ARCH"; STAGE="$WORK/fpk"; APP_STAGE="$WORK/app"; FPK_NAME="nginx-web-${VERSION}-${OUTPUT_ARCH}.fpk"
+if (( $# == 0 )); then ARCHES=(x86); else ARCHES=("$@"); fi
+for arch in "${ARCHES[@]}"; do
+  case "$arch" in
+    x86|x86_64|amd64|arm|arm64|aarch64) ;;
+    *) echo "不支持的架构：$arch（应为 x86 或 arm64）" >&2; exit 1 ;;
+  esac
+done
 for cmd in go npm tar file python3; do command -v "$cmd" >/dev/null 2>&1 || { echo "缺少 $cmd" >&2; exit 1; }; done
-rm -rf "$WORK"; mkdir -p "$DIST" "$STAGE" "$APP_STAGE/bin"
 
 create_archive() {
   local source_dir="$1" output_file="$2"
@@ -29,37 +28,52 @@ sha256_file() {
   else shasum -a 256 "$1" | awk '{print $1}'; fi
 }
 
-echo '[1/8] 构建 Vue 管理页面'
+echo '[共享 1/2] 构建 Vue 管理页面'
 if [[ ! -d "$ROOT/web/node_modules" ]]; then npm --prefix "$ROOT/web" ci; fi
 npm --prefix "$ROOT/web" run build
-echo '[2/8] 运行 Go 测试'; (cd "$ROOT" && go test ./...)
-echo "[3/8] 构建 Linux $GOARCH 管理服务"
-(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$APP_STAGE/bin/nginx-web-server" ./cmd/nginx-web)
-chmod 755 "$APP_STAGE/bin/nginx-web-server"
-echo '[4/8] 准备并校验 Nginx 1.30.4'
-"$ROOT/scripts/fetch-nginx.sh" "$ARCH" "$APP_STAGE/bin/nginx" >/dev/null
-file "$APP_STAGE/bin/nginx-web-server" | grep -Eq "$FILE_PATTERN" || { echo '管理服务架构不正确' >&2; exit 1; }
-file "$APP_STAGE/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构不正确' >&2; exit 1; }
-file "$APP_STAGE/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 必须是静态链接二进制' >&2; exit 1; }
-grep -aFq 'nginx version: nginx/1.30.4' "$APP_STAGE/bin/nginx" || { echo '无法确认 Nginx 1.30.4 版本字符串' >&2; exit 1; }
-NGINX_SHA256="$(sha256_file "$APP_STAGE/bin/nginx")"
-echo '[5/8] 组装 app.tgz'
-mkdir -p "$APP_STAGE/etc" "$APP_STAGE/licenses"
-cp -a "$ROOT/packaging/fnos/app/ui" "$APP_STAGE/"
-cp "$ROOT/third_party/nginx/mime.types" "$APP_STAGE/etc/mime.types"
-cp "$ROOT/LICENSE" "$ROOT/NGINX_LICENSE" "$ROOT/NOTICE" "$ROOT/THIRD_PARTY_LICENSES.md" "$APP_STAGE/licenses/"
-create_archive "$APP_STAGE" "$STAGE/app.tgz"
-if command -v md5sum >/dev/null 2>&1; then APP_MD5="$(md5sum "$STAGE/app.tgz" | awk '{print $1}')"; else APP_MD5="$(md5 -q "$STAGE/app.tgz")"; fi
-echo '[6/8] 组装 FPK 元数据'
-cp -a "$ROOT/packaging/fnos/cmd" "$ROOT/packaging/fnos/config" "$ROOT/packaging/fnos/wizard" "$STAGE/"
-cp "$ROOT/packaging/fnos/ICON.PNG" "$ROOT/packaging/fnos/ICON_256.PNG" "$STAGE/"
-if [[ "$ARCH" == arm64 ]]; then cp "$ROOT/third_party/nginx/arm64/SOURCES.txt" "$STAGE/NGINX_ARM64_SOURCES.txt"; cp "$ROOT/third_party/nginx/arm64/SHA256SUMS.txt" "$STAGE/NGINX_ARM64_SHA256SUMS.txt";
-else cp "$ROOT/third_party/nginx/x86_64/SOURCES.txt" "$STAGE/NGINX_X86_64_SOURCES.txt"; cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA256SUMS.txt"; fi
-printf '%s  nginx\n' "$NGINX_SHA256" > "$STAGE/NGINX_BINARY_SHA256SUMS.txt"
-sed -E "s/^platform[[:space:]]*=.*/platform                   = ${PLATFORM}/" "$ROOT/packaging/fnos/manifest" | grep -v '^[[:space:]]*checksum[[:space:]]*=' > "$STAGE/manifest"
-printf 'checksum                   = %s\n' "$APP_MD5" >> "$STAGE/manifest"; chmod 755 "$STAGE/cmd/"*
-echo "[7/8] 创建 $FPK_NAME"
-create_archive "$STAGE" "$DIST/$FPK_NAME"
-echo '[8/8] 验证 FPK'; "$ROOT/scripts/verify-fpk.sh" "$DIST/$FPK_NAME"
-if command -v sha256sum >/dev/null 2>&1; then (cd "$DIST" && sha256sum "$FPK_NAME" > "${FPK_NAME}.sha256"); else (cd "$DIST" && shasum -a 256 "$FPK_NAME" > "${FPK_NAME}.sha256"); fi
-echo "完成：$DIST/$FPK_NAME"
+echo '[共享 2/2] 运行 Go 测试'; (cd "$ROOT" && go test ./...)
+
+build_arch() {
+  local ARCH="$1" GOARCH PLATFORM FILE_PATTERN OUTPUT_ARCH
+  case "$ARCH" in
+    x86|x86_64|amd64) ARCH="x86"; GOARCH="amd64"; PLATFORM="x86"; FILE_PATTERN='x86-64|x86_64'; OUTPUT_ARCH="x86_64" ;;
+    arm|arm64|aarch64) ARCH="arm64"; GOARCH="arm64"; PLATFORM="arm"; FILE_PATTERN='ARM aarch64|ARM64|aarch64'; OUTPUT_ARCH="arm64" ;;
+    *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
+  esac
+  local WORK="$ROOT/.build/$ARCH" STAGE="$ROOT/.build/$ARCH/fpk" APP_STAGE="$ROOT/.build/$ARCH/app"
+  local FPK_NAME="nginx-web-${VERSION}-${OUTPUT_ARCH}.fpk" NGINX_SHA256 APP_MD5
+  rm -rf "$WORK"; mkdir -p "$DIST" "$STAGE" "$APP_STAGE/bin"
+
+  echo "[$ARCH 1/6] 构建 Linux $GOARCH 管理服务"
+  (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$APP_STAGE/bin/nginx-web-server" ./cmd/nginx-web)
+  chmod 755 "$APP_STAGE/bin/nginx-web-server"
+  echo "[$ARCH 2/6] 准备并校验 Nginx 1.30.4"
+  "$ROOT/scripts/fetch-nginx.sh" "$ARCH" "$APP_STAGE/bin/nginx" >/dev/null
+  file "$APP_STAGE/bin/nginx-web-server" | grep -Eq "$FILE_PATTERN" || { echo '管理服务架构不正确' >&2; exit 1; }
+  file "$APP_STAGE/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构不正确' >&2; exit 1; }
+  file "$APP_STAGE/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 必须是静态链接二进制' >&2; exit 1; }
+  grep -aFq 'nginx version: nginx/1.30.4' "$APP_STAGE/bin/nginx" || { echo '无法确认 Nginx 1.30.4 版本字符串' >&2; exit 1; }
+  NGINX_SHA256="$(sha256_file "$APP_STAGE/bin/nginx")"
+  echo "[$ARCH 3/6] 组装 app.tgz"
+  mkdir -p "$APP_STAGE/etc" "$APP_STAGE/licenses"
+  cp -a "$ROOT/packaging/fnos/app/ui" "$APP_STAGE/"
+  cp "$ROOT/third_party/nginx/mime.types" "$APP_STAGE/etc/mime.types"
+  cp "$ROOT/LICENSE" "$ROOT/NGINX_LICENSE" "$ROOT/NOTICE" "$ROOT/THIRD_PARTY_LICENSES.md" "$APP_STAGE/licenses/"
+  create_archive "$APP_STAGE" "$STAGE/app.tgz"
+  if command -v md5sum >/dev/null 2>&1; then APP_MD5="$(md5sum "$STAGE/app.tgz" | awk '{print $1}')"; else APP_MD5="$(md5 -q "$STAGE/app.tgz")"; fi
+  echo "[$ARCH 4/6] 组装 FPK 元数据"
+  cp -a "$ROOT/packaging/fnos/cmd" "$ROOT/packaging/fnos/config" "$ROOT/packaging/fnos/wizard" "$STAGE/"
+  cp "$ROOT/packaging/fnos/ICON.PNG" "$ROOT/packaging/fnos/ICON_256.PNG" "$STAGE/"
+  if [[ "$ARCH" == arm64 ]]; then cp "$ROOT/third_party/nginx/arm64/SOURCES.txt" "$STAGE/NGINX_ARM64_SOURCES.txt"; cp "$ROOT/third_party/nginx/arm64/SHA256SUMS.txt" "$STAGE/NGINX_ARM64_SHA256SUMS.txt";
+  else cp "$ROOT/third_party/nginx/x86_64/SOURCES.txt" "$STAGE/NGINX_X86_64_SOURCES.txt"; cp "$ROOT/third_party/nginx/x86_64/SHA256SUMS.txt" "$STAGE/NGINX_X86_64_SHA256SUMS.txt"; fi
+  printf '%s  nginx\n' "$NGINX_SHA256" > "$STAGE/NGINX_BINARY_SHA256SUMS.txt"
+  sed -E "s/^platform[[:space:]]*=.*/platform                   = ${PLATFORM}/" "$ROOT/packaging/fnos/manifest" | grep -v '^[[:space:]]*checksum[[:space:]]*=' > "$STAGE/manifest"
+  printf 'checksum                   = %s\n' "$APP_MD5" >> "$STAGE/manifest"; chmod 755 "$STAGE/cmd/"*
+  echo "[$ARCH 5/6] 创建 $FPK_NAME"
+  create_archive "$STAGE" "$DIST/$FPK_NAME"
+  echo "[$ARCH 6/6] 验证 FPK"; "$ROOT/scripts/verify-fpk.sh" "$DIST/$FPK_NAME"
+  if command -v sha256sum >/dev/null 2>&1; then (cd "$DIST" && sha256sum "$FPK_NAME" > "${FPK_NAME}.sha256"); else (cd "$DIST" && shasum -a 256 "$FPK_NAME" > "${FPK_NAME}.sha256"); fi
+  echo "完成：$DIST/$FPK_NAME"
+}
+
+for arch in "${ARCHES[@]}"; do build_arch "$arch"; done

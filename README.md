@@ -6,7 +6,7 @@
 
 **运行在飞牛 fnOS 上的原生 Nginx 反向代理管理器**
 
-通过 fnOS 桌面管理 HTTP/HTTPS 代理、TCP/UDP 转发、SSL 证书、后端服务组与访问统计。
+通过 fnOS 桌面管理 HTTP/HTTPS 代理、TCP/UDP 转发、SSL 证书、转发服务组与访问统计。
 
 [![Release](https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?display_name=tag)](https://github.com/chenpingonline/nginx-web-fnos/releases)
 [![Downloads](https://img.shields.io/github/downloads/chenpingonline/nginx-web-fnos/total?label=downloads)](https://github.com/chenpingonline/nginx-web-fnos/releases)
@@ -47,7 +47,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 | 代理 HTTP(S) | 管理域名与路径转发、WebSocket、SSE、HTTP/2、静态文件和跳转 |
 | 规则分组 | 共享监听类型、协议、监听端口、证书与 HTTP/2 默认值，支持逐项取消继承 |
 | TCP/UDP 代理 | 四层转发、TLS 终止、SNI 分流、PROXY Protocol 与访问控制 |
-| 后端服务组 | 管理多个节点、权重、备用节点及负载均衡策略，可供多个规则复用 |
+| 转发服务组 | 管理多个节点、权重、备用节点及负载均衡策略，可供多个规则复用 |
 | 限流策略 | 管理请求速率、突发请求、并发连接与下载速度限制 |
 | SSL/TLS 证书 | 导入 PEM 证书，通过 ACME DNS-01 自动签发与续期，接入 39 个 DNS 服务商适配器 |
 | 请求详情 | 按时段与规则查看 HTTP 请求、4xx/5xx 错误趋势和统计覆盖情况 |
@@ -221,7 +221,7 @@ third_party/nginx/arm64/nginx
 ```bash
 make build-x86       # 生成 x86_64 安装包
 make build-arm64     # 生成 ARM64 安装包
-make build-all       # 依次构建两个架构
+make build-all       # 前端和测试只执行一次，再依次构建两个架构
 ```
 
 安装包输出到 `dist/`。构建会检查管理程序及 Nginx 的架构、内置版本、包结构和校验和。

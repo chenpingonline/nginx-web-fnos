@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
 .acme-actions { margin-top: 10px; }
 .acme-detail-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); color: var(--text); }
 .acme-detail-dialog:not([open]) { display: none; }
-.acme-detail-dialog::backdrop { background: rgba(18,25,31,.48); backdrop-filter: blur(4px); }
+.acme-detail-dialog::backdrop { background: rgba(18,25,31,.58); }
 .certificate-details { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px 14px; margin: 0; }
 .certificate-details dt { color: var(--text-muted); }
 .certificate-details dd { margin: 0; overflow-wrap: anywhere; }

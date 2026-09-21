@@ -79,7 +79,7 @@ npm --prefix web run build
 
 `web/dist/` 是本地生成目录，不纳入版本控制。首次克隆或修改前端后，直接运行 `go build`、`go run` 或 `go test` 前须先执行 `make frontend-build`；`make test`、集成测试脚本和 FPK 打包会自动先构建前端。
 
-Vite 开发服务器适合检查页面布局；需要调用真实 API 时，应使用 Go 管理服务提供的页面。`scripts/build.sh` 会在每次 FPK 打包前自动执行前端类型检查和生产构建，并将 `web/dist/` 嵌入 `nginx-web-server`。
+Vite 开发服务器适合检查页面布局；需要调用真实 API 时，应使用 Go 管理服务提供的页面。`scripts/build.sh` 会在每次 FPK 打包前自动执行前端类型检查和生产构建，并将 `web/dist/` 嵌入 `nginx-web-server`。一次传入多个架构时，前端构建和完整 Go 测试只执行一次，再为各架构分别编译、组装和校验 FPK。
 
 ```bash
 make test
@@ -105,7 +105,7 @@ make integration
 make release
 ```
 
-`tests/integration.sh` 会启动临时管理服务、独立 Nginx、HTTP 后端服务和临时自签名证书，验证 HTTP、HTTPS、配置应用、历史版本及平滑重载。
+`tests/integration.sh` 会启动临时管理服务、独立 Nginx、HTTP 转发服务和临时自签名证书，验证 HTTP、HTTPS、配置应用、历史版本及平滑重载。
 
 
 集成与生命周期测试须在对应架构的 Linux 环境运行；macOS 可构建 FPK，但不能直接执行包内 Linux 二进制。`make release` 生成本地安装包和校验文件，不会自动创建 GitHub Release。

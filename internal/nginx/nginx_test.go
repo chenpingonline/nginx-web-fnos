@@ -92,6 +92,55 @@ func TestRenderUsesOnlyFnProxyPaths(t *testing.T) {
 	}
 }
 
+func TestRenderRuleAuthenticationUsesInternalUnixSubrequest(t *testing.T) {
+	paths := Paths{SocketPath: "/private/nginx-web/app.sock"}
+	manager := New(paths)
+	rule := domain.ProxyRule{
+		ID: "0123456789ab", Name: "private", Enabled: true, ListenPort: 19080,
+		Domains: []string{"private.example.com"}, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080,
+		ConnectTimeoutSeconds: 10, ReadTimeoutSeconds: 60, SendTimeoutSeconds: 60,
+		Authentication: domain.RuleAuthentication{Enabled: true, Mode: domain.AuthenticationModeBasic, ProfileID: "abcdef012345"},
+	}
+	domain.NormalizeRule(&rule, domain.DefaultState().Settings)
+	config, err := manager.renderRuleServer(rule, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"auth_request /_nginx_web_internal_auth_0123456789ab;",
+		"internal;",
+		"proxy_pass \"http://unix:/private/nginx-web/app.sock:/internal/basic-auth/abcdef012345\";",
+		"proxy_set_header Authorization \"\";",
+	} {
+		if !strings.Contains(config, expected) {
+			t.Fatalf("generated authenticated rule missing %q:\n%s", expected, config)
+		}
+	}
+	if strings.Count(config, "proxy_set_header Authorization \"\";") != 1 {
+		t.Fatalf("unexpected Authorization stripping directives:\n%s", config)
+	}
+}
+
+func TestRenderHTTPRedirectUsesConfiguredHTTPSPort(t *testing.T) {
+	rule := domain.ProxyRule{
+		ID: "0123456789ab", Name: "redirect", Enabled: true, ListenPort: 19080,
+		Domains: []string{"demo.example.com"}, UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080,
+		ConnectTimeoutSeconds: 10, ReadTimeoutSeconds: 60, SendTimeoutSeconds: 60,
+		RedirectToHTTPS: true, RedirectHTTPSPort: 19443,
+	}
+	domain.NormalizeRule(&rule, domain.DefaultState().Settings)
+	config, err := New(Paths{}).renderRuleServer(rule, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(config, "return 308 https://$host:19443$request_uri;") {
+		t.Fatalf("configured HTTPS redirect missing:\n%s", config)
+	}
+	if strings.Contains(config, "location / {") {
+		t.Fatalf("redirect-only server unexpectedly rendered proxy locations:\n%s", config)
+	}
+}
+
 func TestRenderIncludesCustomHTTPAndStreamConfigs(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{NginxConfD: filepath.Join(root, "conf.d"), NginxPID: filepath.Join(root, "nginx.pid"), NginxErrorLog: filepath.Join(root, "error.log"), MimeTypes: filepath.Join(root, "mime.types"), NginxTempDir: filepath.Join(root, "tmp"), NginxCacheDir: filepath.Join(root, "cache")}

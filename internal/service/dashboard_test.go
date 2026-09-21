@@ -41,6 +41,34 @@ func TestDashboardSeparatesDraftFromAppliedRules(t *testing.T) {
 	}
 }
 
+func TestOverviewReportsRecoverableAppliedConfiguration(t *testing.T) {
+	s := testService(t)
+	if s.Overview().AppliedKnown {
+		t.Fatal("fresh state must not claim that a discard target exists")
+	}
+
+	now := time.Now().UTC()
+	if err := s.store.Update(func(state *State) error {
+		state.LastAppliedAt = &now
+		state.Dirty = true
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	applied := s.State()
+	applied.Dirty = false
+	data, err := json.Marshal(applied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.paths.AppliedState(), data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Overview().AppliedKnown {
+		t.Fatal("matching applied state must be reported as a safe discard target")
+	}
+}
+
 func TestDashboardStreamListenersPreserveAddressesForPendingDeletes(t *testing.T) {
 	s := testService(t)
 	if err := s.store.Update(func(state *State) error {

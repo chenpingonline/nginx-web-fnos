@@ -1,6 +1,6 @@
 <template>
   <section class="pool-example" aria-label="服务组访问路径示例（示例数据）">
-    <svg class="example-path" viewBox="0 0 640 150" role="img" aria-label="示例：用户访问 example.com，经 Nginx 代理规则进入后端服务组，再选择服务器 A 或服务器 B 处理请求">
+    <svg class="example-path" viewBox="0 0 640 150" role="img" aria-label="示例：用户访问 example.com，经 Nginx 代理规则进入转发服务组，再选择服务器 A 或服务器 B 处理请求">
       <g class="path-lines" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <path d="M112 75 H150 M144 71 L150 75 L144 79" />
         <path d="M270 75 H308 M302 71 L308 75 L302 79" />
@@ -19,7 +19,7 @@
       </g>
       <g class="path-node pool-node">
         <rect x="308" y="49" width="120" height="52" rx="8" />
-        <text x="368" y="70" class="node-title">后端服务组</text>
+        <text x="368" y="70" class="node-title">转发服务组</text>
         <text x="368" y="87" class="node-detail">负载均衡 · 轮询</text>
       </g>
       <g class="path-node">

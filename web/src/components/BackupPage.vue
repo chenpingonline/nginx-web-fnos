@@ -42,7 +42,7 @@ function date(value: string) {
           <div><dt>TCP/UDP 代理</dt><dd>{{ state.stream_rules.length }}</dd></div>
           <div><dt>证书</dt><dd>{{ state.certificates.length }}</dd></div>
         </dl>
-        <p>包含全局设置、代理规则、后端服务组、限流策略，以及已导入或签发的证书和私钥。</p>
+        <p>包含全局设置、代理规则、转发服务组、限流策略，以及已导入或签发的证书和私钥。</p>
         <p class="backup-note">备份文件包含私钥，请妥善保管。运行日志、流量统计、代理缓存、配置历史和 ACME 账户／续期任务不包含在内；服务器外部引用文件需另行保存。</p>
         <button type="button" class="button primary fit" :disabled="busy" @click="emit('download')"><PhDownloadSimple :size="16" />下载备份</button>
       </div>

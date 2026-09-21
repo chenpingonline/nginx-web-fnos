@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import PoolPathExample from "./PoolPathExample.vue";
 import AppSelect from "./AppSelect.vue";
+import HelpHint from "./HelpHint.vue";
 import { reactive, ref, toRaw } from "vue";
 import {
   PhArrowClockwise,
@@ -16,20 +17,6 @@ const emit = defineEmits<{
   remove: [pool: UpstreamPool];
   refresh: [];
 }>();
-const helpOpen = ref(false);
-const helpPosition = ref<Record<string, string>>({});
-function toggleHelp(event: MouseEvent) {
-  if (helpOpen.value) { helpOpen.value = false; return; }
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const width = Math.min(500, window.innerWidth - 32);
-  const fitsRight = rect.right + 8 + width <= window.innerWidth - 16;
-  helpPosition.value = {
-    width: `${width}px`,
-    left: `${fitsRight ? rect.right + 8 : Math.max(16, Math.min(rect.left, window.innerWidth - width - 16))}px`,
-    top: `${Math.max(16, Math.min(fitsRight ? rect.top : rect.bottom, window.innerHeight - width * 150 / 640 - 36))}px`,
-  };
-  helpOpen.value = true;
-}
 const editing = ref<UpstreamPool | null>(null),
   open = ref(false);
 const blankServer = (): UpstreamServer => ({
@@ -85,6 +72,13 @@ function submit() {
   emit("save", structuredClone(toRaw(form)), editing.value?.id ?? "", savedResult);
 }
 const saveError = ref("");
+const strategyLabels: Record<UpstreamPool["strategy"], string> = {
+  round_robin: "轮询",
+  least_conn: "最少连接",
+  ip_hash: "IP 哈希",
+  hash: "哈希",
+  random: "随机二选一最少连接",
+};
 function savedResult(saved?: UpstreamPool, error?: string) {
   if (saved) editing.value = saved;
   saveError.value = error ?? "";
@@ -94,22 +88,19 @@ function savedResult(saved?: UpstreamPool, error?: string) {
 <template>
   <div class="toolbar">
     <div class="notice pool-description">
-      后端服务组可以被多个 HTTP 或 TCP/UDP
+      转发服务组可以被多个 HTTP 或 TCP/UDP
       规则复用，并统一配置负载均衡与故障恢复。
-      <span class="pool-help" @mouseleave="helpOpen = false" @focusout="helpOpen = false" @keydown.esc="helpOpen = false">
-        <button type="button" class="pool-help-button" aria-label="查看服务组访问路径示例" :aria-expanded="helpOpen" aria-controls="pool-help-content" @click="toggleHelp">?</button>
-        <div v-if="helpOpen" id="pool-help-content" class="pool-help-panel" :style="helpPosition"><PoolPathExample /></div>
-      </span>
+      <HelpHint label="查看服务组访问路径示例" wide><PoolPathExample /></HelpHint>
     </div>
     <span class="spacer"></span>
     <button class="button ghost" :disabled="busy" @click="emit('refresh')">
       <PhArrowClockwise :size="16" aria-hidden="true" />刷新
     </button>
     <button class="button primary" @click="show()">
-      <PhPlusCircle :size="17" aria-hidden="true" />添加后端服务组
+      <PhPlusCircle :size="17" aria-hidden="true" />添加转发服务组
     </button>
   </div>
-  <article class="card">
+  <article class="card pool-card">
     <div v-if="pools.length" class="table-wrap">
       <table class="table">
         <thead>
@@ -126,23 +117,12 @@ function savedResult(saved?: UpstreamPool, error?: string) {
           <tr v-for="pool in pools" :key="pool.id">
             <td>
               <div class="rule-name">{{ pool.name }}</div>
-              <div class="rule-sub">{{ pool.id }}</div>
             </td>
             <td>
               <span class="badge info">{{ pool.protocol.toUpperCase() }}</span>
             </td>
-            <td>{{ pool.strategy }}</td>
-            <td>
-              <div
-                v-for="server in pool.servers"
-                :key="`${server.host}:${server.port}`"
-                class="rule-sub"
-              >
-                {{ server.host }}:{{ server.port }} · 权重 {{ server.weight
-                }}<template v-if="server.backup"> · 备份</template
-                ><template v-if="server.down"> · 停用</template>
-              </div>
-            </td>
+            <td>{{ strategyLabels[pool.strategy] }}</td>
+            <td>{{ pool.servers.length }}</td>
             <td>{{ pool.keepalive || "关闭" }}</td>
             <td>
               <div class="table-actions">
@@ -161,7 +141,7 @@ function savedResult(saved?: UpstreamPool, error?: string) {
       </table>
     </div>
     <div v-else class="empty-state pool-empty">
-      <h3>还没有后端服务组</h3>
+      <h3>还没有转发服务组</h3>
       <PoolPathExample class="pool-empty-example" />
     </div>
   </article>
@@ -175,7 +155,7 @@ function savedResult(saved?: UpstreamPool, error?: string) {
     >
       <header class="modal-header">
         <div>
-          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}后端服务组</h2>
+          <h2 id="pool-title">{{ editing ? "编辑" : "添加" }}转发服务组</h2>
           <p>保存后立即应用，其他尚未应用的配置修改也会一并生效。</p>
         </div>
         <div class="rule-header-actions">
@@ -351,14 +331,9 @@ function savedResult(saved?: UpstreamPool, error?: string) {
 
 <style scoped>
 .pool-description { position: relative; }
-.pool-help { position: relative; display: inline-flex; vertical-align: middle; margin-left: 5px; }
-.pool-help::after { content: ""; position: absolute; left: 100%; top: 0; width: 10px; height: 100%; }
-.pool-help-button { width: 18px; height: 18px; border: 1px solid var(--text-muted); border-radius: 50%; color: var(--text-muted); background: transparent; font-size: 14px; padding: 0; line-height: 16px; }
-.pool-help-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.pool-help-panel { position: fixed; z-index: 50; padding: 9px; width: 500px; background: var(--surface-solid); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
-.pool-help-panel :deep(.example-path) { min-width: 0; }
+.pool-description :deep(.help-hint-wrap) { margin-left: 5px; }
+.pool-card { overflow: hidden; }
 .pool-empty { padding: 36px 24px; }
 .pool-empty h3 { color: var(--text-muted); font-weight: 500; }
 .pool-empty-example { max-width: 640px; margin: 16px auto 20px; }
-.pool-help-panel { max-height: calc(100vh - 32px); overflow-y: auto; }
 </style>

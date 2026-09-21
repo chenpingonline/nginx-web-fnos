@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import ListenTypePicker from "./ListenTypePicker.vue";
 import AppSelect from "./AppSelect.vue";
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
+import { PhPlusCircle } from "@phosphor-icons/vue";
 import type {
   CertificateMeta,
   RuleGroup,
@@ -14,7 +15,9 @@ import type {
 } from "../types";
 import { formatDate } from "../utils";
 import LocationSettingsEditor from "./LocationSettingsEditor.vue";
-import type { LocationSettings } from "../types";
+import AuthProfileManager from "./AuthProfileManager.vue";
+import HelpHint from "./HelpHint.vue";
+import type { AuthProfile, LocationSettings } from "../types";
 const props = defineProps<{
   rule: ProxyRule | null;
   groups: RuleGroup[];
@@ -23,13 +26,20 @@ const props = defineProps<{
   certificates: CertificateMeta[];
   upstreamPools: UpstreamPool[];
   rateLimitPolicies: RateLimitPolicy[];
+  authProfiles: AuthProfile[];
   busy: boolean;
 }>();
 const emit = defineEmits<{
   save: [value: ProxyRuleInput, applyAfter: boolean];
+  authProfilesChanged: [profiles: AuthProfile[]];
+  manageRateLimits: [createNew?: boolean];
 }>();
+const addRateLimitValue = "__add_rate_limit_policy__";
+const addAuthProfileValue = "__add_auth_profile__";
+const authProfileManager = ref<InstanceType<typeof AuthProfileManager>>();
 const applyAfter = ref(true);
 const domains = ref("");
+const authError = ref("");
 function defaultLocation(): LocationSettings {
   return {
     backend_type: "proxy", upstream_scheme: "http", upstream_pool_id: "", upstream_host: "127.0.0.1", upstream_port: 8080,
@@ -48,6 +58,8 @@ const form = reactive<ProxyRuleInput>({
   listen_port: 9080,
   domains: [],
   tls: false,
+  redirect_to_https: false,
+  redirect_https_port: 443,
   http2: true,
   certificate_id: "",
   upstream_scheme: "http",
@@ -71,6 +83,7 @@ const form = reactive<ProxyRuleInput>({
     connections: 0,
     download_kbps: 0,
   },
+  authentication: { enabled: false, mode: "basic", profile_id: "", forward_authorization: false },
   root_location: defaultLocation(),
   locations: [],
 });
@@ -80,6 +93,31 @@ const inheritanceOptions: { key: GroupField; label: string }[] = [
   { key: "certificate_id", label: "证书" }, { key: "http2", label: "HTTP/2" },
 ];
 const selectedGroup = computed(() => props.groups.find(g => g.id === form.group_id));
+const hasExternalAuthentication = computed(() =>
+  [form.root_location, ...form.locations.map(location => location.settings)]
+    .some(settings => settings.basic_auth || Boolean(settings.auth_request?.trim())),
+);
+const rateLimitPolicySelection = computed({
+  get: () => form.rate_limit_policy_id,
+  set: (value: string) => {
+    if (value === addRateLimitValue) {
+      nextTick(() => emit("manageRateLimits", true));
+      return;
+    }
+    form.rate_limit_policy_id = value;
+  },
+});
+const authProfileSelection = computed({
+  get: () => form.authentication.profile_id,
+  set: (value: string) => {
+    if (value === addAuthProfileValue) {
+      nextTick(() => authProfileManager.value?.showNew());
+      return;
+    }
+    form.authentication.profile_id = value;
+    authError.value = "";
+  },
+});
 const inherits = (field: GroupField) => Boolean(selectedGroup.value && form.inherit_fields?.includes(field));
 function syncInherited() {
   const group = selectedGroup.value;
@@ -110,6 +148,8 @@ watch(
         listen_port: props.settings.default_http_port,
         domains: [],
         tls: false,
+        redirect_to_https: false,
+        redirect_https_port: 443,
         http2: true,
         certificate_id: "",
         upstream_scheme: "http",
@@ -133,6 +173,7 @@ watch(
           connections: 0,
           download_kbps: 0,
         },
+        authentication: { enabled: false, mode: "basic", profile_id: "", forward_authorization: false },
         root_location: defaultLocation(),
         locations: [],
       },
@@ -146,9 +187,19 @@ watch(
       download_kbps: 0,
       ...rule?.rate_limit,
     };
+    form.authentication = {
+      enabled: false,
+      mode: "basic",
+      profile_id: "",
+      forward_authorization: false,
+      ...rule?.authentication,
+    };
+    form.redirect_to_https = rule?.redirect_to_https ?? rule?.root_location?.redirect_to_https ?? false;
+    form.redirect_https_port = rule?.redirect_https_port || 443;
     form.root_location = rule?.root_location
       ? JSON.parse(JSON.stringify(rule.root_location))
       : defaultLocation();
+    form.root_location.redirect_to_https = false;
     form.locations = rule?.locations
       ? JSON.parse(JSON.stringify(rule.locations))
       : [];
@@ -159,6 +210,9 @@ watch(
   },
   { immediate: true },
 );
+watch(() => form.tls, (tls) => {
+  if (tls) form.redirect_to_https = false;
+});
 function changeTLS() {
   if (
     !inherits("listen_port") && (!props.rule ||
@@ -197,6 +251,12 @@ function pasteBackendAddress(event: ClipboardEvent) {
   Object.assign(form, parsed);
 }
 function submit() {
+  if (form.authentication.enabled && !form.authentication.profile_id) {
+    authError.value = "启用认证时必须选择认证策略。";
+    return;
+  }
+  authError.value = "";
+  form.root_location.redirect_to_https = false;
   if (!form.upstream_pool_id) normalizeBackendAddress();
   Object.assign(form.root_location, {
     upstream_scheme: form.upstream_scheme,
@@ -210,23 +270,36 @@ function submit() {
     applyAfter.value,
   );
 }
-function addLocation() {
+function createLocationID() {
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = crypto.getRandomValues(new Uint8Array(10));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`
+    .replaceAll(".", "")
+    .slice(0, 20)
+    .padEnd(20, "0");
+}
+async function addLocation() {
+  const id = createLocationID();
   form.locations.push({
-    id: crypto.randomUUID().replaceAll("-", "").slice(0, 20),
+    id,
     name: `路径 ${form.locations.length + 1}`,
     enabled: true,
     path: "/api/",
     match: "prefix",
     settings: defaultLocation(),
   });
+  await nextTick();
+  document.getElementById(`location-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 </script>
 <template>
   <form id="proxy-rule-form" class="form-grid modal-form-grid rule-form-grid" @submit.prevent="submit">
     <div class="rule-basics-row">
     <div class="field">
-      <label for="rule-group">所属分组</label>
-      <AppSelect id="rule-group" :model-value="form.group_id || ''" class="select" @update:model-value="changeGroup">
+      <label>所属分组</label>
+      <AppSelect id="rule-group" :model-value="form.group_id || ''" class="select" aria-label="所属分组" @update:model-value="changeGroup">
         <option value="">未分组</option><option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
       </AppSelect>
 
@@ -255,6 +328,7 @@ function addLocation() {
       <span>监听设置</span><small>定义访问域名、监听端口与协议</small>
     </div>
     <section class="rule-settings-panel" aria-label="监听设置">
+    <div class="field full section-content"><label>监听类型</label><ListenTypePicker v-model="form.listen_type" :disabled="inherits('listen_type')" /><span class="field-help">IPv6 入口可以转发到 IPv4 后端；需放行对应端口。</span></div>
     <div class="field full section-content entry-domain-field">
       <label for="rule-domains">访问域名 / IP</label
       ><textarea
@@ -268,9 +342,8 @@ function addLocation() {
         >多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。</span
       >
     </div>
-    <div class="field full section-content"><label>监听类型</label><ListenTypePicker v-model="form.listen_type" :disabled="inherits('listen_type')" /><span class="field-help">IPv6 入口可以转发到 IPv4 后端；需放行对应端口。</span></div>
     <div class="field section-content section-left">
-      <label for="listen-port">监听端口</label
+      <label for="listen-port" class="field-label-with-help">监听端口<HelpHint text="仅允许非特权端口，范围 1024–65535。" /></label
       ><input
         :disabled="inherits('listen_port')"
         id="listen-port"
@@ -280,7 +353,7 @@ function addLocation() {
         min="1024"
         max="65535"
         required
-      /><span class="field-help">仅允许非特权端口。</span>
+      />
     </div>
     <div class="field section-content section-right">
       <label>入口协议</label
@@ -289,20 +362,32 @@ function addLocation() {
         HTTPS</label
       >
     </div>
+    <div v-if="!form.tls" class="field full section-content redirect-https-field">
+      <label>HTTPS 跳转</label>
+      <div class="redirect-https-controls">
+        <label class="checkbox-row"><input v-model="form.redirect_to_https" type="checkbox" />HTTP 自动跳转 HTTPS</label>
+        <label v-if="form.redirect_to_https" class="redirect-port-control" for="redirect-https-port">
+          <span>目标端口</span>
+          <input id="redirect-https-port" v-model.number="form.redirect_https_port" class="input" type="number" min="1" max="65535" required />
+        </label>
+      </div>
+      <span class="field-help">使用 308 保留请求路径；需另有相同域名的 HTTPS 规则监听目标端口。</span>
+    </div>
     <div v-if="form.tls" class="field section-content">
-      <label for="certificate">SSL/TLS 证书</label
+      <label class="field-label-with-help">证书<HelpHint text="没有证书时，请先到“SSL/TLS 证书”页面导入。" /></label
       ><AppSelect
         :disabled="inherits('certificate_id')"
         id="certificate"
         v-model="form.certificate_id"
         class="select"
+        aria-label="SSL/TLS 证书"
         required
       >
         <option value="">请选择证书</option>
         <option v-for="cert in certificates" :key="cert.id" :value="cert.id">
           {{ cert.name }} · {{ formatDate(cert.not_after, true) }}
         </option></AppSelect
-      ><span class="field-help">没有证书时，请先到“SSL/TLS 证书”页面导入。</span>
+      >
     </div>
     <div v-if="form.tls" class="field section-content section-right">
       <label>HTTP/2</label
@@ -312,18 +397,19 @@ function addLocation() {
     </div>
     </section>
     <div class="form-section">
-      <span>后端服务</span><small>选择请求需要转发到的位置</small>
+      <span>转发服务</span><small>选择请求需要转发到的位置</small>
     </div>
-    <section class="rule-settings-panel" aria-label="后端服务">
+    <section class="rule-settings-panel" aria-label="转发服务">
     <div class="target-service-fields full section-content">
       <div class="field target-pool-field">
-        <label for="upstream-pool">后端服务组</label
+        <label>转发服务组</label
         ><AppSelect
           id="upstream-pool"
           v-model="form.upstream_pool_id"
           class="select"
+          aria-label="转发服务组"
         >
-          <option value="">单个后端服务</option>
+          <option value="">单节点服务</option>
           <option
             v-for="pool in upstreamPools.filter(
               (item) => item.protocol === 'http',
@@ -334,15 +420,16 @@ function addLocation() {
             {{ pool.name }} · {{ pool.servers.length }} 个节点
           </option></AppSelect
         ><span class="field-help"
-          >后端服务组支持权重、备份节点、故障恢复和负载均衡。</span
+          >转发服务组支持权重、备份节点、故障恢复和负载均衡。</span
         >
       </div>
       <div class="field">
-        <label for="upstream-scheme">后端服务协议</label
+        <label>转发服务协议</label
         ><AppSelect
           id="upstream-scheme"
           v-model="form.upstream_scheme"
           class="select"
+          aria-label="转发服务协议"
         >
           <option value="http">HTTP</option>
           <option value="https">HTTPS</option>
@@ -358,7 +445,7 @@ function addLocation() {
           class="input"
           required
           placeholder="IP、域名或 http://192.168.1.22:2330"
-        /><span class="field-help">粘贴完整地址可自动填写协议和端口；手动输入后移开焦点即可识别。</span>
+        /><span class="field-help">粘贴完整地址可自动填写协议和端口。</span>
       </div>
       <div v-if="!form.upstream_pool_id" class="field">
         <label for="upstream-port">目标端口</label
@@ -377,9 +464,9 @@ function addLocation() {
       v-if="form.upstream_scheme === 'https'"
       class="field section-content section-left"
     >
-      <label>后端服务证书校验</label
+      <label>转发服务证书校验</label
       ><label class="checkbox-row"
-        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验后端服务
+        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验转发服务
         SSL/TLS 证书</label
       >
     </div>
@@ -408,7 +495,7 @@ function addLocation() {
         ><input v-model="form.streaming" type="checkbox" /> 关闭代理缓冲</label
       >
     </div>
-    <div class="field section-content section-right">
+    <div class="field section-content section-right body-limit-field">
       <label for="body-limit">请求体上限（MB）</label
       ><input
         id="body-limit"
@@ -466,24 +553,53 @@ function addLocation() {
     </div>
     <section class="rule-settings-panel" aria-label="访问限流">
     <div class="field full section-content entry-domain-field">
-      <label for="rate-limit-policy">限流策略</label
-      ><AppSelect
-        id="rate-limit-policy"
-        v-model="form.rate_limit_policy_id"
-        class="select"
-      >
-        <option value="">不启用限流</option>
-        <option
-          v-for="policy in rateLimitPolicies"
-          :key="policy.id"
-          :value="policy.id"
+      <label class="field-label-with-help">限流策略<HelpHint text="同一策略可供多条规则复用，但每条规则分别计数、互不占用额度。" /></label
+      ><div class="rate-limit-policy-controls">
+        <AppSelect
+          id="rate-limit-policy"
+          v-model="rateLimitPolicySelection"
+          class="select"
+          aria-label="限流策略"
         >
-          {{ policy.name }} · {{ policy.settings.requests_per_second }} 请求/秒
-        </option></AppSelect
-      ><span class="field-help"
-        >同一策略可供多条规则复用，但每条规则分别计数、互不占用额度。</span
-      >
+          <option value="">不启用限流</option>
+          <option
+            v-for="policy in rateLimitPolicies"
+            :key="policy.id"
+            :value="policy.id"
+          >
+            {{ policy.name }} · {{ policy.settings.requests_per_second }} 请求/秒
+          </option>
+          <option :value="addRateLimitValue" data-action>＋ 添加限流策略</option>
+        </AppSelect>
+      </div>
     </div>
+    </section>
+    <div class="form-section">
+      <span>访问认证</span><small>访问规则前验证用户名和密码，默认关闭</small>
+    </div>
+    <section class="rule-settings-panel" aria-label="访问认证">
+      <div class="field section-content section-left">
+        <label>Basic Auth</label>
+        <label class="checkbox-row"><input v-model="form.authentication.enabled" type="checkbox" :disabled="hasExternalAuthentication && !form.authentication.enabled" />启用用户名密码认证</label>
+        <span v-if="hasExternalAuthentication && !form.authentication.enabled" class="field-help auth-mode-warning">根路径或自定义 Location 已配置外部认证，请先清除后再启用。</span>
+      </div>
+      <div class="field section-content section-right">
+        <label>认证策略</label>
+        <div class="auth-policy-controls">
+          <AppSelect id="auth-profile" v-model="authProfileSelection" class="select" aria-label="认证策略" :disabled="busy">
+            <option value="">请选择认证策略</option>
+            <option v-for="profile in authProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.users.filter(user => user.enabled).length }} 个用户</option>
+            <option :value="addAuthProfileValue" data-action>＋ 添加认证策略</option>
+          </AppSelect>
+          <AuthProfileManager ref="authProfileManager" :profiles="authProfiles" :disabled="busy" hide-trigger @changed="emit('authProfilesChanged', $event)" />
+        </div>
+        <span v-if="authProfiles.length === 0" class="field-help">请从下拉菜单添加认证策略。</span>
+        <span v-if="authError" class="field-help auth-error">{{ authError }}</span>
+      </div>
+      <div v-if="form.authentication.enabled" class="auth-forward-row full section-content">
+        <label class="checkbox-row"><input v-model="form.authentication.forward_authorization" type="checkbox" /><span>将 Authorization 请求头继续转发给后端</span></label>
+        <span class="field-help">默认不转发，避免代理认证密码泄露给后端。仅在后端明确需要该请求头时开启。</span>
+      </div>
     </section>
     <div class="form-section">
       <span>根路径与高级能力</span><small>设置缓存、重写、鉴权与内容处理</small>
@@ -491,13 +607,13 @@ function addLocation() {
     <section class="rule-settings-panel" aria-label="根路径与高级能力">
     <div class="full location-card section-content">
       <div class="location-card-title"><strong>根路径 /</strong><span>缓存、静态网站、重写、鉴权与内容处理</span></div>
-      <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" root />
+      <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" root />
     </div>
     </section>
     <div class="form-section section-actions">
       <span>自定义 Location</span><small>为指定路径覆盖独立代理规则</small
-      ><button type="button" class="button ghost compact" @click="addLocation">
-        添加路径
+      ><button type="button" class="button compact add-location-button" @click="addLocation">
+        <PhPlusCircle :size="15" aria-hidden="true" />添加路径
       </button>
     </div>
     <section class="rule-settings-panel" aria-label="自定义 Location">
@@ -505,7 +621,7 @@ function addLocation() {
       v-if="form.locations.length === 0"
       class="empty-inline full section-content"
     >没有额外路径，所有请求使用根路径设置。</div>
-    <div v-for="(location, index) in form.locations" :key="location.id" class="location-card full section-content">
+    <div v-for="(location, index) in form.locations" :id="`location-${location.id}`" :key="location.id" class="location-card full section-content">
       <div class="location-head">
         <input v-model.trim="location.name" class="input" placeholder="名称" required maxlength="80" />
         <AppSelect v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></AppSelect>
@@ -513,7 +629,7 @@ function addLocation() {
         <label class="checkbox-row"><input v-model="location.enabled" type="checkbox" />启用</label>
         <button type="button" class="button danger compact" @click="form.locations.splice(index, 1)">删除</button>
       </div>
-      <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" />
+      <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" />
     </div>
     </section>
   </form>
@@ -521,6 +637,7 @@ function addLocation() {
 
 <style scoped>
 .rule-enabled { align-self: center; white-space: nowrap; }
+.field-label-with-help { gap: 6px; width: fit-content; }
 .rule-basics-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 44px; align-items: start; }
 #proxy-rule-form .rule-basics-row > .field { grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: center; }
 .rule-form-grid .rule-basics-row > .field > label:first-child { font-size: 15px; font-weight: 620; white-space: nowrap; }
@@ -533,13 +650,13 @@ function addLocation() {
   min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 48px;
-  padding: 20px 24px;
+  gap: 10px 48px;
+  padding: 16px 24px;
   border: 1px solid color-mix(in srgb, var(--text) 24%, var(--line));
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-soft) 55%, var(--surface));
 }
-.rule-settings-panel > .field:not(.standalone-field) > label:first-child { min-height: 38px; font-size: 15px; font-weight: 620; }
+.rule-settings-panel > .field:not(.standalone-field) > label:first-child { min-height: 34px; font-size: 15px; font-weight: 620; }
 @media (max-width: 760px) {
   .rule-settings-panel { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px 12px; }
 }
@@ -547,4 +664,35 @@ function addLocation() {
 .group-inheritance { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
 .group-inheritance .checkbox-row { font-size: 14px; font-weight: 400; }
 .group-inheritance > span:last-child { flex-basis: 100%; }
+#proxy-rule-form .body-limit-field { grid-template-columns: max-content minmax(0, 1fr); }
+.body-limit-field > label:first-child { white-space: nowrap; }
+.add-location-button {
+  min-height: 34px;
+  padding-inline: 12px;
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  box-shadow: none;
+}
+
+.add-location-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--line));
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+}
+.redirect-https-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 24px; min-height: 34px; }
+.redirect-port-control { display: flex; align-items: center; gap: 9px; color: var(--text-muted); font-size: 13px; }
+#proxy-rule-form .redirect-port-control .input { width: 110px; }
+.rate-limit-policy-controls { width: 33.333%; min-width: 220px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: center; }
+.auth-policy-controls { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-items: center; }
+.auth-forward-row { display: grid; gap: 5px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--surface-soft) 70%, var(--surface)); }
+.auth-forward-row .checkbox-row { min-height: auto; font-weight: 620; }
+.auth-forward-row .field-help { padding-left: 25px; }
+.auth-mode-warning { color: var(--warning); }
+.auth-error { color: var(--danger); }
+@media (max-width: 760px) {
+  .rate-limit-policy-controls { width: 100%; min-width: 0; }
+  .rate-limit-policy-controls,
+  .auth-policy-controls { grid-template-columns: minmax(0, 1fr); }
+  .auth-forward-row .field-help { padding-left: 0; }
+}
 </style>

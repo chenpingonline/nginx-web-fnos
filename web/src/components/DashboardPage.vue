@@ -207,7 +207,7 @@ const issue = computed(() => {
       </div>
       <div v-if="visible.length" class="table-wrap">
         <table class="table dashboard-table">
-          <thead><tr><th>名称</th><th>类型</th><th>访问入口</th><th>后端服务</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th></tr></thead>
+          <thead><tr><th>名称</th><th>类型</th><th>访问入口</th><th>转发服务</th><th>配置状态</th><th>平均请求速率</th><th>错误率</th></tr></thead>
           <tbody>
             <tr v-for="rule in visible" :key="rule.id">
               <td><div class="rule-identity"><PhGlobe v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" :size="16" /><PhShareNetwork v-else :size="17" />
@@ -224,7 +224,7 @@ const issue = computed(() => {
                 </template>
                 <div v-else class="proxy-entry"><span>{{ rule.listen_address || rule.entry || '—' }}</span><button v-if="rule.listen_address" type="button" class="icon-button proxy-entry-action" aria-label="复制监听地址" title="复制监听地址" @click="emit('copy', rule.listen_address, '监听地址')"><PhCopy :size="16" /></button></div>
               </td>
-              <td><div class="proxy-entry"><span class="proxy-entry-url">{{ rule.target_url || rule.target }}</span><button v-if="rule.target_url || rule.protocol === 'TCP' || rule.protocol === 'UDP'" type="button" class="icon-button proxy-entry-action" aria-label="复制后端服务地址" title="复制后端服务地址" @click="emit('copy', rule.target_url || rule.target, '后端服务地址')"><PhCopy :size="16" /></button></div></td>
+              <td><div class="proxy-entry"><span class="proxy-entry-url">{{ rule.target_url || rule.target }}</span><button v-if="rule.target_url || rule.protocol === 'TCP' || rule.protocol === 'UDP'" type="button" class="icon-button proxy-entry-action" aria-label="复制转发服务地址" title="复制转发服务地址" @click="emit('copy', rule.target_url || rule.target, '转发服务地址')"><PhCopy :size="16" /></button></div></td>
               <td><span class="rule-status" :class="rule.config_state" :title="rule.config_state === 'pending_delete' ? '草稿已删除，仍在上次生效配置中' : '配置状态不代表服务健康'"><i></i><span>{{ configNames[rule.config_state] }}</span></span></td>
               <td :title="`${period}平均完成请求速率`">{{ num(averageRate(rule), 2) }} <small v-if="averageRate(rule) != null">req/s</small></td>
               <td><button v-if="rule.protocol === 'HTTP' || rule.protocol === 'HTTPS'" class="error-rate-link" :class="{ 'error-count': (totalErrors(rule.counts) ?? 0) > 0 }" :aria-label="`查看 ${rule.name} 的错误率详情`" @click="showErrors(rule.id)">{{ errorRate(rule.counts) == null ? "—" : `${num(errorRate(rule.counts), 2)}%` }}<PhArrowRight :size="13" /></button><span v-else>—</span></td>
@@ -272,7 +272,7 @@ const issue = computed(() => {
 </template>
 
 <style scoped>
-.dashboard-page { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 10px; }
+.dashboard-page { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 10px; contain: layout paint; }
 .dashboard-page > * { min-width: 0; }
 .dashboard-status { display: flex; align-items: center; gap: 30px; min-height: 130px; padding: 17px 28px; }
 .dashboard-service { display: flex; align-items: center; gap: 28px; flex: 0 0 38%; min-width: 0; }
@@ -296,7 +296,7 @@ const issue = computed(() => {
 .dashboard-notice { display: flex; align-items: center; gap: 10px; margin: 0; line-height: 1.6; }
 .dashboard-notice svg { flex-shrink: 0; }
 .dashboard-notice > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.traffic-card { margin-top: 2px; }
+.traffic-card { margin-top: 2px; contain: paint; }
 .card-header { justify-content: space-between; min-height: 58px; padding: 14px 20px 8px; border-bottom: 0; }
 .traffic-card .card-header h2 { font-size: 19px; font-weight: 570; }
 h2 { font-size: 19px; font-weight: 570; }

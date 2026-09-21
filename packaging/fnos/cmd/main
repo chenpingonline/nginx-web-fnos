@@ -29,7 +29,7 @@ pid_running() {
 }
 
 backend_ready() {
-  pid_running && [ -S "$SOCKET" ]
+  pid_running && [ -S "$SOCKET" ] && "$BIN" healthcheck >/dev/null 2>&1
 }
 
 start_backend() {
@@ -46,9 +46,10 @@ start_backend() {
   echo "$pid" > "$PID_FILE"
 
   local count=0
-  # 首次启动需先校验并应用默认配置，再开放管理页面。
+  # Unix Socket 文件出现时 HTTP 服务可能仍未开始响应；必须完成一次
+  # 真实请求后再让 fnOS 打开窗口，避免短暂显示 Chromium 断网页。
   while [ "$count" -lt 60 ]; do
-    if [ -S "$SOCKET" ] && kill -0 "$pid" 2>/dev/null; then
+    if [ -S "$SOCKET" ] && kill -0 "$pid" 2>/dev/null && "$BIN" healthcheck >/dev/null 2>&1; then
       return 0
     fi
     if ! kill -0 "$pid" 2>/dev/null; then

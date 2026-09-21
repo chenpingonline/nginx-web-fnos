@@ -197,7 +197,7 @@ watch(
             <td>
               {{
                 rule.upstream_pool_id
-                  ? "后端服务组"
+                  ? "转发服务组"
                   : `${rule.upstream_host}:${rule.upstream_port}`
               }}
             </td>
@@ -232,7 +232,7 @@ watch(
     <div v-else class="empty-state">
       <div class="empty-icon">⇆</div>
       <h3>{{ rules.length ? "没有匹配的规则" : "还没有 TCP/UDP 代理" }}</h3>
-      <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单个后端服务或 Stream 后端服务组。" }}</p>
+      <p>{{ rules.length ? "调整关键词、协议或启用状态后重试。" : "创建独立监听端口并转发到单节点服务或 Stream 转发服务组。" }}</p>
     </div>
   </article>
   <Teleport to="body">
@@ -298,7 +298,7 @@ watch(
                 type="checkbox"
               />入口接收 PROXY Protocol</label
             ><label class="checkbox-row"
-              ><input v-model="form.proxy_protocol" type="checkbox" />向后端服务发送
+              ><input v-model="form.proxy_protocol" type="checkbox" />向转发服务发送
               PROXY Protocol</label
             >
           </div>
@@ -311,10 +311,10 @@ watch(
             ></textarea>
           </div>
           </section>
-          <div class="form-section"><span>后端服务</span><small>选择连接需要转发的位置</small></div>
-          <section class="stream-settings-panel" aria-label="后端服务">
+          <div class="form-section"><span>转发服务</span><small>选择连接需要转发的位置</small></div>
+          <section class="stream-settings-panel" aria-label="转发服务">
           <div class="field full">
-            <label>Stream 后端服务组</label
+            <label>Stream 转发服务组</label
             ><AppSelect v-model="form.upstream_pool_id" class="select">
               <option value="">单个目标</option>
               <option

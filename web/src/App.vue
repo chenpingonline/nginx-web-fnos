@@ -30,8 +30,6 @@ import {
   PhXCircle,
 } from "@phosphor-icons/vue";
 import { errorMessage, jsonBody, request } from "./api";
-import { followSystemTheme } from "./theme";
-import { followScrollActivity } from "./scrollbars";
 import { highlightLog, searchLogLines } from "./logHighlight";
 const appVersion = __APP_VERSION__;
 import RuleGroups from "./components/RuleGroups.vue";
@@ -42,12 +40,14 @@ import ErrorDetailsPage from "./components/AnalysisPage.vue";
 import CertificateForm from "./components/CertificateForm.vue";
 import UpstreamPoolsPage from "./components/UpstreamPoolsPage.vue";
 import RateLimitPoliciesPage from "./components/RateLimitPoliciesPage.vue";
+import RateLimitPolicyManager from "./components/RateLimitPolicyManager.vue";
 import BackupPage, { type BackupFile } from "./components/BackupPage.vue";
 import RuntimeSettingsForm from "./components/RuntimeSettingsForm.vue";
 import SidebarIcon from "./components/SidebarIcon.vue";
 import StreamRulesPage from "./components/StreamRulesPage.vue";
 import type {
   ApplyResult,
+  AuthProfile,
   CertificateInput,
   CustomConfig,
   GeneratedConfig,
@@ -95,7 +95,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string;
     id: "rules",
     icon: "http",
     label: "HTTP(S) 代理",
-    subtitle: "管理域名、监听端口与后端服务",
+    subtitle: "管理域名、监听端口与转发服务",
     groupLabel: "代理配置",
   },
   {
@@ -107,7 +107,7 @@ const pages: { id: Page; icon: SidebarIconName; label: string; subtitle: string;
   {
     id: "upstreams",
     icon: "upstreams",
-    label: "后端服务组",
+    label: "转发服务组",
     subtitle: "管理负载均衡、节点健康参数与连接复用",
   },
   {
@@ -154,12 +154,15 @@ const page = ref<Page>("dashboard"),
   state = ref<State | null>(null),
   revisions = ref<Revision[]>([]),
   config = ref<GeneratedConfig | null>(null);
+const appliedConfigurationKnown = computed(() => overview.value?.applied_known ?? false);
 const restoredRevision = computed(() => state.value?.dirty && state.value.draft_revision_id
   ? revisions.value.find(item => item.id === state.value!.draft_revision_id) : undefined);
 const showDraftPreview = ref(false);
 const draftPreview = computed<Revision | null>(() => state.value ? {
   id: "当前草稿",
-  summary: state.value.dirty ? "待应用，以当前编辑内容为准" : "已同步",
+  summary: !appliedConfigurationKnown.value
+    ? "待初始化，首次应用后开始生成配置历史"
+    : state.value.dirty ? "待应用，以当前编辑内容为准" : "已同步",
   created_at: state.value.updated_at,
   rule_count: (state.value.rules?.length ?? 0) + (state.value.stream_rules?.length ?? 0),
   enabled_count: 0,
@@ -209,11 +212,11 @@ watch(logSearch, (query) => {
     void revealLogMatch();
   } else if (page.value === "logs") void loadLogs();
 });
-const stopTheme = followSystemTheme();
-const stopScrollActivity = followScrollActivity();
 const acmeJobsPanel = ref<InstanceType<typeof ACMEJobs> | null>(null);
 const modal = ref<"rule" | "certificate" | null>(null),
   editingRule = ref<ProxyRule | null>(null),
+  rateLimitManagerOpen = ref(false),
+  rateLimitManagerCreateNew = ref(false),
   toasts = ref<Toast[]>([]),
   logView = ref<HTMLElement | null>(null),
   toastID = ref(0);
@@ -229,6 +232,9 @@ const currentPage = computed(
 const selectedGroup = ref("all");
 const groupPanel = ref<InstanceType<typeof RuleGroups>>();
 const ruleGroups = computed(() => state.value?.rule_groups ?? []);
+function updateAuthProfiles(profiles: AuthProfile[]) {
+  if (state.value) state.value.auth_profiles = profiles;
+}
 async function saveRuleGroup(value: RuleGroup): Promise<{ group: RuleGroup; error?: string }> {
   if (busy.value) throw new Error("请等待当前操作完成");
   busy.value = true;
@@ -368,8 +374,8 @@ const configFileGroups = computed(() => {
       const rule = candidates?.find(rule => rule.id === match[2]);
       label = rule ? `${rule.name} · ${Number(match[1])}` : key;
     } else if (key === '000-monitoring.conf') label = '监控配置';
-    else if (key === '001-runtime-and-upstreams.conf') label = 'HTTP 公共配置与后端服务组';
-    else if (key === '001-stream-runtime.stream') label = 'TCP/UDP 公共配置与后端服务组';
+    else if (key === '001-runtime-and-upstreams.conf') label = 'HTTP 公共配置与转发服务组';
+    else if (key === '001-stream-runtime.stream') label = 'TCP/UDP 公共配置与转发服务组';
     else {
       const fallback = key.match(/^000-default-(\d+)(-ipv6)?\.conf$/);
       if (fallback) label = `默认站点 · ${Number(fallback[1])} · ${fallback[2] ? 'IPv6' : 'IPv4'}`;
@@ -568,7 +574,15 @@ function openCertificate() {
   modal.value = "certificate";
 }
 function closeModal() {
-  if (!busy.value) modal.value = null;
+  if (!busy.value) {
+    rateLimitManagerOpen.value = false;
+    modal.value = null;
+  }
+}
+function manageRateLimitPolicies(createNew = false) {
+  if (busy.value) return;
+  rateLimitManagerCreateNew.value = createNew;
+  rateLimitManagerOpen.value = true;
 }
 async function saveRule(value: ProxyRuleInput, applyAfter: boolean) {
   const id = editingRule.value?.id;
@@ -625,15 +639,27 @@ async function deleteRule(rule: ProxyRule) {
   if (
     !(await ask(
       "删除代理规则",
-      `确定删除“${rule.name}”吗？删除后仍需应用配置才会影响运行中的 Nginx。`,
+      `确定删除“${rule.name}”吗？删除后会立即应用当前全部草稿，并更新运行中的 Nginx。`,
     ))
   )
     return;
-  const ok = await mutate(
-    () => request(`/rules/${rule.id}`, { method: "DELETE" }),
-    "规则已删除",
+  let deleted = false;
+  await mutate(
+    async () => {
+      await request(`/rules/${rule.id}`, { method: "DELETE" });
+      deleted = true;
+      try {
+        return await request<ApplyResult>("/apply", {
+          method: "POST",
+          body: jsonBody({ summary: `删除规则：${rule.name}` }),
+        });
+      } catch (error) {
+        throw new Error(`规则已删除，但应用失败：${errorMessage(error)}。请修正后重新保存并应用。`);
+      }
+    },
+    "规则已删除并应用",
   );
-  if (ok !== undefined) await loadCore(true);
+  if (deleted) await loadCore(true);
 }
 async function toggleRule(rule: ProxyRule, enabled: boolean) {
   const payload: ProxyRuleInput = { ...rule, enabled };
@@ -775,19 +801,19 @@ async function saveAndApplyResource<T>(path: string, value: unknown, id: string,
   }
 }
 async function saveUpstreamPool(value: UpstreamPoolInput, id: string, done: (saved?: UpstreamPool, error?: string) => void) {
-  await saveAndApplyResource("/upstreams", value, id, "后端服务组", done);
+  await saveAndApplyResource("/upstreams", value, id, "转发服务组", done);
 }
 async function removeUpstreamPool(pool: UpstreamPool) {
   if (
     !(await ask(
-      "删除后端服务组",
-      `确定删除“${pool.name}”吗？正在使用的后端服务组不能删除。`,
+      "删除转发服务组",
+      `确定删除“${pool.name}”吗？正在使用的转发服务组不能删除。`,
     ))
   )
     return;
   const ok = await mutate(
     () => request(`/upstreams/${pool.id}`, { method: "DELETE" }),
-    "后端服务组已删除",
+    "转发服务组已删除",
   );
   if (ok !== undefined) await loadCore(true);
 }
@@ -891,6 +917,7 @@ function keydown(event: KeyboardEvent) {
   if (event.key === "Escape") {
     if (activePreview.value) return;
     if (confirmBox.open) answerConfirm(false);
+    else if (rateLimitManagerOpen.value && !busy.value) rateLimitManagerOpen.value = false;
     else closeModal();
   }
 }
@@ -899,8 +926,6 @@ onMounted(() => {
   void loadCore();
 });
 onBeforeUnmount(() => {
-  stopTheme();
-  stopScrollActivity();
   stopLogs();
   if (configCopiedTimer) window.clearTimeout(configCopiedTimer);
   document.removeEventListener("keydown", keydown);
@@ -927,41 +952,41 @@ onBeforeUnmount(() => {
         </template>
       </nav>
       <div class="sidebar-bottom">
-      <div class="sidebar-footer">
-        <div class="mini-status">
-          <span
-            class="status-dot"
-            :class="
-              connectionError
-                ? 'offline'
-                : !overview
-                  ? 'neutral'
-                  : overview.nginx.running
-                    ? overview.dirty
-                      ? 'warning'
-                      : 'online'
-                    : 'offline'
-            "
-          ></span
-          ><span>{{
-            connectionError
-              ? "连接管理服务失败"
-              : !overview
-                ? "正在连接…"
-                : overview.nginx.running
-                  ? overview.dirty
-                    ? "运行中 · 有未应用变更"
-                    : "运行中"
-                  : "已停止"
-          }}</span>
+        <div class="sidebar-footer">
+          <div class="sidebar-runtime-row">
+            <div class="mini-status">
+              <span
+                class="status-dot"
+                :class="
+                  connectionError
+                    ? 'offline'
+                    : !overview
+                      ? 'neutral'
+                      : overview.nginx.running
+                        ? overview.dirty
+                          ? 'warning'
+                          : 'online'
+                        : 'offline'
+                "
+              ></span
+              ><span>{{
+                connectionError
+                  ? "连接管理服务失败"
+                  : !overview
+                    ? "正在连接…"
+                    : overview.nginx.running
+                      ? overview.dirty
+                        ? "运行中 · 有未应用变更"
+                        : "运行中"
+                      : "已停止"
+              }}</span>
+            </div>
+            <span class="sidebar-version">Nginx {{ overview?.nginx_version ?? "1.30.4" }}</span>
+          </div>
         </div>
-        <div class="version-row">
-          <span>v{{ overview?.app_version ?? appVersion }}</span
-          ><span>Nginx {{ overview?.nginx_version ?? "1.30.4" }}</span>
-        </div>
-      </div>
       </div>
     </aside>
+    <div class="workspace-frame">
     <div class="workspace">
       <div class="mobile-nav-bar">
         <button
@@ -1034,14 +1059,13 @@ onBeforeUnmount(() => {
               @remove="removeRateLimitPolicy"
               @refresh="loadCore()"
               @inspect="setPage('errors')"
-              @configure="setPage('rules')"
           /></template>
           <template v-else-if="page === 'rules'"
             ><div class="toolbar"><span
                 class="badge"
                 :class="state.dirty ? 'warning' : 'success'"
                 >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span>
-              <span class="rule-port-hint">监听端口 1024–65535，不占用系统 80/443</span>
+              <span class="rule-port-hint">监听端口 1024–65535</span>
               <span class="spacer"></span
               ><button class="button ghost" :disabled="busy" @click="loadCore()">
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新
@@ -1091,7 +1115,7 @@ onBeforeUnmount(() => {
                       <th>状态</th>
                       <th>名称</th>
                       <th>入口</th>
-                      <th>后端服务</th>
+                      <th>转发服务</th>
                       <th class="hide-mobile">能力</th>
                       <th></th>
                     </tr>
@@ -1126,7 +1150,7 @@ onBeforeUnmount(() => {
                       <td>
                         <div class="proxy-entry">
                           <span class="proxy-entry-url">{{ formatRuleBackend(rule) }}</span>
-                          <button type="button" class="icon-button proxy-entry-action" :aria-label="`复制后端服务 ${formatRuleBackend(rule)}`" title="复制后端服务地址" @click="copyProxyAddress(formatRuleBackend(rule), '后端服务地址')"><PhCopy :size="16" aria-hidden="true" /></button>
+                          <button type="button" class="icon-button proxy-entry-action" :aria-label="`复制转发服务 ${formatRuleBackend(rule)}`" title="复制转发服务地址" @click="copyProxyAddress(formatRuleBackend(rule), '转发服务地址')"><PhCopy :size="16" aria-hidden="true" /></button>
                         </div>
                       </td>
                       <td class="hide-mobile">
@@ -1276,21 +1300,27 @@ onBeforeUnmount(() => {
           >
           <template v-else-if="page === 'revisions'"
             >
-            <article class="card" aria-label="当前草稿状态">
+            <article class="card" :aria-label="appliedConfigurationKnown ? '当前草稿状态' : '当前配置初始化状态'">
               <header class="card-header">
                 <div aria-live="polite">
-                  <h2>当前草稿 <span class="badge" :class="state.dirty ? 'warning' : 'success'">{{ state.dirty ? '待应用' : '已同步' }}</span></h2>
+                  <h2>
+                    {{ appliedConfigurationKnown ? '当前草稿' : '当前配置' }}
+                    <span class="badge" :class="!appliedConfigurationKnown || state.dirty ? 'warning' : 'success'">
+                      {{ !appliedConfigurationKnown ? '待初始化' : state.dirty ? '待应用' : '已同步' }}
+                    </span>
+                  </h2>
                   <template v-if="state.dirty && state.draft_revision_id">
                     <p class="draft-restored-title">已恢复：{{ restoredRevision ? `${formatDate(restoredRevision.created_at)} · ${restoredRevision.summary || '配置快照'}` : state.draft_revision_id }}</p>
                     <p>此版本已写入当前草稿，尚未应用到 Nginx。后续编辑会保留在草稿中。</p>
                   </template>
+                  <p v-else-if="!appliedConfigurationKnown">默认配置尚未完成首次应用，目前没有可放弃的已应用配置。</p>
                   <p v-else>{{ state.dirty ? '当前有尚未应用的修改，运行配置尚未切换。' : '当前配置已同步，没有待应用的修改。' }}</p>
                 </div>
                 <span class="spacer"></span>
-                <button class="button ghost small" aria-haspopup="dialog" @click="showDraftPreview = true">查看当前草稿</button>
+                <button class="button ghost small" aria-haspopup="dialog" @click="showDraftPreview = true">{{ appliedConfigurationKnown ? '查看当前草稿' : '查看当前配置' }}</button>
                 <button class="button ghost small" @click="page = 'rules'">编辑代理规则</button>
                 <button
-                  v-if="state.dirty"
+                  v-if="state.dirty && appliedConfigurationKnown"
                   class="button danger-ghost small"
                   :disabled="busy"
                   title="恢复为当前正在生效的配置，不会重载 Nginx"
@@ -1302,10 +1332,10 @@ onBeforeUnmount(() => {
                   v-if="state.dirty"
                   class="button primary small"
                   :disabled="busy"
-                  title="将当前草稿应用到 Nginx，并生成新的历史版本"
+                  :title="appliedConfigurationKnown ? '将当前草稿应用到 Nginx，并生成新的历史版本' : '首次应用当前配置，并创建第一个历史版本'"
                   @click="applyConfiguration"
                 >
-                  <PhCheckCircle :size="14" aria-hidden="true" />保存并应用
+                  <PhCheckCircle :size="14" aria-hidden="true" />{{ appliedConfigurationKnown ? '保存并应用' : '初始化并应用' }}
                 </button>
               </header>
               <div v-if="state.last_apply_error" class="notice warning" role="alert">上次应用失败：{{ state.last_apply_error }}</div>
@@ -1455,6 +1485,8 @@ onBeforeUnmount(() => {
         </template>
       </main>
     </div>
+    <div class="workspace-scrollbar" aria-hidden="true"></div>
+    </div>
   </div>
   <RevisionPreview v-if="activePreview" :revision="activePreview" :title="showDraftPreview ? '当前草稿预览' : '历史配置预览'" @close="closePreview" />
   <div v-if="customConfigOpen" class="modal-backdrop" @mousedown.self="!busy && (customConfigOpen = false)">
@@ -1518,7 +1550,7 @@ onBeforeUnmount(() => {
         <div v-if="modal === 'rule'" class="rule-header-actions">
           <button type="button" class="button ghost" :disabled="busy" @click="closeModal">取消</button>
           <button type="submit" form="proxy-rule-form" class="button primary" :disabled="busy">
-            {{ busy ? "处理中…" : editingRule ? "保存修改" : "创建规则" }}
+            {{ busy ? "处理中…" : editingRule ? "保存修改" : "保存规则" }}
           </button>
         </div>
         <button type="button" class="icon-button modal-close" aria-label="关闭" @click="closeModal">
@@ -1535,8 +1567,11 @@ onBeforeUnmount(() => {
           :certificates="state!.certificates"
           :upstream-pools="state!.upstream_pools"
           :rate-limit-policies="state!.rate_limit_policies"
+          :auth-profiles="state!.auth_profiles ?? []"
           :busy="busy"
           @save="saveRule"
+          @manage-rate-limits="manageRateLimitPolicies"
+          @auth-profiles-changed="updateAuthProfiles"
         /><CertificateForm
           @acme="createACME"
           v-else
@@ -1547,6 +1582,47 @@ onBeforeUnmount(() => {
       </div>
     </section>
   </div>
+  <Teleport to="body">
+    <div
+      v-if="rateLimitManagerOpen"
+      class="rate-limit-manager-backdrop"
+      @mousedown.self="!busy && (rateLimitManagerOpen = false)"
+    >
+      <section
+        class="rate-limit-manager"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="rate-limit-manager-title"
+      >
+        <header class="rate-limit-manager-header">
+          <div>
+            <h2 id="rate-limit-manager-title">添加限流策略</h2>
+            <p>创建可供代理规则复用的限流参数，关闭后继续编辑当前规则。</p>
+          </div>
+          <button
+            type="button"
+            class="icon-button"
+            aria-label="关闭"
+            :disabled="busy"
+            @click="rateLimitManagerOpen = false"
+          >
+            <PhX :size="20" aria-hidden="true" />
+          </button>
+        </header>
+        <div class="rate-limit-manager-body">
+          <RateLimitPolicyManager
+            :policies="state?.rate_limit_policies ?? []"
+            :rules="state?.rules ?? []"
+            :busy="busy"
+            :create-new="rateLimitManagerCreateNew"
+            @save="saveRateLimitPolicy"
+            @remove="removeRateLimitPolicy"
+            @close="rateLimitManagerOpen = false"
+          />
+        </div>
+      </section>
+    </div>
+  </Teleport>
   <div v-if="confirmBox.open" class="modal-backdrop" aria-hidden="false">
     <section
       class="modal confirm-modal"
@@ -1587,4 +1663,17 @@ onBeforeUnmount(() => {
 .custom-config-form > label { font-weight: 650; }
 .custom-config-editor { min-height: min(52vh, 520px); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.55; tab-size: 4; }
 .custom-config-form .modal-footer { padding: 8px 0 0; }
+.rate-limit-manager-backdrop { position: fixed; inset: 0; z-index: 105; display: grid; place-items: center; padding: 20px; background: rgba(18,25,31,.58); }
+.rate-limit-manager { width: min(720px, calc(100vw - 40px)); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-solid); box-shadow: 0 24px 64px rgba(0,0,0,.22); }
+.rate-limit-manager-header { min-height: 56px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+.rate-limit-manager-header > div { min-width: 0; display: flex; align-items: baseline; gap: 14px; }
+.rate-limit-manager-header h2 { flex: 0 0 auto; margin: 0; font-size: 17px; }
+.rate-limit-manager-header p { margin: 0; color: var(--muted); font-size: 13px; }
+.rate-limit-manager-header .icon-button { width: 32px; height: 32px; }
+.rate-limit-manager-body { min-height: 0; overflow: hidden; }
+@media (max-width: 720px) {
+  .rate-limit-manager-backdrop { padding: 10px; }
+  .rate-limit-manager-header > div { display: grid; gap: 3px; }
+  .rate-limit-manager-body { min-height: 0; }
+}
 </style>

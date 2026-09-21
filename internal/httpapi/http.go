@@ -38,6 +38,10 @@ func New(service *appservice.AppService, web fs.FS) *API {
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.setSecurityHeaders(w)
+	if strings.HasPrefix(r.URL.Path, "/internal/basic-auth/") {
+		a.handleInternalBasicAuth(w, r)
+		return
+	}
 	if r.URL.Path == gatewayPrefix {
 		http.Redirect(w, r, gatewayPrefix+"/", http.StatusTemporaryRedirect)
 		return
@@ -69,7 +73,7 @@ func (a *API) setSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	w.Header().Set("Referrer-Policy", "same-origin")
 	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'sha256-76g7wgrMVgAEbs0hh2mrttl6RmvPc6qF1NzkSErm0B0='; style-src 'self' 'sha256-8MlIelSkx+wy+TI8N7GLZB5hyVRBZK5So+iuZxr84jE='; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'self'")
 }
 
 func (a *API) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
@@ -127,7 +131,18 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 	case apiPath == "/api/overview" && r.Method == http.MethodGet:
 		writeJSON(w, http.StatusOK, a.service.Overview())
 	case apiPath == "/api/state" && r.Method == http.MethodGet:
-		writeJSON(w, http.StatusOK, a.service.State())
+		writeJSON(w, http.StatusOK, domain.PublicState(a.service.State()))
+	case apiPath == "/api/auth-profiles" && r.Method == http.MethodGet:
+		writeJSON(w, http.StatusOK, domain.PublicState(a.service.State()).AuthProfiles)
+	case apiPath == "/api/auth-profiles" && r.Method == http.MethodPost:
+		var input appservice.AuthProfileInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		profile, err := a.service.CreateAuthProfile(input)
+		writeResult(w, http.StatusCreated, profile, err)
+	case strings.HasPrefix(apiPath, "/api/auth-profiles/"):
+		a.handleAuthProfile(w, r, strings.TrimPrefix(apiPath, "/api/auth-profiles/"))
 	case apiPath == "/api/custom-configs" && r.Method == http.MethodPost:
 		var input domain.CustomConfig
 		if !decodeJSON(w, r, &input) {
@@ -281,7 +296,7 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 			return
 		}
 		state, err := a.service.RestoreBackup(backup)
-		writeResult(w, http.StatusOK, state, err)
+		writeResult(w, http.StatusOK, domain.PublicState(state), err)
 	case apiPath == "/api/settings" && r.Method == http.MethodPut:
 		var settings domain.Settings
 		if !decodeJSON(w, r, &settings) {
@@ -310,7 +325,7 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusOK, result, err)
 	case apiPath == "/api/draft" && r.Method == http.MethodDelete:
 		state, err := a.service.DiscardDraft()
-		writeResult(w, http.StatusOK, state, err)
+		writeResult(w, http.StatusOK, domain.PublicState(state), err)
 	case apiPath == "/api/nginx/start" && r.Method == http.MethodPost:
 		result, err := a.service.NginxStart()
 		writeResult(w, http.StatusOK, result, err)
@@ -339,6 +354,9 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusOK, map[string]any{"rotated": rotated}, err)
 	case apiPath == "/api/revisions" && r.Method == http.MethodGet:
 		revisions, err := a.service.ListRevisions()
+		for index := range revisions {
+			revisions[index] = domain.PublicRevision(revisions[index])
+		}
 		writeResult(w, http.StatusOK, revisions, err)
 	case strings.HasPrefix(apiPath, "/api/revisions/"):
 		a.handleRevision(w, r, strings.TrimPrefix(apiPath, "/api/revisions/"))
@@ -347,6 +365,49 @@ func (a *API) handleAPI(w http.ResponseWriter, r *http.Request, apiPath string) 
 		writeResult(w, http.StatusOK, config, err)
 	default:
 		writeAPIError(w, http.StatusNotFound, "接口不存在")
+	}
+}
+
+func (a *API) handleInternalBasicAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	profileID := strings.TrimPrefix(r.URL.Path, "/internal/basic-auth/")
+	if !domain.ValidID(profileID) || strings.Contains(profileID, "/") {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	username, password, ok := r.BasicAuth()
+	realm, authenticated := a.service.AuthenticateBasic(profileID, username, password)
+	if !ok || !authenticated {
+		w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q, charset=\"UTF-8\"", realm))
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) handleAuthProfile(w http.ResponseWriter, r *http.Request, id string) {
+	if !domain.ValidID(id) || strings.Contains(id, "/") {
+		writeAPIError(w, http.StatusNotFound, "认证策略不存在")
+		return
+	}
+	switch r.Method {
+	case http.MethodPut:
+		var input appservice.AuthProfileInput
+		if !decodeJSON(w, r, &input) {
+			return
+		}
+		profile, err := a.service.UpdateAuthProfile(id, input)
+		writeResult(w, http.StatusOK, profile, err)
+	case http.MethodDelete:
+		err := a.service.DeleteAuthProfile(id)
+		writeResult(w, http.StatusOK, map[string]bool{"ok": err == nil}, err)
+	default:
+		writeAPIError(w, http.StatusMethodNotAllowed, "认证策略接口不支持该请求方法")
 	}
 }
 
@@ -373,7 +434,7 @@ func (a *API) handleRateLimitPolicy(w http.ResponseWriter, r *http.Request, id s
 
 func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id string) {
 	if strings.Contains(id, "/") || id == "" {
-		writeAPIError(w, http.StatusNotFound, "后端服务组不存在")
+		writeAPIError(w, http.StatusNotFound, "转发服务组不存在")
 		return
 	}
 	switch r.Method {
@@ -388,7 +449,7 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 		err := a.service.DeleteUpstreamPool(id)
 		writeResult(w, http.StatusOK, map[string]any{"ok": err == nil}, err)
 	default:
-		writeAPIError(w, http.StatusMethodNotAllowed, "后端服务组接口不支持该请求方法")
+		writeAPIError(w, http.StatusMethodNotAllowed, "转发服务组接口不支持该请求方法")
 	}
 }
 
@@ -443,7 +504,7 @@ func (a *API) handleRevision(w http.ResponseWriter, r *http.Request, suffix stri
 	id := parts[0]
 	if len(parts) == 2 && parts[1] == "restore" && r.Method == http.MethodPost {
 		state, err := a.service.RestoreRevision(id)
-		writeResult(w, http.StatusOK, state, err)
+		writeResult(w, http.StatusOK, domain.PublicState(state), err)
 		return
 	}
 	if len(parts) == 1 && r.Method == http.MethodDelete {

@@ -4,6 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light dark">
+    <style>
+      html, body, #app { min-height: 100%; margin: 0; background: #fcfefe; }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body,
+      html[data-theme="dark"] #app { background: #202122; }
+    </style>
+    <script>
+      (() => {
+        const themeStorageKey = 'nginx-web:host-theme';
+        let theme;
+        try {
+          const cachedTheme = localStorage.getItem(themeStorageKey);
+          if (cachedTheme === 'light' || cachedTheme === 'dark') theme = cachedTheme;
+        } catch (_) {
+          // Storage can be unavailable in restricted WebViews.
+        }
+        if (!theme) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <title>nginx-web</title>
   </head>
   <body>

@@ -19,7 +19,8 @@ build-x86:
 build-arm64:
 	./scripts/build.sh arm64
 
-build-all: build-x86 build-arm64
+build-all:
+	./scripts/build.sh x86 arm64
 
 integration:
 	./tests/integration.sh

@@ -43,35 +43,38 @@ type Settings struct {
 }
 
 type ProxyRule struct {
-	ListenType            string            `json:"listen_type,omitempty"`
-	GroupID               string            `json:"group_id,omitempty"`
-	InheritFields         []string          `json:"inherit_fields,omitempty"`
-	ID                    string            `json:"id"`
-	Name                  string            `json:"name"`
-	Enabled               bool              `json:"enabled"`
-	ListenPort            int               `json:"listen_port"`
-	Domains               []string          `json:"domains"`
-	TLS                   bool              `json:"tls"`
-	HTTP2                 bool              `json:"http2"`
-	CertificateID         string            `json:"certificate_id,omitempty"`
-	UpstreamScheme        string            `json:"upstream_scheme"`
-	UpstreamHost          string            `json:"upstream_host"`
-	UpstreamPort          int               `json:"upstream_port"`
-	PreserveHost          bool              `json:"preserve_host"`
-	WebSocket             bool              `json:"websocket"`
-	Streaming             bool              `json:"streaming"`
-	VerifyUpstreamTLS     bool              `json:"verify_upstream_tls"`
-	ConnectTimeoutSeconds int               `json:"connect_timeout_seconds"`
-	ReadTimeoutSeconds    int               `json:"read_timeout_seconds"`
-	SendTimeoutSeconds    int               `json:"send_timeout_seconds"`
-	ClientMaxBodyMB       int               `json:"client_max_body_mb"`
-	UpstreamPoolID        string            `json:"upstream_pool_id,omitempty"`
-	RateLimitPolicyID     string            `json:"rate_limit_policy_id,omitempty"`
-	RateLimit             RateLimitSettings `json:"rate_limit"`
-	RootLocation          LocationSettings  `json:"root_location"`
-	Locations             []LocationRule    `json:"locations"`
-	CreatedAt             time.Time         `json:"created_at"`
-	UpdatedAt             time.Time         `json:"updated_at"`
+	ListenType            string             `json:"listen_type,omitempty"`
+	GroupID               string             `json:"group_id,omitempty"`
+	InheritFields         []string           `json:"inherit_fields,omitempty"`
+	ID                    string             `json:"id"`
+	Name                  string             `json:"name"`
+	Enabled               bool               `json:"enabled"`
+	ListenPort            int                `json:"listen_port"`
+	Domains               []string           `json:"domains"`
+	TLS                   bool               `json:"tls"`
+	RedirectToHTTPS       bool               `json:"redirect_to_https"`
+	RedirectHTTPSPort     int                `json:"redirect_https_port,omitempty"`
+	HTTP2                 bool               `json:"http2"`
+	CertificateID         string             `json:"certificate_id,omitempty"`
+	UpstreamScheme        string             `json:"upstream_scheme"`
+	UpstreamHost          string             `json:"upstream_host"`
+	UpstreamPort          int                `json:"upstream_port"`
+	PreserveHost          bool               `json:"preserve_host"`
+	WebSocket             bool               `json:"websocket"`
+	Streaming             bool               `json:"streaming"`
+	VerifyUpstreamTLS     bool               `json:"verify_upstream_tls"`
+	ConnectTimeoutSeconds int                `json:"connect_timeout_seconds"`
+	ReadTimeoutSeconds    int                `json:"read_timeout_seconds"`
+	SendTimeoutSeconds    int                `json:"send_timeout_seconds"`
+	ClientMaxBodyMB       int                `json:"client_max_body_mb"`
+	UpstreamPoolID        string             `json:"upstream_pool_id,omitempty"`
+	RateLimitPolicyID     string             `json:"rate_limit_policy_id,omitempty"`
+	RateLimit             RateLimitSettings  `json:"rate_limit"`
+	Authentication        RuleAuthentication `json:"authentication"`
+	RootLocation          LocationSettings   `json:"root_location"`
+	Locations             []LocationRule     `json:"locations"`
+	CreatedAt             time.Time          `json:"created_at"`
+	UpdatedAt             time.Time          `json:"updated_at"`
 }
 
 type CertificateMeta struct {
@@ -95,6 +98,7 @@ type State struct {
 	Certificates      []CertificateMeta `json:"certificates"`
 	UpstreamPools     []UpstreamPool    `json:"upstream_pools"`
 	RateLimitPolicies []RateLimitPolicy `json:"rate_limit_policies"`
+	AuthProfiles      []AuthProfile     `json:"auth_profiles"`
 	StreamRules       []StreamRule      `json:"stream_rules"`
 	CustomConfigs     []CustomConfig    `json:"custom_configs,omitempty"`
 	Dirty             bool              `json:"dirty"`
@@ -157,6 +161,7 @@ func DefaultState() State {
 		Certificates:      []CertificateMeta{},
 		UpstreamPools:     []UpstreamPool{},
 		RateLimitPolicies: []RateLimitPolicy{},
+		AuthProfiles:      []AuthProfile{},
 		StreamRules:       []StreamRule{},
 		CustomConfigs:     []CustomConfig{},
 		Dirty:             true,
@@ -185,12 +190,21 @@ func NormalizeRule(rule *ProxyRule, settings Settings) {
 	if rule.Locations == nil {
 		rule.Locations = []LocationRule{}
 	}
+	legacyRedirectToHTTPS := rule.RootLocation.RedirectToHTTPS
 	if rule.RootLocation.BackendType == "" {
 		rule.RootLocation = defaultLocationSettings()
 		rule.RootLocation.UpstreamScheme = rule.UpstreamScheme
 		rule.RootLocation.UpstreamPoolID = rule.UpstreamPoolID
 		rule.RootLocation.UpstreamHost = rule.UpstreamHost
 		rule.RootLocation.UpstreamPort = rule.UpstreamPort
+	}
+	// Older versions stored the server-wide redirect switch under the root Location.
+	if legacyRedirectToHTTPS {
+		rule.RedirectToHTTPS = true
+		rule.RootLocation.RedirectToHTTPS = false
+	}
+	if rule.RedirectToHTTPS && rule.RedirectHTTPSPort == 0 {
+		rule.RedirectHTTPSPort = 443
 	}
 	NormalizeHTTPLocations(rule)
 
@@ -268,6 +282,9 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 		return errors.New("通配符 * 必须单独使用")
 	}
 	if rule.TLS {
+		if rule.RedirectToHTTPS {
+			return errors.New("HTTPS 规则不能再启用 HTTP 跳转 HTTPS")
+		}
 		if rule.CertificateID == "" {
 			return errors.New("HTTPS 规则必须选择证书")
 		}
@@ -277,6 +294,9 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	} else if rule.CertificateID != "" {
 		return errors.New("HTTP 规则不能绑定 SSL/TLS 证书")
 	}
+	if rule.RedirectToHTTPS && (rule.RedirectHTTPSPort < 1 || rule.RedirectHTTPSPort > 65535) {
+		return errors.New("HTTPS 跳转目标端口必须为 1 到 65535")
+	}
 	poolMap := map[string]UpstreamPool{}
 	if len(pools) > 0 {
 		poolMap = pools[0]
@@ -284,14 +304,14 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if rule.UpstreamPoolID != "" {
 		pool, ok := poolMap[rule.UpstreamPoolID]
 		if !ok {
-			return errors.New("引用的后端服务组不存在")
+			return errors.New("引用的转发服务组不存在")
 		}
 		if pool.Protocol != "http" {
-			return errors.New("HTTP 规则只能引用 HTTP 后端服务组")
+			return errors.New("HTTP 规则只能引用 HTTP 转发服务组")
 		}
 	}
 	if rule.UpstreamScheme != "http" && rule.UpstreamScheme != "https" {
-		return errors.New("后端服务协议只能是 http 或 https")
+		return errors.New("转发服务协议只能是 http 或 https")
 	}
 	if rule.UpstreamPoolID == "" {
 		if err := validateHostName(rule.UpstreamHost, false); err != nil {
@@ -357,14 +377,14 @@ func ValidateState(state State) error {
 	poolNames := make(map[string]struct{}, len(state.UpstreamPools))
 	for _, pool := range state.UpstreamPools {
 		if err := ValidateUpstreamPool(pool); err != nil {
-			return fmt.Errorf("后端服务组 %q: %w", pool.Name, err)
+			return fmt.Errorf("转发服务组 %q: %w", pool.Name, err)
 		}
 		if _, exists := pools[pool.ID]; exists {
-			return errors.New("存在重复的后端服务组 ID")
+			return errors.New("存在重复的转发服务组 ID")
 		}
 		key := strings.ToLower(pool.Name)
 		if _, exists := poolNames[key]; exists {
-			return errors.New("存在重复的后端服务组名称")
+			return errors.New("存在重复的转发服务组名称")
 		}
 		pools[pool.ID] = pool
 		poolNames[key] = struct{}{}
@@ -385,6 +405,22 @@ func ValidateState(state State) error {
 		policies[policy.ID] = policy
 		policyNames[key] = struct{}{}
 	}
+	authProfiles := make(map[string]AuthProfile, len(state.AuthProfiles))
+	authProfileNames := make(map[string]struct{}, len(state.AuthProfiles))
+	for _, profile := range state.AuthProfiles {
+		if err := ValidateAuthProfile(profile); err != nil {
+			return fmt.Errorf("认证策略 %q: %w", profile.Name, err)
+		}
+		if _, exists := authProfiles[profile.ID]; exists {
+			return errors.New("存在重复的认证策略 ID")
+		}
+		nameKey := strings.ToLower(profile.Name)
+		if _, exists := authProfileNames[nameKey]; exists {
+			return errors.New("存在重复的认证策略名称")
+		}
+		authProfiles[profile.ID] = profile
+		authProfileNames[nameKey] = struct{}{}
+	}
 
 	type portInfo struct {
 		tls      bool
@@ -402,6 +438,39 @@ func ValidateState(state State) error {
 		if rule.RateLimitPolicyID != "" {
 			if _, exists := policies[rule.RateLimitPolicyID]; !exists {
 				return fmt.Errorf("规则 %q: 引用的限流策略不存在", rule.Name)
+			}
+		}
+		if rule.Authentication.Enabled {
+			if rule.Authentication.Mode != AuthenticationModeBasic {
+				return fmt.Errorf("规则 %q: 当前仅支持 Basic Auth 认证", rule.Name)
+			}
+			profile, exists := authProfiles[rule.Authentication.ProfileID]
+			if !exists {
+				return fmt.Errorf("规则 %q: 引用的认证策略不存在", rule.Name)
+			}
+			hasEnabledUser := false
+			for _, user := range profile.Users {
+				if user.Enabled {
+					hasEnabledUser = true
+					break
+				}
+			}
+			if !hasEnabledUser {
+				return fmt.Errorf("规则 %q: 认证策略至少需要一个已启用用户", rule.Name)
+			}
+			if rule.RootLocation.AuthRequest != "" {
+				return fmt.Errorf("规则 %q: 根 Location 已配置自定义 Auth Request，不能同时启用内置认证", rule.Name)
+			}
+			if rule.RootLocation.BasicAuth {
+				return fmt.Errorf("规则 %q: 根 Location 已配置外部 htpasswd，不能同时启用内置认证", rule.Name)
+			}
+			for _, location := range rule.Locations {
+				if location.Settings.AuthRequest != "" {
+					return fmt.Errorf("规则 %q: Location %q 已配置自定义 Auth Request，不能同时启用内置认证", rule.Name, location.Name)
+				}
+				if location.Settings.BasicAuth {
+					return fmt.Errorf("规则 %q: Location %q 已配置外部 htpasswd，不能同时启用内置认证", rule.Name, location.Name)
+				}
 			}
 		}
 		if err := ValidateRule(rule, certs, pools); err != nil {

@@ -294,7 +294,7 @@ func poolOrHost(id, host string, port int, state State) string {
 				return pool.Name + "（服务组）"
 			}
 		}
-		return "后端服务组"
+		return "转发服务组"
 	}
 	if strings.Contains(host, ":") {
 		host = "[" + host + "]"

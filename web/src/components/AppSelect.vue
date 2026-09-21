@@ -12,12 +12,12 @@ const open = ref(false);
 const active = ref(-1);
 const query = ref('');
 const placement = ref<Record<string, string>>({});
-type Item = { value: T; label: string; disabled: boolean };
+type Item = { value: T; label: string; disabled: boolean; action: boolean };
 function items(): Item[] {
   const result: Item[] = [];
   const label = (nodes: unknown): string => Array.isArray(nodes) ? nodes.map(label).join('') : typeof nodes === 'object' && nodes ? label((nodes as VNode).children) : typeof nodes === 'string' || typeof nodes === 'number' ? String(nodes) : '';
   const visit = (nodes: VNode[]) => nodes.forEach(node => {
-    if (node.type === 'option') result.push({ value: (node.props?.value ?? label(node.children)) as T, label: label(node.children).trim(), disabled: node.props?.disabled === '' || node.props?.disabled === true });
+    if (node.type === 'option') result.push({ value: (node.props?.value ?? label(node.children)) as T, label: label(node.children).trim(), disabled: node.props?.disabled === '' || node.props?.disabled === true, action: node.props?.['data-action'] !== undefined });
     else if (Array.isArray(node.children)) visit(node.children as VNode[]);
   });
   visit(slots.default?.() ?? []);
@@ -120,8 +120,8 @@ onBeforeUnmount(() => { close(); clearTimeout(searchTimer); });
         <input ref="searchInput" v-model="query" type="search" class="app-select-search" role="combobox" :placeholder="searchPlaceholder || '搜索选项'" aria-label="搜索选项" aria-expanded="true" :aria-controls="id" :aria-activedescendant="active >= 0 ? `${id}-${active}` : undefined" autocomplete="off" @input="filter" @keydown="searchKey" />
       </div>
       <div :id="id" class="app-select-options" role="listbox" :aria-label="($attrs['aria-label'] as string) || '选项'">
-        <div v-for="{ item, index } in visibleItems()" :id="`${id}-${index}`" :key="index" :data-index="index" class="app-select-option" :class="{ highlighted: active === index, selected: item.value === modelValue, disabled: item.disabled }" role="option" :aria-selected="item.value === modelValue" :aria-disabled="item.disabled" @mousedown.prevent @pointermove="!item.disabled && (active = index)" @click="choose(index)">
-          <span v-if="!hideCheck" class="app-select-check">{{ item.value === modelValue ? '✓' : '' }}</span><span>{{ item.label }}</span>
+        <div v-for="{ item, index } in visibleItems()" :id="`${id}-${index}`" :key="index" :data-index="index" class="app-select-option" :class="{ highlighted: active === index, selected: !item.action && item.value === modelValue, disabled: item.disabled, action: item.action }" role="option" :aria-selected="!item.action && item.value === modelValue" :aria-disabled="item.disabled" @mousedown.prevent @pointermove="!item.disabled && (active = index)" @click="choose(index)">
+          <span v-if="!hideCheck && !item.action" class="app-select-check">{{ item.value === modelValue ? '✓' : '' }}</span><span>{{ item.label }}</span>
         </div>
         <div v-if="!visibleItems().length" class="app-select-empty">未找到匹配选项</div>
       </div>
@@ -150,6 +150,8 @@ onBeforeUnmount(() => { close(); clearTimeout(searchTimer); });
 .app-select-option > span:last-child { min-width: 0; }
 .app-select-option.highlighted { background: var(--surface-soft); }
 .app-select-option.selected { color: var(--accent-dark); background: var(--accent-soft); }
+.app-select-option.action { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--line); border-radius: 0 0 5px 5px; color: var(--accent-dark); font-weight: 620; }
+.app-select-option.action.highlighted { background: var(--accent-soft); }
 .app-select-option.disabled { opacity: .45; cursor: not-allowed; }
 .app-select-check { flex: 0 0 14px; }
 </style>

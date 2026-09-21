@@ -6,6 +6,7 @@ const props = defineProps<{
   model: LocationSettings;
   upstreamPools: UpstreamPool[];
   root?: boolean;
+  ruleAuthEnabled?: boolean;
 }>();
 
 const list = (value: string) =>
@@ -42,13 +43,9 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
         <option value="status">连接状态</option>
       </AppSelect>
     </div>
-    <label v-if="root" class="checkbox-row field">
-      <input v-model="model.redirect_to_https" type="checkbox" /> HTTP 永久跳转 HTTPS
-    </label>
-
     <template v-if="!root && ['proxy', 'grpc', 'fastcgi', 'uwsgi', 'scgi', 'memcached'].includes(model.backend_type)">
       <div class="field">
-        <label>后端服务组</label>
+        <label>转发服务组</label>
         <AppSelect v-model="model.upstream_pool_id" class="select">
           <option value="">单个服务器</option>
           <option v-for="pool in upstreamPools.filter((item) => item.protocol === 'http')" :key="pool.id" :value="pool.id">{{ pool.name }}</option>
@@ -59,7 +56,7 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
         <AppSelect v-model="model.upstream_scheme" class="select"><option value="http">HTTP</option><option value="https">HTTPS</option></AppSelect>
       </div>
       <template v-if="!model.upstream_pool_id">
-        <div class="field"><label>目标主机</label><input v-model.trim="model.upstream_host" class="input" required /></div>
+        <div class="field target-host-field"><label>目标主机</label><input v-model.trim="model.upstream_host" class="input" required /></div>
         <div class="field"><label>目标端口</label><input v-model.number="model.upstream_port" class="input" type="number" min="1" max="65535" required /></div>
       </template>
     </template>
@@ -111,13 +108,14 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
     <details class="advanced-box full security-settings-box">
       <summary>鉴权、安全与 WebDAV</summary>
       <div class="form-grid compact-grid">
+        <p v-if="ruleAuthEnabled" class="field-help full auth-mode-note">已启用规则级“访问认证”，外部 htpasswd 和 Auth Request 已停用。</p>
         <div class="security-toggle-row full">
-          <label class="checkbox-row"><input v-model="model.basic_auth" type="checkbox" /> Basic Auth</label>
+          <label class="checkbox-row"><input v-model="model.basic_auth" type="checkbox" :disabled="ruleAuthEnabled" /> 外部 htpasswd（兼容）</label>
           <label class="checkbox-row"><input v-model="model.secure_link.enabled" type="checkbox" /> Secure Link</label>
         </div>
-        <div class="field full auth-request-field"><label>Auth Request URI</label><input v-model.trim="model.auth_request" class="input" placeholder="/_auth" /></div>
-        <div v-if="model.basic_auth" class="field"><label>认证提示</label><input v-model="model.basic_auth_realm" class="input" /></div>
-        <div v-if="model.basic_auth" class="field full"><label>htpasswd 绝对路径</label><input v-model.trim="model.basic_auth_file" class="input" placeholder="/vol1/.../.htpasswd" required /></div>
+        <div class="field full auth-request-field"><label>外部 Auth Request URI</label><input v-model.trim="model.auth_request" class="input" placeholder="/_auth" :disabled="ruleAuthEnabled" /><span class="field-help">仅在已有外部鉴权服务时使用；Nginx 会先请求该 URI，并根据返回状态决定是否放行。普通用户名密码认证请使用上方“访问认证”。</span></div>
+        <div v-if="model.basic_auth" class="field"><label>认证提示</label><input v-model="model.basic_auth_realm" class="input" :disabled="ruleAuthEnabled" /></div>
+        <div v-if="model.basic_auth" class="field full"><label>htpasswd 绝对路径</label><input v-model.trim="model.basic_auth_file" class="input" placeholder="/vol1/.../.htpasswd" :disabled="ruleAuthEnabled" required /></div>
         <div v-if="model.secure_link.enabled" class="field"><label>签名参数</label><input v-model.trim="model.secure_link.argument" class="input" /></div>
         <div v-if="model.secure_link.enabled" class="field"><label>签名密钥</label><input v-model="model.secure_link.secret" class="input" type="password" required /></div>
         <label v-if="model.backend_type === 'static'" class="checkbox-row field"><input v-model="model.dav.enabled" type="checkbox" /> WebDAV 写入</label>
@@ -129,17 +127,38 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
     <details class="advanced-box full header-processing-box">
       <summary>Header、内容处理与旁路</summary>
       <div class="form-grid compact-grid">
-        <div v-for="(item, index) in model.request_headers" :key="`req-${index}`" class="inline-editor full">
-          <input v-model.trim="item.name" class="input" placeholder="请求 Header" /><input v-model="item.value" class="input" placeholder="值；空值表示不转发" /><button type="button" class="button danger compact" @click="model.request_headers.splice(index, 1)">删除</button>
-        </div>
-        <div v-for="(item, index) in model.response_headers" :key="`resp-${index}`" class="inline-editor full">
-          <input v-model.trim="item.name" class="input" placeholder="响应 Header" /><input v-model="item.value" class="input" placeholder="值" /><label class="checkbox-row"><input v-model="item.always" type="checkbox" />always</label><button type="button" class="button danger compact" @click="model.response_headers.splice(index, 1)">删除</button>
-        </div>
-        <div v-for="(item, index) in model.sub_filters" :key="`sub-${index}`" class="inline-editor full"><input v-model="item.search" class="input" placeholder="替换前" /><input v-model="item.replacement" class="input" placeholder="替换后" /><button type="button" class="button danger compact" @click="model.sub_filters.splice(index, 1)">删除</button></div>
-        <div class="header-action-stack full">
-          <button type="button" class="button ghost compact fit header-add-button" @click="addHeader('request_headers')">添加请求 Header</button>
-          <button type="button" class="button ghost compact fit header-add-button" @click="addHeader('response_headers')">添加响应 Header</button>
-          <button type="button" class="button ghost compact fit header-add-button" @click="model.sub_filters.push({ search: '', replacement: '' })">添加内容替换</button>
+        <section class="header-editor-group full" aria-label="请求 Header">
+          <header class="editor-group-header">
+            <div><strong>请求 Header</strong><span>控制转发给后端的请求头</span></div>
+            <button type="button" class="button compact header-add-button" @click="addHeader('request_headers')">添加请求 Header</button>
+          </header>
+          <p v-if="model.request_headers.length === 0" class="editor-empty">未配置请求 Header。</p>
+          <div v-for="(item, index) in model.request_headers" :key="`req-${index}`" class="inline-editor header-editor-row">
+            <input v-model.trim="item.name" class="input" aria-label="请求 Header 名称" placeholder="Header 名称" /><input v-model="item.value" class="input" aria-label="请求 Header 值" placeholder="值；空值表示不转发" /><button type="button" class="button danger-ghost compact" @click="model.request_headers.splice(index, 1)">删除</button>
+          </div>
+        </section>
+        <section class="header-editor-group full" aria-label="响应 Header">
+          <header class="editor-group-header">
+            <div><strong>响应 Header</strong><span>添加返回给客户端的响应头</span></div>
+            <button type="button" class="button compact header-add-button" @click="addHeader('response_headers')">添加响应 Header</button>
+          </header>
+          <p v-if="model.response_headers.length === 0" class="editor-empty">未配置响应 Header。</p>
+          <div v-for="(item, index) in model.response_headers" :key="`resp-${index}`" class="inline-editor header-editor-row response-header-row">
+            <input v-model.trim="item.name" class="input" aria-label="响应 Header 名称" placeholder="Header 名称" /><input v-model="item.value" class="input" aria-label="响应 Header 值" placeholder="值" /><label class="checkbox-row"><input v-model="item.always" type="checkbox" />always</label><button type="button" class="button danger-ghost compact" @click="model.response_headers.splice(index, 1)">删除</button>
+          </div>
+        </section>
+        <section class="header-editor-group full" aria-label="内容替换">
+          <header class="editor-group-header">
+            <div><strong>内容替换</strong><span>替换响应正文中的指定内容</span></div>
+            <button type="button" class="button compact header-add-button" @click="model.sub_filters.push({ search: '', replacement: '' })">添加内容替换</button>
+          </header>
+          <p v-if="model.sub_filters.length === 0" class="editor-empty">未配置内容替换。</p>
+          <div v-for="(item, index) in model.sub_filters" :key="`sub-${index}`" class="inline-editor header-editor-row">
+            <input v-model="item.search" class="input" aria-label="替换前内容" placeholder="替换前" /><input v-model="item.replacement" class="input" aria-label="替换后内容" placeholder="替换后" /><button type="button" class="button danger-ghost compact" @click="model.sub_filters.splice(index, 1)">删除</button>
+          </div>
+        </section>
+        <div class="editor-group-divider full">
+          <strong>旁路与响应处理</strong><span>配置追加内容、镜像、SSI 与 Referer 校验</span>
         </div>
         <div class="field"><label>响应前追加 URI</label><input v-model.trim="model.addition_before" class="input" placeholder="/_before" /></div>
         <div class="field"><label>响应后追加 URI</label><input v-model.trim="model.addition_after" class="input" placeholder="/_after" /></div>
@@ -152,3 +171,21 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
     </details>
   </div>
 </template>
+
+<style scoped>
+.auth-mode-note { margin: 0; color: var(--warning); }
+.header-editor-group { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface)); }
+.editor-group-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.editor-group-header > div { min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.editor-group-header strong, .editor-group-divider strong { font-size: 13px; color: var(--text); }
+.editor-group-header span, .editor-group-divider span, .editor-empty { color: var(--text-muted); font-size: 12px; }
+.header-editor-row { grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.4fr) auto; }
+.response-header-row { grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.4fr) auto auto; }
+.editor-empty { margin: 0; padding: 3px 2px; }
+.editor-group-divider { display: flex; align-items: baseline; gap: 10px; padding: 8px 2px 0; border-top: 1px solid var(--line); }
+@media (max-width: 760px) {
+  .editor-group-header, .editor-group-header > div, .editor-group-divider { align-items: flex-start; }
+  .editor-group-header > div, .editor-group-divider { flex-direction: column; gap: 2px; }
+  .header-editor-row, .response-header-row { grid-template-columns: minmax(0, 1fr); }
+}
+</style>

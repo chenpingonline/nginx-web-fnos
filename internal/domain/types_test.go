@@ -66,6 +66,33 @@ func TestNormalizeRule(t *testing.T) {
 	}
 }
 
+func TestNormalizeRuleMigratesLegacyHTTPSRedirect(t *testing.T) {
+	rule := testRule("0123456789ab", "redirect", "demo.example.com", 19080)
+	rule.RootLocation.RedirectToHTTPS = true
+
+	NormalizeRule(&rule, DefaultState().Settings)
+
+	if !rule.RedirectToHTTPS || rule.RedirectHTTPSPort != 443 || rule.RootLocation.RedirectToHTTPS {
+		t.Fatalf("legacy HTTPS redirect was not migrated: %#v", rule)
+	}
+}
+
+func TestValidateRuleRejectsInvalidHTTPSRedirect(t *testing.T) {
+	rule := testRule("0123456789ab", "redirect", "demo.example.com", 19080)
+	NormalizeRule(&rule, DefaultState().Settings)
+	rule.RedirectToHTTPS = true
+	rule.RedirectHTTPSPort = 70000
+	if err := ValidateRule(rule, nil); err == nil || !strings.Contains(err.Error(), "跳转目标端口") {
+		t.Fatalf("expected redirect-port error, got %v", err)
+	}
+
+	rule.RedirectHTTPSPort = 443
+	rule.TLS = true
+	if err := ValidateRule(rule, nil); err == nil || !strings.Contains(err.Error(), "不能再启用") {
+		t.Fatalf("expected TLS redirect conflict, got %v", err)
+	}
+}
+
 func TestApplyStateDefaultsMigratesInlineRateLimitToPolicy(t *testing.T) {
 	state := DefaultState()
 	state.Rules = []ProxyRule{{

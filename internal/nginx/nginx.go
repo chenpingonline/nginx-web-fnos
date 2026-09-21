@@ -1095,6 +1095,19 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 	}
 	fmt.Fprintf(&builder, "    server_name %s;\n", strings.Join(serverNames, " "))
 	fmt.Fprintf(&builder, "    set $fnproxy_rule_id %s;\n", nginxQuote(rule.ID))
+	if rule.Authentication.Enabled {
+		authLocation := "/_nginx_web_internal_auth_" + rule.ID
+		fmt.Fprintf(&builder, "    auth_request %s;\n", authLocation)
+		fmt.Fprintf(&builder, "\n    location = %s {\n", authLocation)
+		builder.WriteString("        internal;\n")
+		builder.WriteString("        auth_request off;\n")
+		builder.WriteString("        proxy_pass_request_body off;\n")
+		builder.WriteString("        proxy_set_header Content-Length \"\";\n")
+		builder.WriteString("        proxy_set_header Authorization $http_authorization;\n")
+		proxyTarget := fmt.Sprintf("http://unix:%s:/internal/basic-auth/%s", m.paths.SocketPath, rule.Authentication.ProfileID)
+		fmt.Fprintf(&builder, "        proxy_pass %s;\n", nginxQuote(proxyTarget))
+		builder.WriteString("    }\n")
+	}
 
 	if rule.TLS {
 		cert, ok := certs[rule.CertificateID]
@@ -1115,8 +1128,12 @@ func (m *Manager) renderRuleServer(rule ProxyRule, certs map[string]CertificateM
 		fmt.Fprintf(&builder, "    client_max_body_size %dm;\n", rule.ClientMaxBodyMB)
 	}
 
-	if rule.RootLocation.RedirectToHTTPS && !rule.TLS {
-		builder.WriteString("    return 308 https://$host$request_uri;\n")
+	if rule.RedirectToHTTPS {
+		targetPort := ""
+		if rule.RedirectHTTPSPort != 443 {
+			targetPort = ":" + strconv.Itoa(rule.RedirectHTTPSPort)
+		}
+		fmt.Fprintf(&builder, "    return 308 https://$host%s$request_uri;\n", targetPort)
 		builder.WriteString("}\n")
 		return builder.String(), nil
 	}
@@ -1333,6 +1350,9 @@ func (m *Manager) renderProxySettings(builder *strings.Builder, rule ProxyRule, 
 	}
 	for _, header := range settings.RequestHeaders {
 		fmt.Fprintf(builder, "        proxy_set_header %s %s;\n", header.Name, nginxDirectiveQuote(header.Value))
+	}
+	if rule.Authentication.Enabled && !rule.Authentication.ForwardAuthorization {
+		builder.WriteString("        proxy_set_header Authorization \"\";\n")
 	}
 	fmt.Fprintf(builder, "        proxy_connect_timeout %ds;\n", rule.ConnectTimeoutSeconds)
 	fmt.Fprintf(builder, "        proxy_read_timeout %ds;\n", rule.ReadTimeoutSeconds)

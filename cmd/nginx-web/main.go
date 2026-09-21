@@ -26,6 +26,10 @@ func main() {
 
 	paths, err := platform.LoadPaths()
 	fatalIf(err)
+	if command == "healthcheck" {
+		fatalIf(app.HealthCheck(paths.SocketPath))
+		return
+	}
 	appService, err := service.New(paths)
 	fatalIf(err)
 	application := app.New(paths, appService, webassets.Assets)
@@ -59,7 +63,7 @@ func main() {
 		fmt.Printf("%s (Nginx %s)\n", domain.BuildIdentity, domain.NginxVersion)
 	default:
 		fmt.Fprintf(os.Stderr, "未知命令: %s\n", command)
-		fmt.Fprintln(os.Stderr, "可用命令: serve, init, nginx-start, nginx-stop, nginx-reload, nginx-test, doctor, version")
+		fmt.Fprintln(os.Stderr, "可用命令: serve, healthcheck, init, nginx-start, nginx-stop, nginx-reload, nginx-test, doctor, version")
 		os.Exit(2)
 	}
 }

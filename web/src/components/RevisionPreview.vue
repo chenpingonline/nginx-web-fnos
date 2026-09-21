@@ -26,9 +26,13 @@ function target(rule: { upstream_pool_id: string; upstream_host: string; upstrea
   return address(rule.upstream_host, rule.upstream_port);
 }
 function destination(location: LocationSettings | undefined, rule: ProxyRule): string {
+  if (rule.redirect_to_https || rule.root_location?.redirect_to_https) {
+    const port = rule.redirect_https_port || 443;
+    return `跳转到 HTTPS${port === 443 ? "" : `:${port}`}`;
+  }
   if (!location || !location.backend_type || location.backend_type === "proxy") return rule.upstream_pool_id ? target(rule) : `${rule.upstream_scheme || "http"}://${target(rule)}`;
   if (location.backend_type === "static") return `静态目录 · ${location.static_path || "未设置"}`;
-  if (location.backend_type === "return") return location.redirect_to_https ? "跳转到 HTTPS" : `返回 ${location.return_code} · ${location.return_target || "无响应内容"}`;
+  if (location.backend_type === "return") return `返回 ${location.return_code} · ${location.return_target || "无响应内容"}`;
   if (location.backend_type === "status") return "Nginx 状态页";
   return `${location.backend_type.toUpperCase()} · ${target(location)}`;
 }
@@ -53,7 +57,7 @@ const strategies: Record<string, string> = { round_robin: "轮询", least_conn: 
         <div class="preview-stats">
           <div><strong>{{ rules.length + streams.length }}</strong><span>代理规则</span></div>
           <div><strong>{{ enabled }}</strong><span>已启用</span></div>
-          <div><strong>{{ snapshot.upstream_pools?.length ?? 0 }}</strong><span>后端服务组</span></div>
+          <div><strong>{{ snapshot.upstream_pools?.length ?? 0 }}</strong><span>转发服务组</span></div>
         </div>
         <section v-if="rules.length" class="preview-section">
           <h3>HTTP(S) 代理</h3>
@@ -72,7 +76,7 @@ const strategies: Record<string, string> = { round_robin: "轮询", least_conn: 
           </article>
         </section>
         <p v-if="!rules.length && !streams.length" class="preview-muted">此配置没有代理规则。</p>
-        <section v-if="snapshot.upstream_pools?.length" class="preview-section"><h3>后端服务组</h3><div v-for="pool in snapshot.upstream_pools" :key="pool.id" class="preview-rule"><div class="preview-rule-heading"><strong>{{ pool.name }}</strong><span class="preview-muted">{{ strategies[pool.strategy] || pool.strategy }}</span></div><div v-for="(server, index) in pool.servers" :key="index" class="preview-path"><span>{{ address(server.host, server.port) }}</span><span>{{ server.down ? '停用' : server.backup ? '备用' : '启用' }} · 权重 {{ server.weight }}</span></div></div></section>
+        <section v-if="snapshot.upstream_pools?.length" class="preview-section"><h3>转发服务组</h3><div v-for="pool in snapshot.upstream_pools" :key="pool.id" class="preview-rule"><div class="preview-rule-heading"><strong>{{ pool.name }}</strong><span class="preview-muted">{{ strategies[pool.strategy] || pool.strategy }}</span></div><div v-for="(server, index) in pool.servers" :key="index" class="preview-path"><span>{{ address(server.host, server.port) }}</span><span>{{ server.down ? '停用' : server.backup ? '备用' : '启用' }} · 权重 {{ server.weight }}</span></div></div></section>
         <section v-if="snapshot.rate_limit_policies?.length" class="preview-section"><h3>限流策略</h3><div v-for="policy in snapshot.rate_limit_policies" :key="policy.id" class="preview-rule"><strong>{{ policy.name }}</strong><p class="preview-features">{{ policy.settings.enabled ? '启用' : '停用' }} · 每秒请求 {{ policy.settings.requests_per_second || '不限' }} · 并发连接 {{ policy.settings.connections || '不限' }}</p></div></section>
         <section class="preview-section"><h3>全局设置</h3><dl class="preview-settings"><div><dt>HTTP 端口</dt><dd>{{ snapshot.settings?.default_http_port ?? '未设置' }}</dd></div><div><dt>HTTPS 端口</dt><dd>{{ snapshot.settings?.default_https_port ?? '未设置' }}</dd></div><div><dt>保留历史</dt><dd>{{ snapshot.settings?.revision_limit ?? '未设置' }} 个</dd></div></dl></section>
         <details class="preview-raw"><summary>高级：查看完整原始配置</summary><p class="preview-muted">版本：{{ revision.id }}。包含全部参数，供排查问题时使用。</p><pre class="code-view">{{ JSON.stringify(snapshot, null, 2) }}</pre></details>
@@ -85,7 +89,7 @@ const strategies: Record<string, string> = { round_robin: "轮询", least_conn: 
 <style scoped>
 .preview-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); color: var(--text); }
 .preview-dialog:not([open]) { display: none; }
-.preview-dialog::backdrop { background: rgba(18,25,31,.48); backdrop-filter: blur(4px); }
+.preview-dialog::backdrop { background: rgba(18,25,31,.58); }
 .preview-heading { flex: 1; min-width: 0; }
 .preview-heading p { overflow-wrap: anywhere; }
 .preview-body { padding: 20px; overflow-y: auto; min-height: 0; }
