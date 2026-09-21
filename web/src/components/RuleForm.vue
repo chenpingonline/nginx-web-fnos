@@ -524,6 +524,7 @@ function addLocation() {
 .rule-basics-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 44px; align-items: start; }
 #proxy-rule-form .rule-basics-row > .field { grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; align-items: center; }
 .rule-form-grid .rule-basics-row > .field > label:first-child { font-size: 15px; font-weight: 620; white-space: nowrap; }
+.rule-form-grid .rule-basics-row :is(#rule-group, #rule-name) { height: 34px; min-height: 34px; }
 .rule-form-grid .rule-basics-row #rule-name { width: 100%; }
 @media (max-width: 760px) { .rule-basics-row { grid-template-columns: minmax(0, 1fr); gap: 12px; } }
 

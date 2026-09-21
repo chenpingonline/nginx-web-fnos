@@ -1081,7 +1081,7 @@ onBeforeUnmount(() => {
                   <button type="button" class="button ghost small group-toggle" :aria-expanded="!collapsedGroups.has(section.id)" :aria-controls="`group-rules-${section.id || 'ungrouped'}`" :aria-label="`${collapsedGroups.has(section.id) ? '展开' : '收起'}分组 ${section.name}`" @click="toggleGroupExpanded(section.id)"><PhCaretRight v-if="collapsedGroups.has(section.id)" :size="15" aria-hidden="true" /><PhCaretDown v-else :size="15" aria-hidden="true" />{{ collapsedGroups.has(section.id) ? '展开' : '收起' }}</button>
                   <h3>{{ section.name }}</h3><span class="proxy-group-count">{{ section.rules.length }} 条规则</span><p v-if="section.group" :title="groupDescription(section.group)">{{ groupDescription(section.group) }}</p>
                 </div>
-                <div class="table-actions"><button v-if="section.group" class="button secondary small" :disabled="busy" @click="groupPanel?.show(section.group)">编辑分组</button><button class="button secondary small" :disabled="busy" @click="addRuleToGroup(section.id)"><PhPlusCircle :size="15" />添加规则</button></div>
+                <div class="table-actions"><button v-if="section.group" class="button secondary small" :disabled="busy" @click="groupPanel?.show(section.group)">编辑分组</button><button class="button primary small" :disabled="busy" @click="addRuleToGroup(section.id)"><PhPlusCircle :size="15" />添加规则</button></div>
               </header>
               <div v-show="!collapsedGroups.has(section.id)" :id="`group-rules-${section.id || 'ungrouped'}`">
               <div v-if="section.rules.length" class="table-wrap">
