@@ -20,6 +20,7 @@ import (
 
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/pathsecurity"
 	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
 )
 
@@ -215,6 +216,9 @@ func (m *Manager) TestState(state State) (string, error) {
 
 func (m *Manager) testStateUnlocked(state State) (string, error) {
 	if err := domain.ValidateState(state); err != nil {
+		return "", err
+	}
+	if err := pathsecurity.ValidateState(state); err != nil {
 		return "", err
 	}
 	if err := m.paths.Ensure(); err != nil {

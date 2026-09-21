@@ -22,6 +22,7 @@ import (
 	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
 	"github.com/chenpingonline/nginx-web-fnos/internal/metrics"
 	nginxmanager "github.com/chenpingonline/nginx-web-fnos/internal/nginx"
+	"github.com/chenpingonline/nginx-web-fnos/internal/pathsecurity"
 	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
 	storepkg "github.com/chenpingonline/nginx-web-fnos/internal/store"
 )
@@ -132,6 +133,9 @@ func (s *AppService) UpdateSettings(settings Settings) error {
 		candidate := State{Settings: settings}
 		domain.ApplyStateDefaults(&candidate)
 		state.Settings = candidate.Settings
+		if err := pathsecurity.ValidateState(*state); err != nil {
+			return err
+		}
 		state.Dirty = true
 		return nil
 	})
@@ -348,6 +352,9 @@ func (s *AppService) CreateRule(input ProxyRule) (ProxyRule, error) {
 	domain.NormalizeRule(&input, snapshot.Settings)
 	if err := s.store.Update(func(state *State) error {
 		state.Rules = append(state.Rules, input)
+		if err := pathsecurity.ValidateState(*state); err != nil {
+			return err
+		}
 		state.Dirty = true
 		return nil
 	}); err != nil {
@@ -372,6 +379,9 @@ func (s *AppService) UpdateRule(id string, input ProxyRule) (ProxyRule, error) {
 			domain.ResolveRuleGroup(&input, state.RuleGroups)
 			domain.NormalizeRule(&input, state.Settings)
 			state.Rules[index] = input
+			if err := pathsecurity.ValidateState(*state); err != nil {
+				return err
+			}
 			state.Dirty = true
 			updated = input
 			return nil
@@ -404,11 +414,11 @@ func (s *AppService) ImportCertificate(input CertificateInput) (CertificateMeta,
 			return CertificateMeta{}, errors.New("路径导入不能同时提交 PEM 内容")
 		}
 		var err error
-		input.Certificate, err = readCertificateFile(input.CertificatePath, 2*1024*1024)
+		input.Certificate, err = readAuthorizedCertificateFile(input.CertificatePath, 2*1024*1024)
 		if err != nil {
 			return CertificateMeta{}, fmt.Errorf("读取证书文件失败: %w", err)
 		}
-		input.PrivateKey, err = readCertificateFile(input.PrivateKeyPath, 512*1024)
+		input.PrivateKey, err = readAuthorizedCertificateFile(input.PrivateKeyPath, 512*1024)
 		if err != nil {
 			return CertificateMeta{}, fmt.Errorf("读取私钥文件失败: %w", err)
 		}
@@ -639,6 +649,9 @@ func (s *AppService) DiscardDraft() (State, error) {
 	applied.LastAppliedAt = current.LastAppliedAt
 	applied.LastApplyMessage = "已放弃未应用的草稿修改"
 	applied.LastApplyError = ""
+	if err := pathsecurity.ValidateState(applied); err != nil {
+		return State{}, err
+	}
 	if err := s.store.Replace(applied); err != nil {
 		return State{}, err
 	}
@@ -735,6 +748,9 @@ func (s *AppService) RestoreRevision(id string) (State, error) {
 	next.LastApplyError = ""
 	next.LastApplyMessage = "已从配置历史恢复为草稿，尚未应用"
 	next.LastAppliedAt = current.LastAppliedAt
+	if err := pathsecurity.ValidateState(next); err != nil {
+		return State{}, err
+	}
 	if err := s.store.Replace(next); err != nil {
 		return State{}, err
 	}

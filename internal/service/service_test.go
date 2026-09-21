@@ -87,6 +87,26 @@ func TestCreateRuleNormalizesInput(t *testing.T) {
 	}
 }
 
+func TestCreateRuleRequiresAuthorizedStaticDirectory(t *testing.T) {
+	service := testService(t)
+	staticDir := t.TempDir()
+	input := domain.ProxyRule{
+		Name: "Static", Enabled: true, ListenPort: 19080, Domains: []string{"static.example.com"},
+		UpstreamScheme: "http", UpstreamHost: "127.0.0.1", UpstreamPort: 8080,
+		RootLocation: domain.LocationSettings{BackendType: "static", StaticPath: staticDir},
+	}
+	if _, err := service.CreateRule(input); err == nil {
+		t.Fatal("unauthorized static directory was accepted")
+	}
+	if len(service.State().Rules) != 0 {
+		t.Fatal("rejected static rule changed persisted state")
+	}
+	t.Setenv("TRIM_DATA_ACCESSIBLE_PATHS", staticDir)
+	if _, err := service.CreateRule(input); err != nil {
+		t.Fatalf("authorized static directory rejected: %v", err)
+	}
+}
+
 func TestRestoredDraftSourcePersistsAcrossEditsAndReopen(t *testing.T) {
 	service := testService(t)
 	original := service.State()

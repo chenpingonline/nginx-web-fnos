@@ -3,6 +3,32 @@ set -u
 
 BIN="${TRIM_APPDEST}/bin/nginx-web-server"
 LOG="${TRIM_PKGVAR}/logs/install.log"
+PRESERVED_ROOT="${TRIM_PKGVAR}/.uninstall-preserved"
+PRESERVED=false
+
+restore_preserved_data() {
+  [ -d "$PRESERVED_ROOT" ] || return 0
+
+  if [ -d "${PRESERVED_ROOT}/etc" ]; then
+    [ -n "${TRIM_PKGETC:-}" ] || return 1
+    mkdir -p "$TRIM_PKGETC" || return 1
+    cp -a "${PRESERVED_ROOT}/etc/." "$TRIM_PKGETC/" || return 1
+  fi
+
+  if [ -d "${PRESERVED_ROOT}/home" ]; then
+    [ -n "${TRIM_PKGHOME:-}" ] || return 1
+    mkdir -p "$TRIM_PKGHOME" || return 1
+    cp -a "${PRESERVED_ROOT}/home/." "$TRIM_PKGHOME/" || return 1
+  fi
+
+  PRESERVED=true
+}
+
+if ! restore_preserved_data; then
+  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "恢复已保留的 nginx-web 应用数据失败。" > "$TRIM_TEMP_LOGFILE"
+  exit 1
+fi
+
 mkdir -p "${TRIM_PKGVAR}/logs"
 
 if [ ! -x "$BIN" ]; then
@@ -13,5 +39,9 @@ fi
 if ! "$BIN" init >> "$LOG" 2>&1; then
   [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "nginx-web 初始化失败，请查看 $LOG" > "$TRIM_TEMP_LOGFILE"
   exit 1
+fi
+
+if [ "$PRESERVED" = true ]; then
+  rm -rf -- "$PRESERVED_ROOT"
 fi
 exit 0

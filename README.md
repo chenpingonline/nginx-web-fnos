@@ -264,7 +264,7 @@ ACME 当前支持 DNS-01，尚不支持 HTTP-01、IP 地址签发或飞牛系统
 
 ## 当前限制
 
-内置 Nginx 未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查或 Prometheus 模块。Basic Auth 密码文件和客户端 CA 等外部文件需自行维护，并确保应用用户可读。
+内置 Nginx 未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查或 Prometheus 模块。Basic Auth 密码文件、客户端 CA、静态目录等外部路径需先在飞牛应用设置中授权；应用只接受授权目录内可由 `nginx-web` 用户读取或写入的路径。
 
 每个 Release 的测试范围以发布说明为准；构建与包校验不能替代实体 fnOS 设备的安装、升级及使用验证。
 

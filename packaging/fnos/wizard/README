@@ -1,1 +1,4 @@
-nginx-web currently has no installation wizard fields.
+nginx-web has no installation wizard fields.
+
+The uninstall wizard asks whether package-owned application data should be
+preserved or deleted. User-authorized external paths are never removed.

@@ -1,5 +1,5 @@
 appname                    = nginx-web
-version                    = 0.2.31
+version                    = 0.2.33
 display_name               = nginx-web
 desc                       = 专为 fnOS 打造的 Nginx 可视化管理工具，支持 HTTP(S) 反向代理、TCP/UDP 转发、SSL 证书、负载均衡、限流与运行分析。内置独立 Nginx，不修改飞牛系统 Nginx。<a href="https://github.com/chenpingonline/nginx-web-fnos/blob/master/docs/user-guide.md" target="_blank" rel="noopener noreferrer">查看使用手册</a>
 maintainer                 = chenping
@@ -9,9 +9,9 @@ source                     = thirdparty
 platform                   = x86
 ctl_stop                   = true
 checkport                  = false
-disable_authorization_path = true
+disable_authorization_path = false
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 完善使用手册与应用简介，并移除安装时的许可确认页。
+changelog                  = 增加卸载时保留或删除应用数据的选择，并保护用户授权目录不被清理。
 micro_app                  = true

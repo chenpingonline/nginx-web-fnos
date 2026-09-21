@@ -36,6 +36,7 @@ func TestCertificateImportMethods(t *testing.T) {
 			input := CertificateInput{Method: method, Certificate: certPEM, PrivateKey: keyPEM}
 			if method == "path" {
 				root := t.TempDir()
+				t.Setenv("TRIM_DATA_ACCESSIBLE_PATHS", root)
 				input.CertificatePath = filepath.Join(root, "cert.pem")
 				input.PrivateKeyPath = filepath.Join(root, "key.pem")
 				if err := os.WriteFile(input.CertificatePath, []byte(certPEM), 0600); err != nil {
@@ -90,6 +91,7 @@ func TestCertificateImportMethods(t *testing.T) {
 
 func TestReadCertificateFileBounds(t *testing.T) {
 	root := t.TempDir()
+	t.Setenv("TRIM_DATA_ACCESSIBLE_PATHS", root)
 	file := filepath.Join(root, "cert.pem")
 	if err := os.WriteFile(file, []byte("12345"), 0600); err != nil {
 		t.Fatal(err)

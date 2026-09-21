@@ -78,7 +78,7 @@
 
 ## SSL/TLS 证书
 
-- 支持上传 PEM 证书链与私钥文件、从服务器绝对路径导入或粘贴 PEM，并校验证书与私钥是否匹配。
+- 支持上传 PEM 证书链与私钥文件、从飞牛已授权目录中的服务器绝对路径导入或粘贴 PEM，并校验证书与私钥是否匹配。
 - 路径导入会将证书复制到应用目录，源文件更新后需要重新导入。
 - ACME 自动申请：基于 lego v5.4.1，支持 Let’s Encrypt、ZeroSSL 和自定义 HTTPS ACME Directory；ZeroSSL 需要填写 EAB KID / HMAC Key。
 - DNS-01 验证接入 lego v5.4.1 的39 个原生 DNS 适配器（16 个国内、23 个常见国际服务商，含 DNS.LA、Dynadot、华为云、阿里云 ESA 等），支持多个域名、通配符以及 CNAME 验证委托。Cloudflare Token 需具有目标 Zone 的读取和 DNS 编辑权限。

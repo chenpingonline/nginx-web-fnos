@@ -15,6 +15,7 @@ import (
 
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
+	"github.com/chenpingonline/nginx-web-fnos/internal/pathsecurity"
 )
 
 const MaxBackupBytes = 64 * 1024 * 1024
@@ -73,6 +74,9 @@ func (s *AppService) RestoreBackup(backup Backup) (State, error) {
 	next := domain.CloneState(backup.State)
 	domain.ApplyStateDefaults(&next)
 	if err := domain.ValidateState(next); err != nil {
+		return State{}, err
+	}
+	if err := pathsecurity.ValidateState(next); err != nil {
 		return State{}, err
 	}
 	if len(backup.Certificates) != len(next.Certificates) {

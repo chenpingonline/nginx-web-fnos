@@ -6,7 +6,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/chenpingonline/nginx-web-fnos/internal/pathsecurity"
 )
+
+func readAuthorizedCertificateFile(path string, limit int64) (string, error) {
+	if err := pathsecurity.ValidateFile(path); err != nil {
+		return "", err
+	}
+	return readCertificateFile(path, limit)
+}
 
 func readCertificateFile(path string, limit int64) (string, error) {
 	path = strings.TrimSpace(path)
