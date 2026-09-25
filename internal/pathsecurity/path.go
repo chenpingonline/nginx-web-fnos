@@ -29,7 +29,11 @@ func AuthorizedRoots() []string {
 // ValidateFile verifies that a user-supplied file resolves inside an fnOS
 // authorized directory and is a readable regular file.
 func ValidateFile(path string) error {
-	resolved, err := validateAuthorizedPath(path)
+	return (&pathValidator{}).validateFile(path)
+}
+
+func (v *pathValidator) validateFile(path string) error {
+	resolved, err := v.validateAuthorizedPath(path)
 	if err != nil {
 		return err
 	}
@@ -49,7 +53,11 @@ func ValidateFile(path string) error {
 // ValidateDirectory verifies that a user-supplied directory resolves inside
 // an fnOS authorized directory. DAV roots additionally require write access.
 func ValidateDirectory(path string, writable bool) error {
-	resolved, err := validateAuthorizedPath(path)
+	return (&pathValidator{}).validateDirectory(path, writable)
+}
+
+func (v *pathValidator) validateDirectory(path string, writable bool) error {
+	resolved, err := v.validateAuthorizedPath(path)
 	if err != nil {
 		return err
 	}
@@ -78,17 +86,18 @@ func ValidateDirectory(path string, writable bool) error {
 // Nginx configuration. Paths owned internally by the application are not
 // user-controlled and are validated by platform.Paths instead.
 func ValidateState(state domain.State) error {
+	v := &pathValidator{}
 	if state.Settings.TLS.ClientVerify != "" && state.Settings.TLS.ClientVerify != "off" {
-		if err := ValidateFile(state.Settings.TLS.ClientCAFile); err != nil {
+		if err := v.validateFile(state.Settings.TLS.ClientCAFile); err != nil {
 			return fmt.Errorf("客户端 CA 文件: %w", err)
 		}
 	}
 	for _, rule := range state.Rules {
-		if err := validateLocation(rule.RootLocation); err != nil {
+		if err := v.validateLocation(rule.RootLocation); err != nil {
 			return fmt.Errorf("规则 %q 的根 Location: %w", rule.Name, err)
 		}
 		for _, location := range rule.Locations {
-			if err := validateLocation(location.Settings); err != nil {
+			if err := v.validateLocation(location.Settings); err != nil {
 				return fmt.Errorf("规则 %q 的 Location %q: %w", rule.Name, location.Name, err)
 			}
 		}
@@ -96,21 +105,21 @@ func ValidateState(state domain.State) error {
 	return nil
 }
 
-func validateLocation(settings domain.LocationSettings) error {
+func (v *pathValidator) validateLocation(settings domain.LocationSettings) error {
 	if settings.BackendType == "static" {
-		if err := ValidateDirectory(settings.StaticPath, settings.DAV.Enabled); err != nil {
+		if err := v.validateDirectory(settings.StaticPath, settings.DAV.Enabled); err != nil {
 			return fmt.Errorf("静态文件目录: %w", err)
 		}
 	}
 	if settings.BasicAuth {
-		if err := ValidateFile(settings.BasicAuthFile); err != nil {
+		if err := v.validateFile(settings.BasicAuthFile); err != nil {
 			return fmt.Errorf("Basic Auth 密码文件: %w", err)
 		}
 	}
 	return nil
 }
 
-func validateAuthorizedPath(path string) (string, error) {
+func (v *pathValidator) validateAuthorizedPath(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if path == "" || strings.ContainsAny(path, "\x00\r\n") || !filepath.IsAbs(path) {
 		return "", errors.New("必须填写安全的绝对路径")
@@ -129,7 +138,11 @@ func validateAuthorizedPath(path string) (string, error) {
 	if err != nil {
 		return "", errors.New("无法解析绝对路径")
 	}
-	for _, root := range AuthorizedRoots() {
+	roots, err := v.authorizedRoots()
+	if err != nil {
+		return "", err
+	}
+	for _, root := range roots {
 		if !filepath.IsAbs(root) {
 			continue
 		}

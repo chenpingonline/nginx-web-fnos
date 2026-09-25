@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onBeforeUnmount, ref } from "vue";
+import { TrimApp } from "@trimjs/web-app";
 import AppSelect from "./AppSelect.vue";
 import type { LocationSettings, UpstreamPool } from "../types";
 
@@ -25,6 +27,49 @@ const setDavMethods = (event: Event) => {
   props.model.dav.methods = list((event.target as HTMLInputElement).value).map((item) => item.toUpperCase());
 };
 const changeBackend = () => { if (props.model.backend_type !== "static") props.model.dav.enabled = false; };
+const pickingDirectory = ref(false);
+const openingAuthorization = ref(false);
+const directoryError = ref("");
+let disposed = false;
+onBeforeUnmount(() => { disposed = true; });
+async function selectDirectory() { await directoryAction("select"); }
+async function openAuthorization() { await directoryAction("authorize"); }
+async function directoryAction(action: "select" | "authorize") {
+  if (pickingDirectory.value || openingAuthorization.value) return;
+  const busy = action === "select" ? pickingDirectory : openingAuthorization;
+  busy.value = true;
+  directoryError.value = "";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const sdk = new TrimApp();
+    await Promise.race([
+      sdk.ready(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("无法连接飞牛，请从飞牛桌面打开应用；也可在应用中心进入 nginx-web 设置。")), 5000);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (disposed) return;
+    if (sdk.isStandaloneWeb) throw new Error(action === "authorize"
+      ? "请在飞牛应用中心打开 nginx-web 的设置，进入“访问权限”添加目录授权。"
+      : "请从飞牛桌面打开应用后选择 NAS 目录，或手动填写目录。");
+    if (action === "authorize") {
+      await sdk.openAppSetting();
+      return;
+    }
+    const paths = await sdk.pickFile({ directory: true, multiple: false, title: "选择静态网站目录", okText: "选择目录" });
+    if (disposed || props.model.backend_type !== "static") return;
+    const path = paths?.[0];
+    if (!path) return; // Cancellation preserves the current directory.
+    if (!path.startsWith("/") || /[\0\r\n]/.test(path)) throw new Error("选择器未返回有效的 NAS 绝对路径，请手动填写目录。");
+    props.model.static_path = path;
+  } catch (error) {
+    if (!disposed) directoryError.value = error instanceof Error ? error.message : (action === "authorize" ? "无法打开应用设置，请在飞牛应用中心进入 nginx-web 的访问权限页面。" : "目录选择失败，请重试或手动填写目录。");
+  } finally {
+    clearTimeout(timer);
+    if (!disposed) busy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -62,7 +107,15 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
     </template>
 
     <template v-if="model.backend_type === 'static'">
-      <div class="field full"><label>静态目录</label><input v-model.trim="model.static_path" class="input" placeholder="/vol1/data/www" required /></div>
+      <div class="field full">
+        <label>静态目录</label>
+        <div class="static-directory-control">
+          <input v-model.trim="model.static_path" class="input" aria-label="静态目录" placeholder="/vol1/data/www" required />
+          <button type="button" class="button" :disabled="pickingDirectory || openingAuthorization" @click="selectDirectory">{{ pickingDirectory ? "选择中…" : "选择目录" }}</button>
+        </div>
+        <span class="field-help">选择 NAS 上的目录；请在应用设置的“访问权限”中授权。<button type="button" class="directory-authorization-link" :disabled="pickingDirectory || openingAuthorization" @click="openAuthorization">{{ openingAuthorization ? "打开中…" : "前往授权" }}</button></span>
+        <span v-if="directoryError" class="field-error" role="alert">{{ directoryError }}</span>
+      </div>
       <label class="checkbox-row field"><input v-model="model.static_alias" type="checkbox" /> 使用 alias（否则 root）</label>
       <label class="checkbox-row field"><input v-model="model.autoindex" type="checkbox" /> 开启目录浏览</label>
       <div class="field"><label>首页文件</label><input class="input" :value="model.index_files.join(', ')" @change="setList('index_files', $event)" /></div>
@@ -173,6 +226,15 @@ const changeBackend = () => { if (props.model.backend_type !== "static") props.m
 </template>
 
 <style scoped>
+.directory-authorization-link { border: 0; background: transparent; color: var(--accent, #168354); font: inherit; padding: 2px 4px; margin-left: 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.directory-authorization-link:disabled { opacity: .55; cursor: wait; }
+.directory-authorization-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 3px; }
+.static-directory-control { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rule-modal .rule-form-grid .static-directory-control .input { width: 50%; min-width: 0; }
+.static-directory-control .button { flex: none; white-space: nowrap; min-height: 34px; }
+@media (max-width: 760px) {
+  .rule-modal .rule-form-grid .static-directory-control .input { flex: 1; width: 0; }
+}
 .auth-mode-note { margin: 0; color: var(--warning); }
 .header-editor-group { display: grid; gap: 7px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface)); }
 .editor-group-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
