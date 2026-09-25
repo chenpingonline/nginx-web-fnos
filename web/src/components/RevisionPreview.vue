@@ -90,28 +90,34 @@ const strategies: Record<string, string> = { round_robin: "轮询", least_conn: 
 .preview-dialog { position: fixed; inset: 0; margin: auto; padding: 0; width: min(820px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); color: var(--text); }
 .preview-dialog:not([open]) { display: none; }
 .preview-dialog::backdrop { background: rgba(18,25,31,.58); }
+.preview-dialog .modal-header { padding: 10px 16px; }
+.preview-heading h2 { margin: 0; font-size: 18px; }
+.preview-heading p { margin: 4px 0 0; font-size: 13px; }
+article.preview-rule { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+article .preview-route { grid-column: 1 / -1; grid-row: 2; }
+article .preview-features { grid-column: 2; grid-row: 1; margin: 0; align-self: center; font-size: 12px; }
 .preview-heading { flex: 1; min-width: 0; }
 .preview-heading p { overflow-wrap: anywhere; }
-.preview-body { padding: 20px; overflow-y: auto; min-height: 0; }
-.preview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.preview-body { padding: 12px 20px; overflow-y: auto; min-height: 0; }
+.preview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .preview-stats div { display: flex; align-items: baseline; gap: 8px; }
-.preview-stats strong { font-size: 24px; }
+.preview-stats strong { font-size: 18px; }
 .preview-stats span, .preview-muted, .preview-label, dt { color: var(--text-muted); }
-.preview-section { margin-top: 20px; }
-h3 { font-size: 15px; margin: 0 0 10px; }
-.preview-rule { border: 1px solid var(--line); border-radius: 9px; padding: 12px; margin-top: 8px; overflow-wrap: anywhere; }
+.preview-section { margin-top: 12px; }
+h3 { font-size: 15px; margin: 0 0 6px; }
+.preview-rule { border: 1px solid var(--line); border-radius: 9px; padding: 8px 12px; margin-top: 6px; overflow-wrap: anywhere; }
 .preview-rule-heading { display: flex; align-items: center; gap: 10px; }
-.preview-route { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 12px; margin-top: 12px; line-height: 1.7; }
+.preview-route { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 6px; line-height: 1.45; }
 .preview-label { display: block; font-size: 13px; }
 .route-arrow { color: var(--text-muted); }
 .preview-features { margin: 10px 0 0; color: var(--text-muted); font-size: 13px; }
-.preview-paths { margin-top: 10px; }
+.preview-paths { margin-top: 6px; grid-column: 1 / -1; }
 summary { cursor: pointer; line-height: 1.8; }
 .preview-path { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
 .preview-settings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0; }
 dd { margin: 6px 0 0; }
-.preview-raw { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 12px; }
+.preview-raw { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
 .code-view { min-height: 0; max-height: 300px; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; }
-.modal-footer { justify-content: space-between; flex-shrink: 0; }
-@media (max-width: 600px) { .preview-body { padding: 14px; } .preview-stats div { flex-direction: column; gap: 2px; } .preview-route { grid-template-columns: 1fr; gap: 6px; } .route-arrow { display: none; } .preview-path { flex-direction: column; gap: 4px; } }
+.modal-footer { padding: 8px 16px; font-size: 13px; justify-content: space-between; flex-shrink: 0; }
+@media (max-width: 600px) { article.preview-rule { grid-template-columns: minmax(0, 1fr); } article .preview-features { grid-column: 1; grid-row: 3; margin-top: 6px; } .preview-body { padding: 14px; } .preview-stats div { flex-direction: column; gap: 2px; } .preview-route { grid-template-columns: 1fr; gap: 6px; } .route-arrow { display: none; } .preview-path { flex-direction: column; gap: 4px; } }
 </style>

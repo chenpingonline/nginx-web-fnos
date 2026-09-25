@@ -55,8 +55,18 @@ for entry in ('main', 'install_callback', 'upgrade_callback', 'uninstall_init'):
     script=(root/'cmd'/entry).read_text()
     if 'enter_package_user "$@"' not in script: raise SystemExit(f'{entry} 缺少降权入口')
 helper=(root/'cmd/privilege.sh').read_text()
-if 'setcap cap_net_bind_service=ep' not in helper or 'exec runuser -u "$user"' not in helper:
-    raise SystemExit('缺少低位端口能力设置或降权执行')
+if mode == 'full-ports':
+    if 'repair-app-data' in helper and not (root/'cmd/repair-app-data').is_file():
+        raise SystemExit('缺少应用数据权限修复程序')
+    if 'setcap cap_net_bind_service=ep' not in helper or 'exec runuser -u "$user"' not in helper:
+        raise SystemExit('缺少低位端口能力设置或降权执行')
+else:
+    import re
+    forbidden = re.compile(r'\b(setcap|getcap|runuser|chown|sudo|prepare_low_ports|prepare_package_directories)\b')
+    for script in (root/'cmd').rglob('*'):
+        if script.is_file() and forbidden.search(script.read_text()):
+            raise SystemExit(f'标准包包含特权代码：{script.name}')
+    if (root/'variants').exists(): raise SystemExit('标准包不应包含其他权限模式的脚本')
 manifest=(root/'manifest').read_text()
 for key in ('appname','version','display_name','platform','checksum'):
     if not any(line.split('=',1)[0].strip()==key for line in manifest.splitlines() if '=' in line): raise SystemExit(f'manifest 缺少 {key}')
@@ -71,5 +81,11 @@ except StopIteration:
 if item.get('type') != 'radio' or item.get('initValue') != 'false': raise SystemExit('卸载向导必须默认保留数据')
 if {option.get('value') for option in item.get('options', [])} != {'false', 'true'}: raise SystemExit('卸载向导选项值必须为字符串 false/true')
 PY
-bash -n "$WORK/cmd/"*
+for script in "$WORK/cmd/"*; do
+  [[ "$(basename "$script")" == repair-app-data ]] && continue
+  bash -n "$script"
+done
+if [[ -f "$WORK/cmd/repair-app-data" ]]; then
+  file "$WORK/cmd/repair-app-data" | grep -Eq "$FILE_PATTERN" || { echo '权限修复程序架构错误' >&2; exit 1; }
+fi
 echo "FPK 验证通过：$(basename "$FPK")"

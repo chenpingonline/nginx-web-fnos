@@ -104,10 +104,18 @@ func New(paths Paths) (*AppService, error) {
 }
 
 func (s *AppService) Prepare() (ApplyResult, error) {
-	if err := s.nginx.CheckBinary(); err != nil {
-		return ApplyResult{}, err
+	if result, handled, err := s.migrateRuntimeConfiguration(); handled || err != nil {
+		return result, err
 	}
-	return s.nginx.Prepare(s.store.Snapshot())
+	state := s.State()
+	if applied, known := s.appliedState(state); known {
+		return s.nginx.Prepare(applied)
+	}
+	// An edited draft is not an installation-time runtime configuration.
+	if !sameToggleConfiguration(state, domain.DefaultState()) {
+		return ApplyResult{}, errors.New("无法确认升级前的已应用配置，已保留草稿，请检查配置记录")
+	}
+	return s.nginx.Prepare(state)
 }
 
 func (s *AppService) Overview() Overview {
@@ -613,6 +621,8 @@ func (s *AppService) Apply(summary string) (ApplyResult, error) {
 		current.Dirty = false
 		current.DraftRevisionID = ""
 		current.LastAppliedAt = &now
+		current.PortMigrationPending = false
+		current.RuntimeConfigVersion = runtimeConfigVersion
 		current.LastApplyMessage = result.Message
 		current.LastApplyError = ""
 		return nil
@@ -666,6 +676,11 @@ func (s *AppService) DiscardDraft() (State, error) {
 }
 
 func (s *AppService) NginxStart() (ApplyResult, error) {
+	if s.State().PortMigrationPending {
+		if _, err := s.Prepare(); err != nil {
+			return ApplyResult{}, err
+		}
+	}
 	return s.nginx.Start()
 }
 
@@ -674,6 +689,11 @@ func (s *AppService) NginxStop() (ApplyResult, error) {
 }
 
 func (s *AppService) NginxReload() (ApplyResult, error) {
+	if s.State().PortMigrationPending {
+		if _, err := s.Prepare(); err != nil {
+			return ApplyResult{}, err
+		}
+	}
 	return s.nginx.Reload()
 }
 

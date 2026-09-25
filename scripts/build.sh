@@ -77,6 +77,10 @@ build_arch() {
   if command -v md5sum >/dev/null 2>&1; then APP_MD5="$(md5sum "$STAGE/app.tgz" | awk '{print $1}')"; else APP_MD5="$(md5 -q "$STAGE/app.tgz")"; fi
   echo "[$ARCH 4/6] 组装 FPK 元数据"
   cp -a "$ROOT/packaging/fnos/cmd" "$ROOT/packaging/fnos/config" "$ROOT/packaging/fnos/wizard" "$STAGE/"
+  if [[ "$MODE" == full-ports ]]; then
+    cp "$ROOT/packaging/fnos/variants/full-ports/privilege.sh" "$STAGE/cmd/privilege.sh"
+    (cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$GOARCH" go build -trimpath -buildvcs=false -ldflags='-s -w' -o "$STAGE/cmd/repair-app-data" ./cmd/repair-app-data)
+  fi
   python3 - "$STAGE" "$MODE" <<'PYMODE'
 import json, pathlib, sys
 stage, mode = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -84,8 +88,6 @@ p = stage / 'config/privilege'
 config = json.loads(p.read_text())
 config['defaults']['run-as'] = 'root' if mode == 'full-ports' else 'package'
 p.write_text(json.dumps(config, indent=2) + '\n')
-p = stage / 'cmd/privilege.sh'
-p.write_text(p.read_text().replace('readonly PACKAGE_PERMISSION_MODE=standard', 'readonly PACKAGE_PERMISSION_MODE=' + mode))
 (stage / 'PERMISSION_MODE').write_text(mode + '\n')
 PYMODE
   cp "$ROOT/packaging/fnos/ICON.PNG" "$ROOT/packaging/fnos/ICON_256.PNG" "$STAGE/"

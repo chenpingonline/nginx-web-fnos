@@ -215,6 +215,10 @@ func (m *Manager) TestState(state State) (string, error) {
 }
 
 func (m *Manager) testStateUnlocked(state State) (string, error) {
+	state = domain.CloneState(state)
+	if err := domain.ValidateRuntimePorts(state); err != nil {
+		return "", err
+	}
 	if err := domain.ValidateState(state); err != nil {
 		return "", err
 	}
@@ -461,6 +465,12 @@ func (m *Manager) runCommand(ctx context.Context, args ...string) ([]byte, error
 }
 
 func (m *Manager) render(state State, confDPath string) (string, map[string]string, error) {
+	// Rules contain shared slices even when State is passed by value. Rendering
+	// resolves policies and defaults only on a private copy, never on a snapshot.
+	state = domain.CloneState(state)
+	if err := domain.ValidateRuntimePorts(state); err != nil {
+		return "", nil, err
+	}
 	domain.ApplyStateDefaults(&state)
 	if err := domain.ValidateState(state); err != nil {
 		return "", nil, err
@@ -504,7 +514,7 @@ func (m *Manager) render(state State, confDPath string) (string, map[string]stri
 		}
 		item.rules = append(item.rules, rule)
 	}
-	if len(groupsByPort) == 0 {
+	if len(groupsByPort) == 0 && state.Settings.DefaultHTTPPort >= domain.MinListenPort {
 		groupsByPort[state.Settings.DefaultHTTPPort] = &group{port: state.Settings.DefaultHTTPPort, tls: false}
 	}
 

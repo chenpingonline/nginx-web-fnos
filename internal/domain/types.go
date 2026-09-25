@@ -91,22 +91,25 @@ type CertificateMeta struct {
 }
 
 type State struct {
-	RuleGroups        []RuleGroup       `json:"rule_groups"`
-	SchemaVersion     int               `json:"schema_version"`
-	Settings          Settings          `json:"settings"`
-	Rules             []ProxyRule       `json:"rules"`
-	Certificates      []CertificateMeta `json:"certificates"`
-	UpstreamPools     []UpstreamPool    `json:"upstream_pools"`
-	RateLimitPolicies []RateLimitPolicy `json:"rate_limit_policies"`
-	AuthProfiles      []AuthProfile     `json:"auth_profiles"`
-	StreamRules       []StreamRule      `json:"stream_rules"`
-	CustomConfigs     []CustomConfig    `json:"custom_configs,omitempty"`
-	Dirty             bool              `json:"dirty"`
-	DraftRevisionID   string            `json:"draft_revision_id,omitempty"`
-	LastAppliedAt     *time.Time        `json:"last_applied_at,omitempty"`
-	LastApplyMessage  string            `json:"last_apply_message,omitempty"`
-	LastApplyError    string            `json:"last_apply_error,omitempty"`
-	UpdatedAt         time.Time         `json:"updated_at"`
+	RuntimeConfigVersion int               `json:"runtime_config_version,omitempty"`
+	RuntimeMinListenPort int               `json:"runtime_min_listen_port,omitempty"`
+	PortMigrationPending bool              `json:"port_migration_pending,omitempty"`
+	RuleGroups           []RuleGroup       `json:"rule_groups"`
+	SchemaVersion        int               `json:"schema_version"`
+	Settings             Settings          `json:"settings"`
+	Rules                []ProxyRule       `json:"rules"`
+	Certificates         []CertificateMeta `json:"certificates"`
+	UpstreamPools        []UpstreamPool    `json:"upstream_pools"`
+	RateLimitPolicies    []RateLimitPolicy `json:"rate_limit_policies"`
+	AuthProfiles         []AuthProfile     `json:"auth_profiles"`
+	StreamRules          []StreamRule      `json:"stream_rules"`
+	CustomConfigs        []CustomConfig    `json:"custom_configs,omitempty"`
+	Dirty                bool              `json:"dirty"`
+	DraftRevisionID      string            `json:"draft_revision_id,omitempty"`
+	LastAppliedAt        *time.Time        `json:"last_applied_at,omitempty"`
+	LastApplyMessage     string            `json:"last_apply_message,omitempty"`
+	LastApplyError       string            `json:"last_apply_error,omitempty"`
+	UpdatedAt            time.Time         `json:"updated_at"`
 }
 
 type CustomConfig struct {
@@ -262,8 +265,8 @@ func ValidateRule(rule ProxyRule, certs map[string]CertificateMeta, pools ...map
 	if len([]rune(rule.Name)) < 1 || len([]rune(rule.Name)) > 80 {
 		return errors.New("规则名称长度必须为 1 到 80 个字符")
 	}
-	if rule.ListenPort < MinListenPort || rule.ListenPort > 65535 {
-		return fmt.Errorf("监听端口必须为 %d 到 65535", MinListenPort)
+	if rule.ListenPort < 1 || rule.ListenPort > 65535 {
+		return errors.New("监听端口必须为 1 到 65535")
 	}
 	if len(rule.Domains) == 0 {
 		return errors.New("至少需要填写一个访问域名或 IP")
@@ -350,10 +353,10 @@ func ValidateState(state State) error {
 	if err := ValidateCustomConfigs(state.CustomConfigs); err != nil {
 		return err
 	}
-	if state.Settings.DefaultHTTPPort < MinListenPort || state.Settings.DefaultHTTPPort > 65535 {
+	if state.Settings.DefaultHTTPPort < 1 || state.Settings.DefaultHTTPPort > 65535 {
 		return errors.New("默认 HTTP 端口不合法")
 	}
-	if state.Settings.DefaultHTTPSPort < MinListenPort || state.Settings.DefaultHTTPSPort > 65535 {
+	if state.Settings.DefaultHTTPSPort < 1 || state.Settings.DefaultHTTPSPort > 65535 {
 		return errors.New("默认 HTTPS 端口不合法")
 	}
 	if state.Settings.RevisionLimit < 1 || state.Settings.RevisionLimit > 100 {
@@ -586,7 +589,7 @@ func ActivePorts(state State) []int {
 			set[rule.ListenPort] = struct{}{}
 		}
 	}
-	if len(set) == 0 {
+	if len(set) == 0 && state.Settings.DefaultHTTPPort >= MinListenPort {
 		set[state.Settings.DefaultHTTPPort] = struct{}{}
 	}
 	ports := make([]int, 0, len(set))

@@ -11,6 +11,9 @@ import (
 // Initialize runs before the management API opens, so the serving process owns
 // both the initial activation and its in-memory/persisted application state.
 func (s *AppService) Initialize() error {
+	if _, handled, err := s.migrateRuntimeConfiguration(); handled || err != nil {
+		return err
+	}
 	state := s.State()
 	defaults := domain.DefaultState()
 	domain.ApplyStateDefaults(&defaults)

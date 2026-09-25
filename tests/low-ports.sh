@@ -2,7 +2,8 @@
 # Linux root-only integration check; run in an isolated container, never against an installed app.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SERVER="${1:?usage: low-ports.sh <native Linux server binary>}"
+SERVER="${1:?usage: low-ports.sh <native Linux server binary> <repair helper>}"
+REPAIR="${2:?native Linux repair-app-data binary}"
 [[ $(id -u) == 0 ]]
 [[ $(cat /proc/sys/net/ipv4/ip_unprivileged_port_start) == 1024 ]]
 id nginx-web >/dev/null
@@ -16,7 +17,8 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$TEST/cmd"
 cp "$ROOT/packaging/fnos/cmd/"* "$TEST/cmd/"
-sed -i 's/readonly PACKAGE_PERMISSION_MODE=standard/readonly PACKAGE_PERMISSION_MODE=full-ports/' "$TEST/cmd/privilege.sh"
+cp "$ROOT/packaging/fnos/variants/full-ports/privilege.sh" "$TEST/cmd/privilege.sh"
+cp "$REPAIR" "$TEST/cmd/repair-app-data"
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/home"
 case $(uname -m) in aarch64) arch=arm64 ;; x86_64) arch=x86_64 ;; esac
 cp "$SERVER" "$TEST/app/bin/nginx-web-server"

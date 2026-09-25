@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-# Root is used only for capability preparation; all application work runs as the package user.
+# The packaged permission helper enforces the selected runtime mode.
 source "$(dirname "${BASH_SOURCE[0]}")/privilege.sh"
 enter_package_user "$@"
 
@@ -10,42 +10,121 @@ LOG="${TRIM_PKGVAR}/logs/install.log"
 PRESERVED_ROOT="${TRIM_PKGVAR}/.uninstall-preserved"
 PRESERVED=false
 
+LOG_READY=false
+RESTORE_ERROR=""
+
+install_log() {
+  local line="$(date '+%Y-%m-%dT%H:%M:%S%z') $*"
+  printf '%s\n' "$line" >&2
+  if [ "$LOG_READY" = true ]; then
+    printf '%s\n' "$line" >> "$LOG" || true
+  fi
+}
+
+report_failure() {
+  local message="$1" detail="${2:-}" notice
+  install_log "$message"
+  [ -z "$detail" ] || install_log "$detail"
+  notice="$message"
+  [ -z "$detail" ] || notice="$notice
+$(printf '%s\n' "$detail" | head -c 2000)"
+  if [ "$LOG_READY" = true ]; then
+    notice="$notice
+详细日志：$LOG"
+  else
+    notice="$notice
+安装日志不可写，详细错误已输出到脚本标准错误。"
+  fi
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    printf '%s\n' "$notice" > "$TRIM_TEMP_LOGFILE" || install_log "无法写入系统错误提示文件。"
+  fi
+}
+
+# Create the log before restoration, while already running as the package user.
+if output=$(mkdir -p "${TRIM_PKGVAR}/logs" 2>&1) && output=$(touch "$LOG" 2>&1); then
+  LOG_READY=true
+else
+  install_log "应用日志暂不可写，改用临时安装日志：$output"
+  LOG=$(mktemp "${TRIM_PKGTMP:-/tmp}/nginx-web-install.XXXXXX") || LOG=$(mktemp /tmp/nginx-web-install.XXXXXX) || {
+    report_failure '无法创建安装日志或备用日志；未执行数据恢复。'
+    exit 1
+  }
+  LOG_READY=true
+  install_log "备用安装日志：$LOG"
+fi
+install_log "开始安装回调，权限模式=$PACKAGE_PERMISSION_MODE，执行用户=$(id)"
+install_log "保留目录=$PRESERVED_ROOT；配置目录=${TRIM_PKGETC:-未设置}；Home 目录=${TRIM_PKGHOME:-未设置}"
+
+restore_command() {
+  local step="$1" output status
+  shift
+  install_log "恢复步骤：$step"
+  if output=$("$@" 2>&1); then
+    [ -z "$output" ] || install_log "$output"
+    return 0
+  else
+    status=$?
+    RESTORE_ERROR="$step（退出码 $status）
+$output"
+    return "$status"
+  fi
+}
+
+restore_directory() {
+  local source="$1" target="$2" label="$3"
+  [ -d "$source" ] || return 0
+  if [ -z "$target" ]; then
+    RESTORE_ERROR="$label 的目标目录环境变量未设置。"
+    return 1
+  fi
+  # Metadata only: never log configuration or certificate contents.
+  install_log "目录属性：$(ls -ldn -- "$source" "$target" 2>&1)"
+  restore_command "创建$label 目标目录：$target" mkdir -p "$target" || return 1
+  restore_command "恢复$label：$source → $target" cp -a "$source/." "$target/" || return 1
+}
+
 restore_preserved_data() {
-  [ -d "$PRESERVED_ROOT" ] || return 0
-
-  if [ -d "${PRESERVED_ROOT}/etc" ]; then
-    [ -n "${TRIM_PKGETC:-}" ] || return 1
-    mkdir -p "$TRIM_PKGETC" || return 1
-    cp -a "${PRESERVED_ROOT}/etc/." "$TRIM_PKGETC/" || return 1
+  # A process interruption between the two backup renames leaves this recovery copy.
+  if [ ! -e "$PRESERVED_ROOT" ] && [ -d "${PRESERVED_ROOT}.previous" ]; then
+    restore_command '恢复上次保留备份' mv -- "${PRESERVED_ROOT}.previous" "$PRESERVED_ROOT" || return 1
   fi
-
-  if [ -d "${PRESERVED_ROOT}/home" ]; then
-    [ -n "${TRIM_PKGHOME:-}" ] || return 1
-    mkdir -p "$TRIM_PKGHOME" || return 1
-    cp -a "${PRESERVED_ROOT}/home/." "$TRIM_PKGHOME/" || return 1
+  if [ ! -e "$PRESERVED_ROOT" ] && [ ! -L "$PRESERVED_ROOT" ]; then
+    install_log '没有保留数据，无需恢复。'
+    return 0
   fi
-
+  if [ ! -d "$PRESERVED_ROOT" ] || [ ! -r "$PRESERVED_ROOT" ] || [ ! -x "$PRESERVED_ROOT" ]; then
+    RESTORE_ERROR="保留目录不是可读取、可进入的目录：$PRESERVED_ROOT
+$(ls -ldn -- "$PRESERVED_ROOT" 2>&1)"
+    return 1
+  fi
+  restore_directory "${PRESERVED_ROOT}/etc" "${TRIM_PKGETC:-}" '配置' || return 1
+  restore_directory "${PRESERVED_ROOT}/home" "${TRIM_PKGHOME:-}" 'Home 数据' || return 1
   PRESERVED=true
+  install_log '保留数据复制完成，开始初始化。'
 }
 
 if ! restore_preserved_data; then
-  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "恢复已保留的 nginx-web 应用数据失败。" > "$TRIM_TEMP_LOGFILE"
+  report_failure '恢复已保留的 nginx-web 应用数据失败；保留目录未删除。' "$RESTORE_ERROR"
   exit 1
 fi
-
-mkdir -p "${TRIM_PKGVAR}/logs"
 
 if [ ! -x "$BIN" ]; then
-  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "nginx-web 管理程序不存在或无法执行：$BIN" > "$TRIM_TEMP_LOGFILE"
+  report_failure "nginx-web 管理程序不存在或无法执行：$BIN"
   exit 1
 fi
 
-if ! "$BIN" init >> "$LOG" 2>&1; then
-  [ -n "${TRIM_TEMP_LOGFILE:-}" ] && echo "nginx-web 初始化失败，请查看 $LOG" > "$TRIM_TEMP_LOGFILE"
+if output=$("$BIN" init 2>&1); then
+  printf '%s\n' "$output" >> "$LOG"
+else
+  report_failure "nginx-web 初始化失败；保留目录未删除。" "$output"
   exit 1
 fi
 
 if [ "$PRESERVED" = true ]; then
-  rm -rf -- "$PRESERVED_ROOT"
+  if ! output=$(rm -rf -- "$PRESERVED_ROOT" 2>&1); then
+    report_failure "初始化已完成，但清理保留目录失败：$PRESERVED_ROOT" "$output"
+    exit 1
+  fi
 fi
+install_log '安装回调完成。'
 exit 0

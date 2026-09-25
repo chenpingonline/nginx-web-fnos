@@ -1,6 +1,7 @@
 package nginx
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
@@ -289,9 +290,14 @@ func TestRenderAdvancedRuntimePoolAndRateLimit(t *testing.T) {
 	staticSettings.SubFilters = nil
 	state.Rules[0].Locations = []domain.LocationRule{{ID: "333333333333", Name: "assets", Enabled: true, Path: "/assets/", Match: "prefix", Settings: staticSettings}}
 	state.StreamRules = []domain.StreamRule{{ID: "222222222222", Name: "mqtt tls", Enabled: true, Protocol: "tcp", ListenAddress: "0.0.0.0", ListenPort: 19081, UpstreamPoolID: streamPool.ID, ConnectTimeoutSeconds: 10, ProxyTimeoutSeconds: 3600, TLSMode: "passthrough", AccessLog: true, MaxConnections: 20, SNIRoutes: []domain.SNIRoute{{ServerNames: []string{"mqtt.example.com"}, UpstreamPoolID: streamPool.ID}}}}
+	before, _ := json.Marshal(state)
 	master, files, err := New(paths).render(state, paths.NginxConfD)
 	if err != nil {
 		t.Fatal(err)
+	}
+	after, _ := json.Marshal(state)
+	if string(before) != string(after) {
+		t.Fatal("render changed caller configuration")
 	}
 	all := master
 	for _, content := range files {
@@ -370,5 +376,24 @@ func TestAdvancedConfigWithRealNginx(t *testing.T) {
 	state.Rules = []domain.ProxyRule{rule}
 	if _, err := New(paths).Prepare(state); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDormantLowPortDefaultsDoNotCreateListener(t *testing.T) {
+	if domain.MinListenPort == 1 {
+		t.Skip("standard edition")
+	}
+	state := domain.DefaultState()
+	state.Settings.DefaultHTTPPort = 80
+	state.Settings.DefaultHTTPSPort = 443
+	m := New(Paths{})
+	_, files, err := m.render(state, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range files {
+		if strings.Contains(content, "listen ") && !strings.Contains(content, "unix:status.sock") {
+			t.Fatalf("unexpected default listener in %s: %s", name, content)
+		}
 	}
 }

@@ -27,6 +27,12 @@ const emit = defineEmits<{
   toggle: [rule: StreamRule, enabled: boolean];
   refresh: [];
 }>();
+function requestToggle(rule: StreamRule, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const enabled = input.checked;
+  input.checked = rule.enabled;
+  emit("toggle", rule, enabled);
+}
 const search = ref("");
 const protocolFilter = ref<"all" | "tcp" | "udp">("all");
 const enabledFilter = ref<"all" | "enabled" | "disabled">("all");
@@ -179,12 +185,10 @@ watch(
                 ><input
                   type="checkbox"
                   :checked="rule.enabled"
+                  :disabled="busy"
+                  :aria-label="`${rule.enabled ? '停用' : '启用'}规则 ${rule.name}`"
                   @change="
-                    emit(
-                      'toggle',
-                      rule,
-                      ($event.target as HTMLInputElement).checked,
-                    )
+                    requestToggle(rule, $event)
                   " /><span></span
               ></label>
             </td>
@@ -193,7 +197,7 @@ watch(
             </td>
             <td>
               <span class="badge info">{{ rule.protocol.toUpperCase() }}</span>
-              {{ rule.listen_address }}:{{ rule.listen_port }}
+              <span :class="{ 'unsupported-entry': rule.listen_port < minListenPort }" :title="rule.listen_port < minListenPort ? '当前版本不支持此监听端口' : undefined">{{ rule.listen_address }}:{{ rule.listen_port }}</span>
             </td>
             <td>
               {{
@@ -291,17 +295,12 @@ watch(
               required
             />
           </div>
-          <div class="field">
-            <label>PROXY Protocol</label
-            ><label class="checkbox-row"
-              ><input
-                v-model="form.accept_proxy_protocol"
-                type="checkbox"
-              />入口接收 PROXY Protocol</label
-            ><label class="checkbox-row"
-              ><input v-model="form.proxy_protocol" type="checkbox" />向转发服务发送
-              PROXY Protocol</label
-            >
+          <div class="field full stream-proxy-field">
+            <label>PROXY Protocol</label>
+            <div class="stream-proxy-options">
+              <label class="checkbox-row"><input v-model="form.accept_proxy_protocol" type="checkbox" />入口接收</label>
+              <label class="checkbox-row"><input v-model="form.proxy_protocol" type="checkbox" />向转发服务发送</label>
+            </div>
           </div>
           <div class="field full">
             <label>可信代理 IP / CIDR</label
@@ -314,7 +313,7 @@ watch(
           </section>
           <div class="form-section"><span>转发服务</span><small>选择连接需要转发的位置</small></div>
           <section class="stream-settings-panel" aria-label="转发服务">
-          <div class="field full">
+          <div class="field full stream-pool-field">
             <label>Stream 转发服务组</label
             ><AppSelect v-model="form.upstream_pool_id" class="select">
               <option value="">单个目标</option>
@@ -472,7 +471,7 @@ watch(
             ><label class="checkbox-row"
               ><input v-model="form.access_log" type="checkbox" />记录 Stream
               访问日志</label
-            ><label>单 IP 最大连接数</label
+            ><label class="stream-connection-limit-label">单 IP 最大连接数</label
             ><input
               v-model.number="form.max_connections"
               class="input"
@@ -499,7 +498,7 @@ watch(
 
 <style scoped>
 .stream-heading-icon { color: var(--accent); flex-shrink: 0; }
-.stream-form { gap: 13px 48px; }
+.stream-form { gap: 8px 48px; }
 .stream-basics { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 44px; }
 #stream-rule-form .stream-basics > .field { grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
 .stream-enabled { white-space: nowrap; }
@@ -508,21 +507,30 @@ watch(
 .stream-form > .form-section::after { content: ""; height: 1px; flex: 1; background: var(--line); }
 .stream-form > .form-section > span { font-size: 18px; font-weight: 660; white-space: nowrap; }
 .stream-form > .form-section > small { color: var(--text-muted); font-size: 12px; font-weight: 450; }
-.stream-settings-panel { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 48px; padding: 20px 24px; border: 1px solid color-mix(in srgb, var(--text) 24%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--surface-soft) 55%, var(--surface)); }
+.stream-settings-panel { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 48px; padding: 16px 24px; border: 1px solid color-mix(in srgb, var(--text) 24%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--surface-soft) 55%, var(--surface)); }
 #stream-rule-form .field { grid-template-columns: 112px minmax(0, 1fr); gap: 4px 10px; }
-.stream-form .field > label:first-child { min-height: 38px; font-size: 15px; font-weight: 620; }
-.stream-form .input, .stream-form .select { min-height: 38px; border-radius: 8px; font-size: 15px; }
-.stream-form .textarea { min-height: 66px; border-radius: 8px; font-size: 15px; }
+#stream-rule-form .stream-proxy-field { grid-template-columns: max-content minmax(0, 1fr); column-gap: 16px; }
+.stream-proxy-field > label:first-child { white-space: nowrap; }
+.stream-proxy-options { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 24px; }
+.stream-proxy-options .checkbox-row { white-space: nowrap; }
+#stream-rule-form .stream-pool-field { grid-template-columns: max-content minmax(0, 250px); column-gap: 16px; }
+.stream-pool-field > label:first-child { white-space: nowrap; }
+.stream-form .field > label:first-child { min-height: 34px; font-size: 15px; font-weight: 620; }
+.stream-form .input, .stream-form .select { height: 34px; min-height: 34px; padding-inline: 11px; border-radius: 8px; font-size: 15px; }
+.stream-form .app-select.select { padding-right: 30px; }
+.stream-form .textarea { min-height: 66px; padding: 9px 11px; border-radius: 8px; font-size: 15px; }
 .stream-form .input[type="number"] { width: min(100%, 145px); }
-.stream-form .checkbox-row { min-height: 38px; gap: 8px; font-size: 15px; }
+.stream-form .checkbox-row { min-height: 34px; gap: 8px; font-size: 15px; }
 .stream-form .checkbox-row input { width: 17px; height: 17px; }
 .stream-form .field > .checkbox-row { grid-column: 2; }
+.stream-connection-limit-label { align-self: center; }
 .stream-subheading { font-size: 15px; font-weight: 620; padding-top: 8px; border-top: 1px solid var(--line); }
 @media (max-width: 760px) {
   .stream-basics, .stream-settings-panel { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .stream-settings-panel { padding: 16px 12px; }
   .stream-form > .form-section { flex-wrap: wrap; gap: 8px; }
-  #stream-rule-form .field { grid-template-columns: minmax(0, 1fr); }
+  #stream-rule-form .field, #stream-rule-form .stream-pool-field, #stream-rule-form .stream-proxy-field { grid-template-columns: minmax(0, 1fr); }
+  .stream-pool-field .select { width: min(100%, 250px); }
   .stream-form .field > .checkbox-row { grid-column: 1; }
 }
 </style>

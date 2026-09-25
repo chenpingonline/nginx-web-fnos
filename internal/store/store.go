@@ -22,6 +22,7 @@ func New(path string) (*Store, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		store.state = domain.DefaultState()
+		store.state.RuntimeMinListenPort = domain.MinListenPort
 		if err := store.persistLocked(store.state); err != nil {
 			return nil, err
 		}
@@ -39,6 +40,21 @@ func New(path string) (*Store, error) {
 	domain.ApplyStateDefaults(&store.state)
 	if err := domain.ValidateState(store.state); err != nil {
 		return nil, err
+	}
+	beforeMigration := domain.CloneState(store.state)
+	if domain.PauseUnsupportedPorts(&store.state) {
+		if !beforeMigration.Dirty && beforeMigration.LastAppliedAt != nil {
+			raw, err := json.Marshal(beforeMigration)
+			if err != nil {
+				return nil, err
+			}
+			if err := fileutil.WriteFileAtomic(path+".migration-baseline", raw, 0600); err != nil {
+				return nil, err
+			}
+		}
+		if err := store.persistLocked(store.state); err != nil {
+			return nil, err
+		}
 	}
 	return store, nil
 }
@@ -60,6 +76,9 @@ func (s *Store) Update(fn func(*domain.State) error) error {
 	next.SchemaVersion = domain.SchemaVersion
 	domain.ApplyStateDefaults(&next)
 	next.UpdatedAt = time.Now().UTC()
+	if err := domain.ValidateRuntimePorts(next); err != nil {
+		return err
+	}
 	if err := domain.ValidateState(next); err != nil {
 		return err
 	}
@@ -76,6 +95,9 @@ func (s *Store) Replace(next domain.State) error {
 	next.SchemaVersion = domain.SchemaVersion
 	domain.ApplyStateDefaults(&next)
 	next.UpdatedAt = time.Now().UTC()
+	if err := domain.ValidateRuntimePorts(next); err != nil {
+		return err
+	}
 	if err := domain.ValidateState(next); err != nil {
 		return err
 	}

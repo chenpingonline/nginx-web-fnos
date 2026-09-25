@@ -454,6 +454,10 @@ func (a *API) handleUpstreamPool(w http.ResponseWriter, r *http.Request, id stri
 }
 
 func (a *API) handleStreamRule(w http.ResponseWriter, r *http.Request, id string) {
+	if strings.HasSuffix(id, "/enabled") {
+		a.handleRuleEnabled(w, r, strings.TrimSuffix(id, "/enabled"), true)
+		return
+	}
 	if strings.Contains(id, "/") || id == "" {
 		writeAPIError(w, http.StatusNotFound, "Stream 规则不存在")
 		return
@@ -475,6 +479,10 @@ func (a *API) handleStreamRule(w http.ResponseWriter, r *http.Request, id string
 }
 
 func (a *API) handleRule(w http.ResponseWriter, r *http.Request, id string) {
+	if strings.HasSuffix(id, "/enabled") {
+		a.handleRuleEnabled(w, r, strings.TrimSuffix(id, "/enabled"), false)
+		return
+	}
 	if strings.Contains(id, "/") || id == "" {
 		writeAPIError(w, http.StatusNotFound, "规则不存在")
 		return
@@ -600,4 +608,23 @@ func formatHTTPError(resp *http.Response) error {
 		return errors.New(body.Error)
 	}
 	return fmt.Errorf("HTTP %d", resp.StatusCode)
+}
+
+func (a *API) handleRuleEnabled(w http.ResponseWriter, r *http.Request, id string, stream bool) {
+	if r.Method != http.MethodPost {
+		writeAPIError(w, http.StatusMethodNotAllowed, "启停接口仅支持 POST")
+		return
+	}
+	var input struct {
+		Enabled *bool `json:"enabled"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.Enabled == nil {
+		writeAPIError(w, http.StatusBadRequest, "必须指定 enabled")
+		return
+	}
+	result, err := a.service.ToggleRule(id, stream, *input.Enabled)
+	writeResult(w, http.StatusOK, result, err)
 }

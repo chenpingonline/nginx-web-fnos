@@ -40,7 +40,7 @@ func TestValidateStateRejectsDuplicateDomain(t *testing.T) {
 
 func TestValidateLowListenPorts(t *testing.T) {
 	for _, port := range []int{1, 53, 80, 443, 1023, 1024, 65535, -1, 65536} {
-		valid := port >= MinListenPort && port <= 65535
+		valid := port >= 1 && port <= 65535
 		state := DefaultState()
 		state.Rules = []ProxyRule{testRule("0123456789ab", "A", "demo.example.com", port)}
 		if err := ValidateState(state); (err == nil) != valid {

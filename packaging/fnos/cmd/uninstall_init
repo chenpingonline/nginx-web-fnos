@@ -1,11 +1,12 @@
 #!/bin/bash
 set -u
 
-# Root is used only for capability preparation; all application work runs as the package user.
+# The packaged permission helper enforces the selected runtime mode.
 source "$(dirname "${BASH_SOURCE[0]}")/privilege.sh"
 enter_package_user "$@"
 
 log_error() {
+  printf '%s\n' "$1" >&2
   printf '%s\n' "$1" > "${TRIM_TEMP_LOGFILE:-/tmp/nginx-web-uninstall.log}"
 }
 
@@ -24,22 +25,40 @@ preserve_app_data() {
   fi
 
   local preserved_root="${TRIM_PKGVAR}/.uninstall-preserved"
-  clear_directory "$preserved_root" || return 1
-  mkdir -p "${preserved_root}/etc" || return 1
-
-  if [ -d "$TRIM_PKGETC" ]; then
-    cp -a "${TRIM_PKGETC}/." "${preserved_root}/etc/" || {
-      log_error "保留应用配置失败，已中止卸载。"
+  local previous="${preserved_root}.previous" staging output
+  # Recover an interrupted replacement before attempting another backup.
+  if [ -e "$previous" ]; then
+    if [ ! -e "$preserved_root" ]; then
+      mv -- "$previous" "$preserved_root" || { log_error "无法恢复上次保留备份。"; return 1; }
+    else
+      log_error "发现未清理的上一份备份：$previous；已中止卸载以保护数据。"
       return 1
-    }
+    fi
   fi
-
-  if [ -n "${TRIM_PKGHOME:-}" ] && [ -d "$TRIM_PKGHOME" ]; then
-    mkdir -p "${preserved_root}/home" || return 1
-    cp -a "${TRIM_PKGHOME}/." "${preserved_root}/home/" || {
-      log_error "保留应用 Home 数据失败，已中止卸载。"
-      return 1
-    }
+  staging=$(mktemp -d "${TRIM_PKGVAR}/.uninstall-preserved.new.XXXXXX") || {
+    log_error "无法创建保留数据临时目录，旧备份未修改。"; return 1
+  }
+  if ! output=$({
+    mkdir -p "$staging/etc" &&
+    { [ ! -d "$TRIM_PKGETC" ] || cp -a "${TRIM_PKGETC}/." "$staging/etc/"; } &&
+    { [ -z "${TRIM_PKGHOME:-}" ] || [ ! -d "$TRIM_PKGHOME" ] ||
+      { mkdir -p "$staging/home" && cp -a "${TRIM_PKGHOME}/." "$staging/home/"; }; }
+  } 2>&1); then
+    log_error "保留应用数据失败，旧备份未修改：$output"
+    rm -rf -- "$staging"
+    return 1
+  fi
+  if [ -e "$preserved_root" ] || [ -L "$preserved_root" ]; then
+    mv -- "$preserved_root" "$previous" || { log_error "无法暂存旧备份，新备份位于 $staging"; return 1; }
+  fi
+  if ! mv -- "$staging" "$preserved_root"; then
+    [ ! -e "$previous" ] || mv -- "$previous" "$preserved_root"
+    log_error "无法替换保留备份，新备份位于 $staging"
+    return 1
+  fi
+  if [ -e "$previous" ] && ! rm -rf -- "$previous"; then
+    log_error "新备份已完成，但旧备份清理失败：$previous"
+    return 1
   fi
 }
 

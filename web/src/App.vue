@@ -155,6 +155,17 @@ const page = ref<Page>("dashboard"),
   state = ref<State | null>(null),
   revisions = ref<Revision[]>([]),
   config = ref<GeneratedConfig | null>(null);
+const incompatiblePorts = computed(() => {
+  const value = state.value;
+  if (!value || minListenPort === 1) return [];
+  const items: string[] = [];
+  if (value.settings.default_http_port < minListenPort) items.push(`默认 HTTP 端口 ${value.settings.default_http_port}`);
+  if (value.settings.default_https_port < minListenPort) items.push(`默认 HTTPS 端口 ${value.settings.default_https_port}`);
+  for (const rule of value.rules ?? []) if (rule.listen_port < minListenPort) items.push(`HTTP 规则「${rule.name}」：${rule.listen_port}`);
+  for (const rule of value.stream_rules ?? []) if (rule.listen_port < minListenPort) items.push(`${rule.protocol.toUpperCase()} 规则「${rule.name}」：${rule.listen_port}`);
+  for (const group of value.rule_groups ?? []) if (group.listen_port < minListenPort) items.push(`分组「${group.name}」：${group.listen_port}`);
+  return items;
+});
 const appliedConfigurationKnown = computed(() => overview.value?.applied_known ?? false);
 const restoredRevision = computed(() => state.value?.dirty && state.value.draft_revision_id
   ? revisions.value.find(item => item.id === state.value!.draft_revision_id) : undefined);
@@ -662,13 +673,18 @@ async function deleteRule(rule: ProxyRule) {
   );
   if (deleted) await loadCore(true);
 }
+function requestRuleToggle(rule: ProxyRule, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const enabled = input.checked;
+  input.checked = rule.enabled;
+  void toggleRule(rule, enabled);
+}
 async function toggleRule(rule: ProxyRule, enabled: boolean) {
-  const payload: ProxyRuleInput = { ...rule, enabled };
   const ok = await mutate(() =>
-    request(`/rules/${rule.id}`, { method: "PUT", body: jsonBody(payload) }),
+    request(`/rules/${rule.id}/enabled`, { method: "POST", body: jsonBody({ enabled }) }),
   );
   if (ok !== undefined) {
-    toast(enabled ? "规则已启用，等待应用" : "规则已停用，等待应用", "success");
+    toast(enabled ? "规则已启用并立即生效" : "规则已停用并立即生效", "success");
     await loadCore(true);
   }
 }
@@ -867,14 +883,14 @@ async function removeStreamRule(rule: StreamRule) {
 }
 async function toggleStreamRule(rule: StreamRule, enabled: boolean) {
   const ok = await mutate(() =>
-    request(`/streams/${rule.id}`, {
-      method: "PUT",
-      body: jsonBody({ ...rule, enabled }),
+    request(`/streams/${rule.id}/enabled`, {
+      method: "POST",
+      body: jsonBody({ enabled }),
     }),
   );
   if (ok !== undefined) {
     toast(
-      enabled ? "Stream 规则已启用，等待应用" : "Stream 规则已停用，等待应用",
+      enabled ? "Stream 规则已启用并立即生效" : "Stream 规则已停用并立即生效",
       "success",
     );
     await loadCore(true);
@@ -1001,6 +1017,11 @@ onBeforeUnmount(() => {
         <strong>{{ currentPage.label }}</strong>
       </div>
       <main class="content" aria-live="polite">
+        <div v-if="page === 'settings' && !loading && !connectionError && incompatiblePorts.length" class="notice warning" role="status">
+          <strong>当前标准版不支持以下低端口配置</strong>
+          <p>相关规则已停用，原始端口和转发设置已保留；低端口默认入口不会监听。请将端口改为 1024–65535 后重新启用并应用，或安装全端口版后手动启用。</p>
+          <ul><li v-for="item in incompatiblePorts" :key="item">{{ item }}</li></ul>
+        </div>
         <div v-if="loading" class="loading-panel">
           <div class="spinner"></div>
           <p>正在读取 nginx-web 状态…</p>
@@ -1117,7 +1138,6 @@ onBeforeUnmount(() => {
                       <th>名称</th>
                       <th>入口</th>
                       <th>转发服务</th>
-                      <th class="hide-mobile">能力</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1128,11 +1148,10 @@ onBeforeUnmount(() => {
                           ><input
                             type="checkbox"
                             :checked="rule.enabled"
+                            :disabled="busy"
+                            :aria-label="`${rule.enabled ? '停用' : '启用'}规则 ${rule.name}`"
                             @change="
-                              toggleRule(
-                                rule,
-                                ($event.target as HTMLInputElement).checked,
-                              )
+                              requestRuleToggle(rule, $event)
                             " /><span></span
                         ></label>
                       </td>
@@ -1141,30 +1160,17 @@ onBeforeUnmount(() => {
                       </td>
                       <td>
                         <div v-for="domain in rule.domains" :key="domain" class="proxy-entry">
-                          <span class="proxy-entry-url">{{ formatRuleEntry(rule, domain) }}</span>
+                          <span class="proxy-entry-url" :class="{ 'unsupported-entry': rule.listen_port < minListenPort }" :title="rule.listen_port < minListenPort ? '当前版本不支持此监听端口' : undefined">{{ formatRuleEntry(rule, domain) }}</span>
                           <button type="button" class="icon-button proxy-entry-action" :disabled="domain === '*'" :aria-label="`复制入口 ${formatRuleEntry(rule, domain)}`" title="复制入口地址" @click="copyRuleEntry(rule, domain)"><PhCopy :size="16" aria-hidden="true" /></button>
                           <a v-if="canOpenRuleEntry(domain)" class="icon-button proxy-entry-action" :href="formatRuleEntry(rule, domain)" target="_blank" rel="noopener noreferrer" :aria-label="`在新窗口打开 ${formatRuleEntry(rule, domain)}`" title="在新窗口打开"><PhArrowSquareOut :size="16" aria-hidden="true" /></a>
                           <button v-else type="button" class="icon-button proxy-entry-action" disabled aria-label="通配符域名无法直接打开" title="通配符域名需替换为实际域名后访问"><PhArrowSquareOut :size="16" aria-hidden="true" /></button>
                         </div>
-                        <div v-if="!rule.domains.length">{{ formatRuleEntry(rule) }}</div>
+                        <div v-if="!rule.domains.length" :class="{ 'unsupported-entry': rule.listen_port < minListenPort }" :title="rule.listen_port < minListenPort ? '当前版本不支持此监听端口' : undefined">{{ formatRuleEntry(rule) }}</div>
                       </td>
                       <td>
                         <div class="proxy-entry">
                           <span class="proxy-entry-url">{{ formatRuleBackend(rule) }}</span>
                           <button type="button" class="icon-button proxy-entry-action" :aria-label="`复制转发服务 ${formatRuleBackend(rule)}`" title="复制转发服务地址" @click="copyProxyAddress(formatRuleBackend(rule), '转发服务地址')"><PhCopy :size="16" aria-hidden="true" /></button>
-                        </div>
-                      </td>
-                      <td class="hide-mobile">
-                        <div class="domain-list">
-                          <span v-if="rule.websocket" class="badge neutral"
-                            >WebSocket</span
-                          ><span v-if="rule.streaming" class="badge neutral"
-                            >流式</span
-                          ><span
-                            v-if="rule.http2 && rule.tls"
-                            class="badge neutral"
-                            >HTTP/2</span
-                          >
                         </div>
                       </td>
                       <td>

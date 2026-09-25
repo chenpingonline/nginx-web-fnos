@@ -227,6 +227,8 @@ make build-all       # 同版本、两种权限、两个架构，共四个安装
 
 安装包输出到 `dist/`，命名为 `nginx-web-<版本>-<standard|full-ports>-<x86_64|arm64>.fpk`。构建会检查管理程序及 Nginx 的架构、内置版本、包结构和校验和。
 
+标准版权限入口使用 `packaging/fnos/cmd/privilege.sh`；全端口版打包时替换为 `packaging/fnos/variants/full-ports/privilege.sh`。每个包只包含所选权限脚本，标准包不携带低端口授权或降权代码。
+
 两种模式只维护 `master`，不再在 `low-port-listen` 上单独开发。它们使用同一应用 ID，属于同一应用的替代安装包，不能并排安装。同版本切换是否允许由 fnOS 决定；不支持时应随下一共同版本升级切换。切回标准版前先将所有低位监听端口改为 1024 以上（包括分组和默认端口）。
 
 ### 统一版本号

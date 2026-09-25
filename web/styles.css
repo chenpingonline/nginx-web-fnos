@@ -662,7 +662,7 @@ html[data-theme="dark"] { --scroll-thumb: #686b6e; }
 .proxy-entry-action:disabled { opacity: .35; cursor: not-allowed; }
 
 .grouped-rule-card { margin-bottom: 16px; }
-.proxy-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+.proxy-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 20px; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
 .proxy-group-heading h3 { margin: 0; font-size: 17px; white-space: nowrap; }
 .proxy-group-summary { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .proxy-group-summary .group-toggle { flex-shrink: 0; }
@@ -699,3 +699,5 @@ html[data-theme="dark"] { --scroll-thumb: #686b6e; }
 
 .certificate-validity { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .certificate-validity-dates { color: var(--text-muted); font-size: 13px; }
+
+.unsupported-entry { color: var(--danger); }

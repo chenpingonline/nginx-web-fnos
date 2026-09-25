@@ -29,7 +29,7 @@ type AuthProfileInput struct {
 
 func (s *AppService) initializeAppliedAuth() {
 	state := s.store.Snapshot()
-	if data, err := os.ReadFile(s.paths.AppliedState()); err == nil {
+	if data, err := os.ReadFile(s.paths.AppliedState()); err == nil && !state.PortMigrationPending {
 		var applied State
 		if json.Unmarshal(data, &applied) == nil {
 			state = applied
