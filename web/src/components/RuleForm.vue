@@ -37,7 +37,6 @@ const emit = defineEmits<{
 const addRateLimitValue = "__add_rate_limit_policy__";
 const addAuthProfileValue = "__add_auth_profile__";
 const authProfileManager = ref<InstanceType<typeof AuthProfileManager>>();
-const applyAfter = ref(true);
 const domains = ref("");
 const authError = ref("");
 function defaultLocation(): LocationSettings {
@@ -87,6 +86,20 @@ const form = reactive<ProxyRuleInput>({
   root_location: defaultLocation(),
   locations: [],
 });
+const activePaths = computed(() => [
+  { ...form.root_location, upstream_scheme: form.upstream_scheme },
+  ...form.locations.filter(location => location.enabled).map(location => location.settings),
+]);
+const hasHTTPProxy = computed(() => activePaths.value.some(path => path.backend_type === "proxy"));
+const hasHTTPSProxy = computed(() => activePaths.value.some(path => path.backend_type === "proxy" && path.upstream_scheme === "https"));
+function locationSummary(settings: LocationSettings) {
+  if (settings.backend_type === "static") return `静态文件 → ${settings.static_path || "未选择目录"}`;
+  if (settings.backend_type === "return") return `返回 ${settings.return_code} → ${settings.return_target || "未填写内容"}`;
+  if (settings.backend_type === "status") return "连接状态";
+  const pool = props.upstreamPools.find(pool => pool.id === settings.upstream_pool_id);
+  const target = settings.upstream_pool_id ? (pool?.name || "转发服务组") : `${settings.upstream_host}:${settings.upstream_port}`;
+  return `${settings.backend_type === "proxy" ? "反向代理" : settings.backend_type.toUpperCase()} → ${target}`;
+}
 const inheritanceOptions: { key: GroupField; label: string }[] = [
   { key: "listen_type", label: "监听类型" },
   { key: "tls", label: "入口协议" }, { key: "listen_port", label: "监听端口" },
@@ -267,7 +280,7 @@ function submit() {
   emit(
     "save",
     { ...form, domains: domains.value.split(/[\s,]+/).filter(Boolean) },
-    applyAfter.value,
+    true,
   );
 }
 function createLocationID() {
@@ -328,7 +341,7 @@ async function addLocation() {
       <span>监听设置</span><small>定义访问域名、监听端口与协议</small>
     </div>
     <section class="rule-settings-panel" aria-label="监听设置">
-    <div class="field full section-content"><label>监听类型</label><ListenTypePicker v-model="form.listen_type" :disabled="inherits('listen_type')" /><span class="field-help">IPv6 入口可以转发到 IPv4 后端；需放行对应端口。</span></div>
+    <div class="field full section-content"><label class="field-label-with-help">监听类型<HelpHint text="IPv6 入口可以转发到 IPv4 后端；需放行对应端口。" /></label><ListenTypePicker v-model="form.listen_type" :disabled="inherits('listen_type')" /></div>
     <div class="field full section-content entry-domain-field">
       <label for="rule-domains">访问域名 / IP</label
       ><textarea
@@ -336,11 +349,8 @@ async function addLocation() {
         v-model="domains"
         class="textarea"
         required
-        placeholder="www.example.com&#10;media.example.com"
-      ></textarea
-      ><span class="field-help"
-        >多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。</span
-      >
+        placeholder="多个域名可用换行、空格或逗号分隔；使用 * 表示该端口的默认站点。&#10;例如：www.example.com、media.example.com"
+      ></textarea>
     </div>
     <div class="field section-content section-left">
       <label for="listen-port" class="field-label-with-help">监听端口<HelpHint text="仅允许非特权端口，范围 1024–65535。" /></label
@@ -363,7 +373,7 @@ async function addLocation() {
       >
     </div>
     <div v-if="!form.tls" class="field full section-content redirect-https-field">
-      <label>HTTPS 跳转</label>
+      <label class="field-label-with-help">HTTPS 跳转<HelpHint text="使用 308 保留请求路径；需另有相同域名的 HTTPS 规则监听目标端口。" /></label>
       <div class="redirect-https-controls">
         <label class="checkbox-row"><input v-model="form.redirect_to_https" type="checkbox" />HTTP 自动跳转 HTTPS</label>
         <label v-if="form.redirect_to_https" class="redirect-port-control" for="redirect-https-port">
@@ -371,7 +381,7 @@ async function addLocation() {
           <input id="redirect-https-port" v-model.number="form.redirect_https_port" class="input" type="number" min="1" max="65535" required />
         </label>
       </div>
-      <span class="field-help">使用 308 保留请求路径；需另有相同域名的 HTTPS 规则监听目标端口。</span>
+
     </div>
     <div v-if="form.tls" class="field section-content">
       <label class="field-label-with-help">证书<HelpHint text="没有证书时，请先到“SSL/TLS 证书”页面导入。" /></label
@@ -397,12 +407,15 @@ async function addLocation() {
     </div>
     </section>
     <div class="form-section">
-      <span>转发服务</span><small>选择请求需要转发到的位置</small>
+      <span>默认路径 /</span><small>未匹配自定义路径的请求在这里处理</small>
     </div>
-    <section class="rule-settings-panel" aria-label="转发服务">
+    <section class="rule-settings-panel" aria-label="默认路径">
+      <div class="full section-content">
+        <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" root>
+          <template #upstream>
     <div class="target-service-fields full section-content">
       <div class="field target-pool-field">
-        <label>转发服务组</label
+        <label class="field-label-with-help">转发服务组<HelpHint text="转发服务组支持权重、备份节点、故障恢复和负载均衡。" /></label
         ><AppSelect
           id="upstream-pool"
           v-model="form.upstream_pool_id"
@@ -419,11 +432,9 @@ async function addLocation() {
           >
             {{ pool.name }} · {{ pool.servers.length }} 个节点
           </option></AppSelect
-        ><span class="field-help"
-          >转发服务组支持权重、备份节点、故障恢复和负载均衡。</span
         >
       </div>
-      <div class="field">
+      <div v-if="['proxy', 'grpc'].includes(form.root_location.backend_type)" class="field">
         <label>转发服务协议</label
         ><AppSelect
           id="upstream-scheme"
@@ -436,7 +447,7 @@ async function addLocation() {
         </AppSelect>
       </div>
       <div v-if="!form.upstream_pool_id" class="field target-host-field">
-        <label for="upstream-host">目标主机</label
+        <label for="upstream-host" class="field-label-with-help">目标主机<HelpHint text="粘贴完整地址可自动填写协议和端口。" /></label
         ><input
           id="upstream-host"
           @paste="pasteBackendAddress"
@@ -445,7 +456,7 @@ async function addLocation() {
           class="input"
           required
           placeholder="IP、域名或 http://192.168.1.22:2330"
-        /><span class="field-help">粘贴完整地址可自动填写协议和端口。</span>
+        />
       </div>
       <div v-if="!form.upstream_pool_id" class="field">
         <label for="upstream-port">目标端口</label
@@ -460,23 +471,77 @@ async function addLocation() {
         />
       </div>
     </div>
+          </template>
+        </LocationSettingsEditor>
+      </div>
+    </section>
+    <div class="form-section section-actions">
+      <span>自定义路径</span><small>例如 /api/ 转发 Java，其他请求使用默认路径</small
+      ><button type="button" class="button compact add-location-button" @click="addLocation">
+        <PhPlusCircle :size="15" aria-hidden="true" />添加路径
+      </button>
+    </div>
+    <section class="rule-settings-panel" aria-label="自定义路径">
     <div
-      v-if="form.upstream_scheme === 'https'"
-      class="field section-content section-left"
-    >
-      <label>转发服务证书校验</label
-      ><label class="checkbox-row"
-        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验转发服务
-        SSL/TLS 证书</label
-      >
+      v-if="form.locations.length === 0"
+      class="empty-inline full section-content"
+    >尚未添加自定义路径，所有请求使用默认路径 /。</div>
+    <div v-for="(location, index) in form.locations" :id="`location-${location.id}`" :key="location.id" class="location-card full section-content">
+      <div class="path-summary"><strong>{{ location.path || "未填写路径" }}</strong><span>{{ locationSummary(location.settings) }}</span></div>
+      <div class="location-head">
+        <input v-model.trim="location.name" class="input" placeholder="名称" required maxlength="80" />
+        <AppSelect v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></AppSelect>
+        <input v-model="location.path" class="input" placeholder="/api/" aria-label="自定义路径" required />
+        <label class="checkbox-row"><input v-model="location.enabled" type="checkbox" />启用</label>
+        <button type="button" class="button danger compact" @click="form.locations.splice(index, 1)">删除</button>
+      </div>
+      <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" />
     </div>
     </section>
-    <div class="form-section">
-      <span>代理能力</span><small>控制请求头、连接升级与传输方式</small>
+    <div class="form-section"><span>规则公共设置</span><small>默认路径与自定义路径共用</small></div>
+    <section class="rule-settings-panel" aria-label="规则公共设置">
+    <div class="field section-content section-right body-limit-field">
+      <label for="body-limit">请求体上限（MB）</label
+      ><div class="body-limit-control"><input
+        id="body-limit"
+        v-model.number="form.client_max_body_mb"
+        class="input"
+        type="number"
+        min="0"
+        max="102400"
+        :class="{ 'has-unlimited-hint': form.client_max_body_mb === 0 }"
+        aria-description="0 表示不限制"
+      /><span v-if="form.client_max_body_mb === 0" class="body-limit-hint" aria-hidden="true">0 表示不限制</span></div>
     </div>
-    <section class="rule-settings-panel" aria-label="代理能力">
+      <div class="settings-subheading full">访问认证</div>
+
+      <div class="field section-content section-left">
+        <label>访问认证</label>
+        <label class="checkbox-row"><input v-model="form.authentication.enabled" type="checkbox" :disabled="hasExternalAuthentication && !form.authentication.enabled" />启用用户名密码认证</label>
+        <span v-if="hasExternalAuthentication && !form.authentication.enabled" class="field-help auth-mode-warning">根路径或自定义 Location 已配置外部认证，请先清除后再启用。</span>
+      </div>
+      <div class="field section-content section-right">
+        <label class="field-label-with-help">认证策略<HelpHint text="请从下拉菜单添加认证策略。" /></label>
+        <div class="auth-policy-controls">
+          <AppSelect id="auth-profile" v-model="authProfileSelection" class="select" aria-label="认证策略" :disabled="busy">
+            <option value="">请选择认证策略</option>
+            <option v-for="profile in authProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.users.filter(user => user.enabled).length }} 个用户</option>
+            <option :value="addAuthProfileValue" data-action>＋ 添加认证策略</option>
+          </AppSelect>
+          <AuthProfileManager ref="authProfileManager" :profiles="authProfiles" :disabled="busy" hide-trigger @changed="emit('authProfilesChanged', $event)" />
+        </div>
+
+        <span v-if="authError" class="field-help auth-error">{{ authError }}</span>
+      </div>
+      <div v-if="form.authentication.enabled" class="auth-forward-row full section-content">
+        <label class="checkbox-row"><input v-model="form.authentication.forward_authorization" type="checkbox" /><span>将 Authorization 请求头继续转发给后端</span></label>
+        <span class="field-help">默认不转发，避免代理认证密码泄露给后端。仅在后端明确需要该请求头时开启。</span>
+      </div>
+    </section>
+    <div v-if="hasHTTPProxy" class="form-section"><span>反向代理设置</span><small>适用于本规则中使用 HTTP 反向代理的路径（含 HTTPS 后端）</small></div>
+    <section v-if="hasHTTPProxy" class="rule-settings-panel" aria-label="反向代理设置">
     <div class="field section-content section-left">
-      <label>请求 Host</label
+      <label>Host 请求头</label
       ><label class="checkbox-row"
         ><input v-model="form.preserve_host" type="checkbox" /> 保留客户端
         Host</label
@@ -486,33 +551,29 @@ async function addLocation() {
       <label>WebSocket</label
       ><label class="checkbox-row"
         ><input v-model="form.websocket" type="checkbox" />
-        转发连接升级头</label
+        启用 WebSocket 支持</label
       >
     </div>
     <div class="field section-content section-left">
       <label>流式传输</label
       ><label class="checkbox-row"
-        ><input v-model="form.streaming" type="checkbox" /> 关闭代理缓冲</label
+        ><input v-model="form.streaming" type="checkbox" /> 关闭请求与响应缓冲</label
       >
     </div>
-    <div class="field section-content section-right body-limit-field">
-      <label for="body-limit">请求体上限（MB）</label
-      ><input
-        id="body-limit"
-        v-model.number="form.client_max_body_mb"
-        class="input"
-        type="number"
-        min="0"
-        max="102400"
-      /><span class="field-help">0 表示不限制。</span>
+    <div
+      v-if="hasHTTPSProxy"
+      class="field section-content section-left"
+    >
+      <label>转发服务证书校验</label
+      ><label class="checkbox-row"
+        ><input v-model="form.verify_upstream_tls" type="checkbox" /> 校验转发服务
+        SSL/TLS 证书</label
+      >
     </div>
-    </section>
-    <div class="form-section">
-      <span>超时设置</span><small>调整连接和响应的最长等待时间</small>
-    </div>
-    <section class="rule-settings-panel" aria-label="超时设置">
+      <div class="settings-subheading full">后端超时</div>
+
     <div class="field section-content section-left">
-      <label>连接超时（秒）</label
+      <label class="field-label-with-help">后端连接超时（秒）<HelpHint text="与后端服务器建立连接的等待时间。" /></label
       ><input
         v-model.number="form.connect_timeout_seconds"
         class="input"
@@ -522,7 +583,7 @@ async function addLocation() {
       />
     </div>
     <div class="field section-content section-right">
-      <label>读取超时（秒）</label
+      <label class="field-label-with-help">后端读取超时（秒）<HelpHint text="从后端读取响应时，相邻两次读取之间的最长等待时间，不是整个请求的总耗时。" /></label
       ><input
         v-model.number="form.read_timeout_seconds"
         class="input"
@@ -532,7 +593,7 @@ async function addLocation() {
       />
     </div>
     <div class="field section-content section-left">
-      <label>发送超时（秒）</label
+      <label class="field-label-with-help">后端发送超时（秒）<HelpHint text="向后端发送请求时，相邻两次写入之间的最长等待时间，不是整个请求的总耗时。" /></label
       ><input
         v-model.number="form.send_timeout_seconds"
         class="input"
@@ -541,19 +602,10 @@ async function addLocation() {
         max="86400"
       />
     </div>
-    <div class="field section-content section-right">
-      <label>保存方式</label
-      ><label class="checkbox-row"
-        ><input v-model="applyAfter" type="checkbox" /> 保存后立即应用</label
-      >
-    </div>
-    </section>
-    <div class="form-section">
-      <span>访问限流</span><small>复用限流参数，每条规则独立计算额度</small>
-    </div>
-    <section class="rule-settings-panel" aria-label="访问限流">
+      <div class="settings-subheading full">访问限流</div>
+
     <div class="field full section-content entry-domain-field">
-      <label class="field-label-with-help">限流策略<HelpHint text="同一策略可供多条规则复用，但每条规则分别计数、互不占用额度。" /></label
+      <label class="field-label-with-help">限流策略<HelpHint text="同一规则下的 HTTP 反向代理路径共享按客户端 IP 统计的请求与连接额度；不同规则独立计数。静态文件路径不受此策略控制。" /></label
       ><div class="rate-limit-policy-controls">
         <AppSelect
           id="rate-limit-policy"
@@ -574,68 +626,20 @@ async function addLocation() {
       </div>
     </div>
     </section>
-    <div class="form-section">
-      <span>访问认证</span><small>访问规则前验证用户名和密码，默认关闭</small>
-    </div>
-    <section class="rule-settings-panel" aria-label="访问认证">
-      <div class="field section-content section-left">
-        <label>Basic Auth</label>
-        <label class="checkbox-row"><input v-model="form.authentication.enabled" type="checkbox" :disabled="hasExternalAuthentication && !form.authentication.enabled" />启用用户名密码认证</label>
-        <span v-if="hasExternalAuthentication && !form.authentication.enabled" class="field-help auth-mode-warning">根路径或自定义 Location 已配置外部认证，请先清除后再启用。</span>
-      </div>
-      <div class="field section-content section-right">
-        <label>认证策略</label>
-        <div class="auth-policy-controls">
-          <AppSelect id="auth-profile" v-model="authProfileSelection" class="select" aria-label="认证策略" :disabled="busy">
-            <option value="">请选择认证策略</option>
-            <option v-for="profile in authProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.users.filter(user => user.enabled).length }} 个用户</option>
-            <option :value="addAuthProfileValue" data-action>＋ 添加认证策略</option>
-          </AppSelect>
-          <AuthProfileManager ref="authProfileManager" :profiles="authProfiles" :disabled="busy" hide-trigger @changed="emit('authProfilesChanged', $event)" />
-        </div>
-        <span v-if="authProfiles.length === 0" class="field-help">请从下拉菜单添加认证策略。</span>
-        <span v-if="authError" class="field-help auth-error">{{ authError }}</span>
-      </div>
-      <div v-if="form.authentication.enabled" class="auth-forward-row full section-content">
-        <label class="checkbox-row"><input v-model="form.authentication.forward_authorization" type="checkbox" /><span>将 Authorization 请求头继续转发给后端</span></label>
-        <span class="field-help">默认不转发，避免代理认证密码泄露给后端。仅在后端明确需要该请求头时开启。</span>
-      </div>
-    </section>
-    <div class="form-section">
-      <span>根路径与高级能力</span><small>设置缓存、重写、鉴权与内容处理</small>
-    </div>
-    <section class="rule-settings-panel" aria-label="根路径与高级能力">
-    <div class="full location-card section-content">
-      <div class="location-card-title"><strong>根路径 /</strong><span>缓存、静态网站、重写、鉴权与内容处理</span></div>
-      <LocationSettingsEditor :model="form.root_location" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" root />
-    </div>
-    </section>
-    <div class="form-section section-actions">
-      <span>自定义 Location</span><small>为指定路径覆盖独立代理规则</small
-      ><button type="button" class="button compact add-location-button" @click="addLocation">
-        <PhPlusCircle :size="15" aria-hidden="true" />添加路径
-      </button>
-    </div>
-    <section class="rule-settings-panel" aria-label="自定义 Location">
-    <div
-      v-if="form.locations.length === 0"
-      class="empty-inline full section-content"
-    >没有额外路径，所有请求使用根路径设置。</div>
-    <div v-for="(location, index) in form.locations" :id="`location-${location.id}`" :key="location.id" class="location-card full section-content">
-      <div class="location-head">
-        <input v-model.trim="location.name" class="input" placeholder="名称" required maxlength="80" />
-        <AppSelect v-model="location.match" class="select"><option value="prefix">前缀</option><option value="exact">精确</option><option value="regex">正则</option></AppSelect>
-        <input v-model="location.path" class="input" placeholder="/api/" required />
-        <label class="checkbox-row"><input v-model="location.enabled" type="checkbox" />启用</label>
-        <button type="button" class="button danger compact" @click="form.locations.splice(index, 1)">删除</button>
-      </div>
-      <LocationSettingsEditor :model="location.settings" :upstream-pools="upstreamPools" :rule-auth-enabled="form.authentication.enabled" />
-    </div>
-    </section>
   </form>
 </template>
 
 <style scoped>
+.rule-modal .rule-form-grid .rule-settings-panel[aria-label="反向代理设置"] > .field .input { width: 100%; }
+.settings-subheading { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 4px; font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.rule-modal .rule-form-grid .rule-settings-panel[aria-label="反向代理设置"] > .field:not(.standalone-field) { grid-template-columns: 168px minmax(0, 1fr); }
+.body-limit-control { position: relative; width: 100%; min-width: 0; }
+.rule-modal .rule-form-grid .body-limit-control .input { width: 100%; }
+.rule-modal .rule-form-grid .body-limit-control .input.has-unlimited-hint { padding-right: 105px; }
+.body-limit-hint { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+.path-summary { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 2px 0 12px; align-items: baseline; }
+.path-summary strong { color: var(--accent); }
+.path-summary span { color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
 .rule-enabled { align-self: center; white-space: nowrap; }
 .field-label-with-help { gap: 6px; width: fit-content; }
 .rule-basics-row { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 44px; align-items: start; }

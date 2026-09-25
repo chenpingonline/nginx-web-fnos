@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount, ref, useId } from "vue";
 import { TrimApp } from "@trimjs/web-app";
 import AppSelect from "./AppSelect.vue";
+import HelpHint from "./HelpHint.vue";
 import type { LocationSettings, UpstreamPool } from "../types";
 
 const props = defineProps<{
@@ -28,12 +29,23 @@ const setDavMethods = (event: Event) => {
 };
 const changeBackend = () => { if (props.model.backend_type !== "static") props.model.dav.enabled = false; };
 const pickingDirectory = ref(false);
+const staticAliasId = `static-alias-${useId()}`;
 const openingAuthorization = ref(false);
 const directoryError = ref("");
 let disposed = false;
 onBeforeUnmount(() => { disposed = true; });
 async function selectDirectory() { await directoryAction("select"); }
 async function openAuthorization() { await directoryAction("authorize"); }
+function isDirectorySelectionCancelled(error: unknown): boolean {
+  // The host picker may reject without a reason when its dialog is dismissed.
+  if (error == null || error === "") return true;
+  const isCancel = (value: unknown) => typeof value === "string"
+    && /^(cancel|cancelled|canceled|AbortError|取消|用户取消)$/i.test(value.trim());
+  if (isCancel(error)) return true;
+  if (typeof error !== "object") return false;
+  const reason = error as { name?: unknown; code?: unknown; message?: unknown };
+  return isCancel(reason.name) || isCancel(reason.code) || isCancel(reason.message);
+}
 async function directoryAction(action: "select" | "authorize") {
   if (pickingDirectory.value || openingAuthorization.value) return;
   const busy = action === "select" ? pickingDirectory : openingAuthorization;
@@ -57,7 +69,11 @@ async function directoryAction(action: "select" | "authorize") {
       await sdk.openAppSetting();
       return;
     }
-    const paths = await sdk.pickFile({ directory: true, multiple: false, title: "选择静态网站目录", okText: "选择目录" });
+    const paths = await sdk.pickFile({ directory: true, multiple: false, title: "选择静态网站目录", okText: "选择目录" })
+      .catch((error: unknown) => {
+        if (isDirectorySelectionCancelled(error)) return undefined;
+        throw error;
+      });
     if (disposed || props.model.backend_type !== "static") return;
     const path = paths?.[0];
     if (!path) return; // Cancellation preserves the current directory.
@@ -88,6 +104,7 @@ async function directoryAction(action: "select" | "authorize") {
         <option value="status">连接状态</option>
       </AppSelect>
     </div>
+    <slot v-if="root && ['proxy', 'grpc', 'fastcgi', 'uwsgi', 'scgi', 'memcached'].includes(model.backend_type)" name="upstream" />
     <template v-if="!root && ['proxy', 'grpc', 'fastcgi', 'uwsgi', 'scgi', 'memcached'].includes(model.backend_type)">
       <div class="field">
         <label>转发服务组</label>
@@ -116,17 +133,35 @@ async function directoryAction(action: "select" | "authorize") {
         <span class="field-help">选择 NAS 上的目录；请在应用设置的“访问权限”中授权。<button type="button" class="directory-authorization-link" :disabled="pickingDirectory || openingAuthorization" @click="openAuthorization">{{ openingAuthorization ? "打开中…" : "前往授权" }}</button></span>
         <span v-if="directoryError" class="field-error" role="alert">{{ directoryError }}</span>
       </div>
-      <label class="checkbox-row field"><input v-model="model.static_alias" type="checkbox" /> 使用 alias（否则 root）</label>
+      <div class="checkbox-row field">
+        <input :id="staticAliasId" v-model="model.static_alias" type="checkbox" />
+        <span class="alias-label-with-help">
+          <label :for="staticAliasId">使用 alias（否则 root）</label>
+          <HelpHint label="查看 alias 与 root 的区别" wide>
+            <div class="alias-help-content">
+              <strong>配置示例（前缀匹配）</strong>
+              <div>自定义路径：<code>/images/</code></div>
+              <div>静态目录：<code>/vol1/data/www/</code></div>
+              <p>访问 <code>/images/logo.png</code> 时读取：</p>
+              <div>不勾选（root）：<code>/vol1/data/www/images/logo.png</code></div>
+              <div>勾选（alias）：<code>/vol1/data/www/logo.png</code></div>
+            </div>
+          </HelpHint>
+        </span>
+      </div>
       <label class="checkbox-row field"><input v-model="model.autoindex" type="checkbox" /> 开启目录浏览</label>
-      <div class="field"><label>首页文件</label><input class="input" :value="model.index_files.join(', ')" @change="setList('index_files', $event)" /></div>
-      <div class="field"><label>Try Files</label><input class="input" :value="model.try_files.join(', ')" placeholder="$uri, $uri/, /index.html" @change="setList('try_files', $event)" /></div>
-      <div class="field"><label>缓存头 Expires</label><input v-model.trim="model.expires" class="input" placeholder="7d / max / off" /></div>
+      <div class="field"><label>首页文件</label><input class="input static-option-input" :value="model.index_files.join(', ')" @change="setList('index_files', $event)" /></div>
+      <div class="field"><label>Try Files</label><input class="input static-option-input" :value="model.try_files.join(', ')" placeholder="$uri, $uri/, /index.html" @change="setList('try_files', $event)" /></div>
+      <div class="field"><label>缓存头 Expires</label><input v-model.trim="model.expires" class="input static-option-input" placeholder="7d / max / off" /></div>
     </template>
     <template v-if="model.backend_type === 'return'">
       <div class="field"><label>状态码</label><input v-model.number="model.return_code" class="input" type="number" min="200" max="599" /></div>
       <div class="field"><label>返回目标 / 内容</label><input v-model="model.return_target" class="input" placeholder="https://example.com$request_uri" /></div>
     </template>
 
+    <details class="path-advanced full">
+      <summary>路径高级设置<span>缓存、重写、鉴权与 Header</span></summary>
+      <div class="location-settings path-advanced-content">
     <details v-if="model.backend_type === 'proxy'" class="advanced-box full">
       <summary>缓存与大文件切片</summary>
       <div class="form-grid compact-grid">
@@ -222,10 +257,20 @@ async function directoryAction(action: "select" | "authorize") {
         <label class="checkbox-row field"><input v-model="model.deny_invalid_referer" type="checkbox" /> 拒绝无效 Referer</label>
       </div>
     </details>
+      </div>
+    </details>
   </div>
 </template>
 
 <style scoped>
+.alias-label-with-help { display: inline-flex; align-items: center; gap: 8px; }
+.alias-help-content p { margin: 8px 0; }
+.alias-help-content p:last-child { margin-bottom: 0; }
+.rule-modal .rule-form-grid .static-option-input { width: 100%; }
+.path-advanced { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; }
+.path-advanced > summary { cursor: pointer; color: var(--text); font-size: 13px; }
+.path-advanced > summary span { margin-left: 12px; color: var(--text-muted); font-size: 12px; }
+.path-advanced-content { padding-top: 12px; }
 .directory-authorization-link { border: 0; background: transparent; color: var(--accent, #168354); font: inherit; padding: 2px 4px; margin-left: 4px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 .directory-authorization-link:disabled { opacity: .55; cursor: wait; }
 .directory-authorization-link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; border-radius: 3px; }
