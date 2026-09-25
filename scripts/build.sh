@@ -41,7 +41,7 @@ build_arch() {
     *) echo "不支持的架构：$ARCH（应为 x86 或 arm64）" >&2; exit 1 ;;
   esac
   local WORK="$ROOT/.build/$ARCH" STAGE="$ROOT/.build/$ARCH/fpk" APP_STAGE="$ROOT/.build/$ARCH/app"
-  local FPK_NAME="nginx-web-${VERSION}-${OUTPUT_ARCH}.fpk" NGINX_SHA256 APP_MD5
+  local FPK_NAME="nginx-web-${VERSION}-full-ports-${OUTPUT_ARCH}.fpk" NGINX_SHA256 APP_MD5
   rm -rf "$WORK"; mkdir -p "$DIST" "$STAGE" "$APP_STAGE/bin"
 
   echo "[$ARCH 1/6] 构建 Linux $GOARCH 管理服务"

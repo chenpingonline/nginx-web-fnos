@@ -38,12 +38,36 @@ func TestValidateStateRejectsDuplicateDomain(t *testing.T) {
 	}
 }
 
-func TestValidateStateRejectsPrivilegedPort(t *testing.T) {
-	state := DefaultState()
-	rule := testRule("0123456789ab", "A", "demo.example.com", 443)
-	state.Rules = []ProxyRule{rule}
-	if err := ValidateState(state); err == nil || !strings.Contains(err.Error(), "非特权端口") {
-		t.Fatalf("expected privileged-port error, got %v", err)
+func TestValidateLowListenPorts(t *testing.T) {
+	for _, port := range []int{1, 53, 80, 443, 1023, 1024, 65535, -1, 65536} {
+		valid := port >= 1 && port <= 65535
+		state := DefaultState()
+		state.Rules = []ProxyRule{testRule("0123456789ab", "A", "demo.example.com", port)}
+		if err := ValidateState(state); (err == nil) != valid {
+			t.Errorf("HTTP port %d: %v", port, err)
+		}
+		state = DefaultState()
+		state.Settings.DefaultHTTPPort = port
+		state.Settings.DefaultHTTPSPort = port
+		if err := ValidateState(state); (err == nil) != valid {
+			t.Errorf("default port %d: %v", port, err)
+		}
+		state = DefaultState()
+		state.RuleGroups = []RuleGroup{{ID: "0123456789ab", Name: "A", ListenPort: port, ListenType: "ipv4"}}
+		if err := ValidateRuleGroups(state); (err == nil) != valid {
+			t.Errorf("group port %d: %v", port, err)
+		}
+		for _, protocol := range []string{"tcp", "udp"} {
+			rule := StreamRule{ID: "0123456789ab", Name: "A", Protocol: protocol, ListenPort: port, ListenAddress: "0.0.0.0", ConnectTimeoutSeconds: 10, ProxyTimeoutSeconds: 60, TLSMode: "off", UpstreamHost: "127.0.0.1", UpstreamPort: 8080}
+			if err := ValidateStreamRule(rule, nil, nil); (err == nil) != valid {
+				t.Errorf("%s port %d: %v", protocol, port, err)
+			}
+		}
+	}
+	// Direct validators reject zero; state normalization intentionally supplies defaults for zero.
+	rule := testRule("0123456789ab", "A", "demo.example.com", 0)
+	if err := ValidateRule(rule, nil); err == nil {
+		t.Error("zero listen port accepted")
 	}
 }
 

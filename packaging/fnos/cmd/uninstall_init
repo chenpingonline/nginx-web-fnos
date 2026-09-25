@@ -1,6 +1,10 @@
 #!/bin/bash
 set -u
 
+# Root is used only for capability preparation; all application work runs as the package user.
+source "$(dirname "${BASH_SOURCE[0]}")/privilege.sh"
+enter_package_user "$@"
+
 log_error() {
   printf '%s\n' "$1" > "${TRIM_TEMP_LOGFILE:-/tmp/nginx-web-uninstall.log}"
 }

@@ -92,7 +92,7 @@ function addSplit() {
             v-model.number="form.default_http_port"
             class="input"
             type="number"
-            min="1024"
+            min="1"
             max="65535"
             required
           />
@@ -103,7 +103,7 @@ function addSplit() {
             v-model.number="form.default_https_port"
             class="input"
             type="number"
-            min="1024"
+            min="1"
             max="65535"
             required
           />

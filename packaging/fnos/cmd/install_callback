@@ -1,6 +1,10 @@
 #!/bin/bash
 set -u
 
+# Root is used only for capability preparation; all application work runs as the package user.
+source "$(dirname "${BASH_SOURCE[0]}")/privilege.sh"
+enter_package_user "$@"
+
 BIN="${TRIM_APPDEST}/bin/nginx-web-server"
 LOG="${TRIM_PKGVAR}/logs/install.log"
 PRESERVED_ROOT="${TRIM_PKGVAR}/.uninstall-preserved"
