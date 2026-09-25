@@ -353,14 +353,14 @@ async function addLocation() {
       ></textarea>
     </div>
     <div class="field section-content section-left">
-      <label for="listen-port" class="field-label-with-help">监听端口<HelpHint text="仅允许非特权端口，范围 1024–65535。" /></label
+      <label for="listen-port" class="field-label-with-help">监听端口<HelpHint text="范围 1–65535；低位端口由内置 Nginx 的专用绑定权限支持，端口不能被其他服务占用。" /></label
       ><input
         :disabled="inherits('listen_port')"
         id="listen-port"
         v-model.number="form.listen_port"
         class="input"
         type="number"
-        min="1024"
+        min="1"
         max="65535"
         required
       />

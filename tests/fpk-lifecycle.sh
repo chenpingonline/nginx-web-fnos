@@ -40,6 +40,15 @@ export TRIM_PKGTMP="$TEST/tmp"
 export TRIM_TEMP_LOGFILE="$TEST/fnos-error.log"
 export TRIM_DATA_ACCESSIBLE_PATHS="$TEST/user-data"
 export TRIM_DATA_SHARE_PATHS="$TEST/share-data"
+export TRIM_USERNAME=nginx-web
+
+# fnOS creates these application directories for the package user, even when
+# lifecycle entrypoints request root for capability preparation.
+if [[ $(id -u) == 0 ]]; then
+  id nginx-web >/dev/null
+  chmod 755 "$TEST"
+  chown -R nginx-web:nginx-web "$TEST/app" "$TEST/etc" "$TEST/var" "$TEST/home" "$TEST/tmp"
+fi
 
 "$TEST/pkg/cmd/install_callback"
 "$TEST/pkg/cmd/main" start

@@ -149,7 +149,7 @@
 - 已运行时使用平滑 Reload；启动或重载失败时自动恢复上一份有效配置。
 - 校验重复域名、端口冲突、证书/转发服务组引用、IP/CIDR、路径和指令参数范围。
 - 管理接口要求 fnOS 管理员身份，并为变更请求校验专用请求标识。
-- 管理服务和 Nginx 均以普通 `nginx-web` package 用户运行，不申请 root 权限。
+- 支持监听 1–65535（含 80/443）；生命周期脚本短暂使用 root 为内置 Nginx 设置 `CAP_NET_BIND_SERVICE` 后降权，管理服务和 Nginx 均以普通 `nginx-web` package 用户运行。
 - 提供 AMD64 与 ARM64 原生 FPK；安装后的应用运行不依赖 Docker。
 
 ## 自动主题

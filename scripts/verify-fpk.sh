@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FPK="${1:?用法: verify-fpk.sh <file.fpk>}"; WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 tar -xzf "$FPK" -C "$WORK"
-for f in app.tgz manifest cmd/main cmd/install_callback cmd/uninstall_init config/privilege config/resource wizard/uninstall ICON.PNG ICON_256.PNG; do [[ -e "$WORK/$f" ]] || { echo "FPK 缺少 $f" >&2; exit 1; }; done
+for f in app.tgz manifest cmd/main cmd/install_callback cmd/privilege.sh cmd/uninstall_init config/privilege config/resource wizard/uninstall ICON.PNG ICON_256.PNG; do [[ -e "$WORK/$f" ]] || { echo "FPK 缺少 $f" >&2; exit 1; }; done
 [[ ! -e "$WORK/LICENSE" ]] || { echo 'FPK 根目录不应包含 LICENSE，以免触发安装许可确认页' >&2; exit 1; }
 EXPECTED_MD5="$(awk -F= '$1 ~ /^[[:space:]]*checksum[[:space:]]*$/ {gsub(/[[:space:]]/, "", $2); print $2}' "$WORK/manifest")"
 if command -v md5sum >/dev/null 2>&1; then ACTUAL_MD5="$(md5sum "$WORK/app.tgz" | awk '{print $1}')"; else ACTUAL_MD5="$(md5 -q "$WORK/app.tgz")"; fi
@@ -38,7 +38,13 @@ json.loads((root/'app/ui/config').read_text())
 uninstall=json.loads((root/'wizard/uninstall').read_text())
 if privilege.get('username') != 'nginx-web': raise SystemExit('运行用户名不正确')
 if privilege.get('groupname') != 'nginx-web': raise SystemExit('运行组名不正确')
-if privilege.get('defaults', {}).get('run-as') != 'package': raise SystemExit('应用不得以 root 身份运行')
+if privilege.get('defaults', {}).get('run-as') != 'root': raise SystemExit('生命周期需要 root 准备低位端口能力')
+for entry in ('main', 'install_callback', 'upgrade_callback', 'uninstall_init'):
+    script=(root/'cmd'/entry).read_text()
+    if 'enter_package_user "$@"' not in script: raise SystemExit(f'{entry} 缺少降权入口')
+helper=(root/'cmd/privilege.sh').read_text()
+if 'setcap cap_net_bind_service=ep' not in helper or 'exec runuser -u "$user"' not in helper:
+    raise SystemExit('缺少低位端口能力设置或降权执行')
 manifest=(root/'manifest').read_text()
 for key in ('appname','version','display_name','platform','checksum'):
     if not any(line.split('=',1)[0].strip()==key for line in manifest.splitlines() if '=' in line): raise SystemExit(f'manifest 缺少 {key}')

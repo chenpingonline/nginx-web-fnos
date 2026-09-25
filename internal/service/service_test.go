@@ -63,9 +63,9 @@ func TestCacheCleanupAndLogRotationStayInsideAppData(t *testing.T) {
 func TestUpdateSettingsValidatesBeforePersisting(t *testing.T) {
 	service := testService(t)
 	invalid := service.State().Settings
-	invalid.DefaultHTTPPort = 80
+	invalid.DefaultHTTPPort = 65536
 	if err := service.UpdateSettings(invalid); err == nil {
-		t.Fatal("expected privileged port to be rejected")
+		t.Fatal("expected out-of-range port to be rejected")
 	}
 	if got := service.State().Settings.DefaultHTTPPort; got != 9080 {
 		t.Fatalf("invalid settings changed persisted state: %d", got)
