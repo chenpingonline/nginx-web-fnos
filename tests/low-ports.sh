@@ -10,10 +10,13 @@ TEST=$(mktemp -d /tmp/nginx-lowports.XXXXXX)
 export TRIM_APPDEST="$TEST/app" TRIM_PKGETC="$TEST/etc" TRIM_PKGVAR="$TEST/var" TRIM_PKGTMP="$TEST/tmp" TRIM_PKGHOME="$TEST/home" TRIM_USERNAME=nginx-web
 export FNPROXY_DEV_ALLOW=1
 cleanup() {
-  "$ROOT/packaging/fnos/cmd/main" stop >/dev/null 2>&1 || true
+  "$TEST/cmd/main" stop >/dev/null 2>&1 || true
   [[ ${KEEP_TEST_ROOT:-0} == 1 ]] || rm -rf "$TEST"
 }
 trap cleanup EXIT
+mkdir -p "$TEST/cmd"
+cp "$ROOT/packaging/fnos/cmd/"* "$TEST/cmd/"
+sed -i 's/readonly PACKAGE_PERMISSION_MODE=standard/readonly PACKAGE_PERMISSION_MODE=full-ports/' "$TEST/cmd/privilege.sh"
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/home"
 case $(uname -m) in aarch64) arch=arm64 ;; x86_64) arch=x86_64 ;; esac
 cp "$SERVER" "$TEST/app/bin/nginx-web-server"
@@ -27,22 +30,22 @@ fi
 printf '%s' '{"schema_version":1,"settings":{"default_http_port":80,"default_https_port":443,"revision_limit":20},"rules":[],"certificates":[],"dirty":true}' > "$TEST/var/fnproxy.json"
 chown nginx-web:nginx-web "$TEST/var/fnproxy.json"
 # Reject an unexpected root runtime user and a symlink in place of the binary.
-if TRIM_USERNAME=root "$ROOT/packaging/fnos/cmd/install_callback" 2>/dev/null; then
+if TRIM_USERNAME=root "$TEST/cmd/install_callback" 2>/dev/null; then
   echo 'Root runtime user unexpectedly accepted' >&2; exit 1
 fi
 mv "$TEST/app/bin/nginx" "$TEST/app/bin/nginx.real"
 ln -s nginx.real "$TEST/app/bin/nginx"
-if "$ROOT/packaging/fnos/cmd/install_callback" 2>/dev/null; then
+if "$TEST/cmd/install_callback" 2>/dev/null; then
   echo 'Symlink capability target unexpectedly accepted' >&2; exit 1
 fi
 rm "$TEST/app/bin/nginx"
 mv "$TEST/app/bin/nginx.real" "$TEST/app/bin/nginx"
-"$ROOT/packaging/fnos/cmd/install_callback"
+"$TEST/cmd/install_callback"
 [[ $(getcap "$TEST/app/bin/nginx") == "$TEST/app/bin/nginx cap_net_bind_service=ep" ]]
 [[ -z $(getcap "$TEST/app/bin/nginx-web-server") ]]
 
-"$ROOT/packaging/fnos/cmd/main" start
-"$ROOT/packaging/fnos/cmd/main" status
+"$TEST/cmd/main" start
+"$TEST/cmd/main" status
 [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80/) == 404 ]]
 backend=$(cat "$TEST/var/run/nginx-web-server.pid")
 nginx=$(cat "$TEST/var/nginx/run/nginx.pid")
@@ -59,13 +62,13 @@ PY
 runuser -u nginx-web -- "$TEST/app/bin/nginx-web-server" nginx-test >/dev/null
 runuser -u nginx-web -- "$TEST/app/bin/nginx-web-server" nginx-reload >/dev/null
 [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80/) == 404 ]]
-"$ROOT/packaging/fnos/cmd/main" stop
+"$TEST/cmd/main" stop
 setcap -r "$TEST/app/bin/nginx"
-"$ROOT/packaging/fnos/cmd/upgrade_callback"
+"$TEST/cmd/upgrade_callback"
 [[ $(getcap "$TEST/app/bin/nginx") == "$TEST/app/bin/nginx cap_net_bind_service=ep" ]]
 # Capability loss is also repaired on start, without running the service as root.
 setcap -r "$TEST/app/bin/nginx"
-"$ROOT/packaging/fnos/cmd/main" start
+"$TEST/cmd/main" start
 [[ $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:80/) == 404 ]]
 runuser -u nginx-web -- python3 "$ROOT/tests/low-ports-api.py"
 echo "Low-port lifecycle passed: $TEST"

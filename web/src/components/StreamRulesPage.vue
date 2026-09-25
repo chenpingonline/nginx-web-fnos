@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { minListenPort } from "../permissionMode";
 import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import {
@@ -285,7 +286,7 @@ watch(
               v-model.number="form.listen_port"
               class="input"
               type="number"
-              min="1"
+              :min="minListenPort"
               max="65535"
               required
             />

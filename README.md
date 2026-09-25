@@ -82,7 +82,7 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 恢复备份或历史快照会生成草稿，检查后再应用。界面上的“保存并应用”会应用全部待生效修改。
 
 > [!IMPORTANT]
-> 监听端口范围为 **1–65535**，支持直接监听 80/443。生命周期脚本短暂使用 root 为内置 Nginx 设置 `CAP_NET_BIND_SERVICE` 后降权；管理服务和 Nginx 均以普通 `nginx-web` 用户运行。宿主需提供 `setcap`、`getcap`、`runuser`，安装文件系统需支持文件能力。请选用未被其他服务占用的端口。
+> 同一版本提供两种权限模式：`standard` 标准版监听 **1024–65535**，生命周期和服务均以应用用户运行；`full-ports` 全端口版监听 **1–65535**，生命周期使用 root 为内置 Nginx 设置 `CAP_NET_BIND_SERVICE` 后降权。两版的管理服务和 Nginx 均以 `nginx-web` 用户运行，全端口版额外需要 `setcap`、`getcap`、`runuser` 和支持文件能力的安装文件系统。
 
 ---
 
@@ -219,18 +219,21 @@ third_party/nginx/arm64/nginx
 然后执行：
 
 ```bash
-make build-x86       # 生成 x86_64 安装包
-make build-arm64     # 生成 ARM64 安装包
-make build-all       # 前端和测试只执行一次，再依次构建两个架构
+make build-x86       # 标准版 x86_64
+make build-arm64     # 标准版 ARM64
+make build-x86 PERMISSION_MODE=full-ports  # 全端口版 x86_64
+make build-all       # 同版本、两种权限、两个架构，共四个安装包
 ```
 
-安装包输出到 `dist/`。构建会检查管理程序及 Nginx 的架构、内置版本、包结构和校验和。
+安装包输出到 `dist/`，命名为 `nginx-web-<版本>-<standard|full-ports>-<x86_64|arm64>.fpk`。构建会检查管理程序及 Nginx 的架构、内置版本、包结构和校验和。
+
+两种模式只维护 `master`，不再在 `low-port-listen` 上单独开发。它们使用同一应用 ID，属于同一应用的替代安装包，不能并排安装。同版本切换是否允许由 fnOS 决定；不支持时应随下一共同版本升级切换。切回标准版前先将所有低位监听端口改为 1024 以上（包括分组和默认端口）。
 
 ### 统一版本号
 
 应用版本只修改 [`packaging/fnos/manifest`](packaging/fnos/manifest) 的 `version` 字段。前端、Go 服务、FPK 文件名及发布脚本均读取此文件，修改后需重新构建。
 
-`make release` 在 Linux 上构建两个架构并执行本机架构的集成与生命周期测试，生成安装包和 `SHA256SUMS.txt`；不会自动创建 GitHub Release。
+`make release` 在 Linux 上构建两种模式的两个架构，并执行本机架构两种模式的生命周期测试及标准版集成测试，生成安装包和 `SHA256SUMS.txt`；不会自动创建 GitHub Release。
 
 ---
 

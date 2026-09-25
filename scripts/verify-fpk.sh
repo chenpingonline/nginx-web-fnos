@@ -38,7 +38,19 @@ json.loads((root/'app/ui/config').read_text())
 uninstall=json.loads((root/'wizard/uninstall').read_text())
 if privilege.get('username') != 'nginx-web': raise SystemExit('运行用户名不正确')
 if privilege.get('groupname') != 'nginx-web': raise SystemExit('运行组名不正确')
-if privilege.get('defaults', {}).get('run-as') != 'root': raise SystemExit('生命周期需要 root 准备低位端口能力')
+mode_file = root / 'PERMISSION_MODE'
+# Compatibility with older full-ports packages.
+mode = mode_file.read_text().strip() if mode_file.exists() else 'full-ports'
+if mode not in ('standard', 'full-ports'): raise SystemExit('无效的权限模式')
+expected_user = 'root' if mode == 'full-ports' else 'package'
+if privilege.get('defaults', {}).get('run-as') != expected_user: raise SystemExit('权限模式与生命周期用户不一致')
+if mode_file.exists():
+    helper = (root/'cmd/privilege.sh').read_text()
+    if 'readonly PACKAGE_PERMISSION_MODE=' + mode + '\n' not in helper: raise SystemExit('生命周期权限模式不一致')
+    import subprocess
+    info = subprocess.check_output(['go', 'version', '-m', str(root/'app/bin/nginx-web-server')], text=True)
+    full_ports = '-tags=full_ports' in info
+    if full_ports != (mode == 'full-ports'): raise SystemExit('后端端口模式与安装包不一致')
 for entry in ('main', 'install_callback', 'upgrade_callback', 'uninstall_init'):
     script=(root/'cmd'/entry).read_text()
     if 'enter_package_user "$@"' not in script: raise SystemExit(f'{entry} 缺少降权入口')

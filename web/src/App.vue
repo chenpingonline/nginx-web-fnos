@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { minListenPort } from "./permissionMode";
 import type { ACMEInput } from "./types";
 import ACMEJobs from "./components/ACMEJobs.vue";
 import AppSelect from "./components/AppSelect.vue";
@@ -1065,7 +1066,7 @@ onBeforeUnmount(() => {
                 class="badge"
                 :class="state.dirty ? 'warning' : 'success'"
                 >{{ state.dirty ? "有未应用变更" : "配置已同步" }}</span>
-              <span class="rule-port-hint">监听端口 1–65535</span>
+              <span class="rule-port-hint">监听端口 {{ minListenPort }}–65535</span>
               <span class="spacer"></span
               ><button class="button ghost" :disabled="busy" @click="loadCore()">
                 <PhArrowClockwise :size="15" aria-hidden="true" />刷新

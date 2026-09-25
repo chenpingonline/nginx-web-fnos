@@ -40,7 +40,7 @@ func TestValidateStateRejectsDuplicateDomain(t *testing.T) {
 
 func TestValidateLowListenPorts(t *testing.T) {
 	for _, port := range []int{1, 53, 80, 443, 1023, 1024, 65535, -1, 65536} {
-		valid := port >= 1 && port <= 65535
+		valid := port >= MinListenPort && port <= 65535
 		state := DefaultState()
 		state.Rules = []ProxyRule{testRule("0123456789ab", "A", "demo.example.com", port)}
 		if err := ValidateState(state); (err == nil) != valid {
@@ -135,5 +135,17 @@ func TestApplyStateDefaultsMigratesInlineRateLimitToPolicy(t *testing.T) {
 	}
 	if state.RateLimitPolicies[0].Settings.RequestsPerSecond != 12 {
 		t.Fatal("expected migrated policy to preserve rate-limit settings")
+	}
+}
+
+// The build mode limits local listeners, never the destination service ports.
+func TestPermissionModeAllowsLowUpstreamPorts(t *testing.T) {
+	for _, port := range []int{1, 80, 443, 1023} {
+		rule := testRule("0123456789ab", "upstream", "demo.example.com", 19080)
+		rule.UpstreamPort = port
+		NormalizeRule(&rule, DefaultState().Settings)
+		if err := ValidateRule(rule, nil); err != nil {
+			t.Errorf("upstream port %d rejected: %v", port, err)
+		}
 	}
 }

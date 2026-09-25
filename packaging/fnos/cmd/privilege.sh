@@ -1,5 +1,7 @@
 #!/bin/bash
 # Sourced by lifecycle entrypoints. Never execute application code as root.
+# Replaced only in the packaging stage for the full-ports variant.
+readonly PACKAGE_PERMISSION_MODE=standard
 
 privilege_error() {
   printf '%s\n' "$1" >&2
@@ -33,6 +35,7 @@ prepare_package_directories() {
 
 enter_package_user() {
   [ "$EUID" -eq 0 ] || return 0
+  [ "$PACKAGE_PERMISSION_MODE" = full-ports ] || privilege_error '标准版生命周期必须以 nginx-web 应用用户运行。'
   # Resolve privileged commands only from system directories, never package data.
   export PATH=/usr/sbin:/usr/bin:/sbin:/bin
   local user="${TRIM_USERNAME:-nginx-web}" uid entry

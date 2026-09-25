@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { minListenPort, listenPortHelp } from "../permissionMode";
 import ListenTypePicker from "./ListenTypePicker.vue";
 import AppSelect from "./AppSelect.vue";
 import { computed, nextTick, reactive, ref, watch } from "vue";
@@ -353,14 +354,14 @@ async function addLocation() {
       ></textarea>
     </div>
     <div class="field section-content section-left">
-      <label for="listen-port" class="field-label-with-help">监听端口<HelpHint text="范围 1–65535；低位端口由内置 Nginx 的专用绑定权限支持，端口不能被其他服务占用。" /></label
+      <label for="listen-port" class="field-label-with-help">监听端口<HelpHint :text="listenPortHelp" /></label
       ><input
         :disabled="inherits('listen_port')"
         id="listen-port"
         v-model.number="form.listen_port"
         class="input"
         type="number"
-        min="1"
+        :min="minListenPort"
         max="65535"
         required
       />
