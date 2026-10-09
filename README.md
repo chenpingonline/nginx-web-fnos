@@ -12,7 +12,7 @@
 - 全端口版为 Nginx 提供绑定低端口的专用权限，管理服务仍以应用用户运行。
 - 管理页面继续使用飞牛网关身份，外部目录通过飞牛“访问权限”授权。
 
-[功能手册](https://github.com/chenpingonline/nginx-web/blob/main/docs/user-guide.md) · [Linux / Docker](https://github.com/chenpingonline/nginx-web)
+[功能手册](https://github.com/chenpingonline/nginx-web/blob/master/docs/user-guide.md) · [Linux / Docker](https://github.com/chenpingonline/nginx-web)
 
 ## 构建 FPK
 
