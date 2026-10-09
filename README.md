@@ -14,7 +14,7 @@
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/)
+[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [公共项目 nginx-web](https://github.com/chenpingonline/nginx-web)
 
 </div>
 
@@ -26,11 +26,9 @@
 
 ## 项目简介
 
-nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结构化表单配置访问入口，将 NAS 应用、容器服务和局域网设备接入统一的域名与端口。
+nginx-web for fnOS 是公共项目 **nginx-web** 在 **飞牛 fnOS** 上的原生应用，通过结构化表单配置访问入口，将 NAS 应用、容器服务和局域网设备接入统一的域名与端口。
 
 首次安装或配置前，请阅读 [nginx-web 使用手册](docs/user-guide.md)。
-
-通用 Go/Vue 功能、Nginx 与 Linux/Docker 构建现由 [nginx-web 核心仓库](https://github.com/chenpingonline/nginx-web) 统一维护。本仓库保留飞牛桌面入口、访问权限、生命周期及 FPK 打包，通过 [`core.lock`](core.lock) 固定核心提交。应用名称、安装标识和已有用户数据保持兼容。
 
 - **原生应用**：从 fnOS 桌面打开，管理界面通过统一网关访问，自动跟随平台亮暗主题。
 - **独立运行**：FPK 内置 Nginx Open Source 1.30.4，使用自己的进程、配置和日志目录。
@@ -38,6 +36,21 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 
 > [!NOTE]
 > 安装和运行无需 Docker，也无需额外安装 Go 或 Node.js。应用不读取、修改或重启飞牛系统 Nginx。仓库名为 `nginx-web-fnos`，fnOS 内的应用名称与安装标识为 `nginx-web`。
+
+---
+
+## 两个项目的关系
+
+两个仓库采用 **共享核心、平台打包分仓库** 的方式维护：本项目基于公共项目构建，负责将同一套管理功能集成到飞牛 fnOS。
+
+| 项目 | 维护范围 |
+| --- | --- |
+| [nginx-web（公共项目）](https://github.com/chenpingonline/nginx-web) | 通用 Go 管理服务、Vue 管理页面、Nginx 功能与二进制，以及 Linux 安装包和 Docker 构建 |
+| [nginx-web-fnos（本项目）](https://github.com/chenpingonline/nginx-web-fnos) | fnOS 应用清单、桌面入口、宿主集成、访问权限、生命周期、权限修复与 FPK 打包 |
+
+通用功能在公共项目中开发和维护，本仓库通过 [`core.lock`](core.lock) 固定公共项目的提交并组装 FPK，不另行维护核心后端、前端或 Docker 副本。应用版本统一来自公共项目的 `VERSION`。fnOS 内的应用名称、安装标识和已有用户数据保持兼容。
+
+飞牛用户请从本项目的 [Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) 下载 FPK；Linux 或 Docker 部署请查看 [公共项目 nginx-web](https://github.com/chenpingonline/nginx-web)。
 
 ---
 
