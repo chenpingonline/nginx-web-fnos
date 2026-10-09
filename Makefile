@@ -33,11 +33,11 @@ release:
 	./scripts/release.sh
 
 clean:
-	rm -rf .build .build-* .cache dist web/dist .fnproxy-dev
+	rm -rf .build .build-* .cache dist docker/dist web/dist .fnproxy-dev
 
 .PHONY: docker-build docker-test
 docker-build:
-	docker build -t $(DOCKER_IMAGE) .
+	docker build -f docker/Dockerfile -t $(DOCKER_IMAGE) .
 
 docker-test:
-	python3 tests/docker-integration.py --image $(DOCKER_IMAGE)
+	python3 docker/tests/integration.py --image $(DOCKER_IMAGE)

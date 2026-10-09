@@ -13,7 +13,7 @@ ENV GOPROXY=$GOPROXY
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY cmd ./cmd
+COPY ["cmd/nginx-web/", "/src/cmd/nginx-web/"]
 COPY internal ./internal
 COPY packaging/fnos/manifest packaging/fnos/version.go ./packaging/fnos/
 COPY web/embed.go ./web/embed.go
@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 FROM alpine:3.21 AS nginx-build
 RUN apk add --no-cache build-base linux-headers openssl-dev pcre2-dev zlib-dev curl
 WORKDIR /build
-COPY packaging/docker/build-nginx.sh ./build-nginx.sh
+COPY docker/build-nginx.sh ./build-nginx.sh
 RUN sh ./build-nginx.sh
 
 FROM alpine:3.21 AS runtime

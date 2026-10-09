@@ -17,6 +17,8 @@ web/node_modules/
 .fnproxy-dev/
 coverage.out
 /secrets/
+/docker/secrets/
+/docker/.env
 /.env
 __pycache__/
 

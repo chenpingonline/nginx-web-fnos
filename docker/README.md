@@ -2,12 +2,16 @@
 
 Docker 版将 Vue 页面、Go 管理服务和 Nginx 1.30.4 放在同一个镜像中，通过独立管理员账户访问，不需要飞牛桌面或网关。构建支持 `linux/amd64` 和 `linux/arm64`；FPK 构建和网关认证继续使用原有方式。此版本不包含 WAF 实验功能。
 
+Docker 专用文件统一放在本目录：`Dockerfile`、`Dockerfile.dockerignore`、`compose.yaml`、`build-nginx.sh`、`tests/` 和本说明；离线镜像保存在 `docker/dist/`，不提交 Git。Go/Vue 源码继续由项目共享。
+
+除“构建与验证”节另有说明外，下文命令均在 `docker/` 目录执行。从项目根目录先执行 `cd docker`。
+
 ## 加载已打包镜像
 
 `dist/` 中的镜像归档可以复制到 NAS 后加载，无需在 NAS 上编译源码。x86_64 设备使用 AMD64 包，ARM64 设备使用 ARM64 包。以 AMD64 为例：
 
 ```bash
-docker load -i nginx-web-0.3.9-docker-amd64.tar.gz
+docker load -i dist/nginx-web-0.3.9-docker-amd64.tar.gz
 docker tag nginx-web:docker-amd64 nginx-web:docker
 ```
 
@@ -15,7 +19,7 @@ ARM64 对应使用 `nginx-web-0.3.9-docker-arm64.tar.gz` 和 `nginx-web:docker-a
 
 ## 使用 Compose
 
-在项目根目录准备首次登录密码，再构建并启动：
+在 `docker/` 目录准备首次登录密码，再构建并启动：
 
 ```bash
 mkdir -p secrets
@@ -52,6 +56,8 @@ Compose 发布管理端口 `8080` 和代理端口 `80`、`443`、`9080`。没有
 启动恢复已应用配置，不自动发布保存的草稿。退出时结束管理请求和后台任务，再停止 Nginx。代理配置有问题时管理页面仍会启动，供检查和修复。健康检查验证管理 HTTP 与 Socket；页面主动停止 Nginx 不影响管理服务健康。
 
 更新代码后执行 `docker compose up -d --build`。`docker compose down` 保留卷；`docker compose down -v` 会删除数据。一个数据卷只应由一个运行中的实例使用。
+
+Compose 默认项目名固定为 `nginx-web-fnos`，与本项目原根目录启动方式一致，目录迁移后仍使用同一命名卷。如果此前通过 `-p` 或 `COMPOSE_PROJECT_NAME` 自定义项目名，迁移后继续使用原项目名；原密码文件和外部挂载也需移到 `docker/`，或改为指向原位置。
 
 页面 JSON 备份可迁移代理、证书和设置，但不包含独立管理员账户、ACME 账户、DNS 凭据或续期任务。完整备份应停止容器后备份整个 `/data` 和外部挂载目录。FPK JSON 备份恢复为草稿，外部路径需改为容器路径后再应用。备份含私钥和代理认证摘要，应妥善保管。
 
@@ -110,17 +116,22 @@ volumes:
 
 从源码构建需要 Docker BuildKit 和 Buildx 插件，以及 Docker Compose v2。单架构构建默认使用本机架构；跨架构构建 Nginx 需要模拟器或对应架构的构建节点。缺少 Buildx 时请按 [Docker 官方安装说明](https://github.com/docker/buildx#installing) 配置插件。
 
+以下命令在项目根目录执行：
+
 ```bash
-docker build -t nginx-web:docker .
+docker build -f docker/Dockerfile -t nginx-web:docker .
 # 或
 make docker-build
 
 # 双架构本地 OCI 归档，需要 Buildx
-docker buildx build --platform linux/amd64,linux/arm64 \
-  --output type=oci,dest=nginx-web-multiarch.tar .
+mkdir -p docker/dist
+docker buildx build -f docker/Dockerfile --platform linux/amd64,linux/arm64 \
+  --output type=oci,dest=docker/dist/nginx-web-multiarch.tar .
 
-python3 tests/docker-integration.py --image nginx-web:docker
+python3 docker/tests/integration.py --image nginx-web:docker
 ```
+
+构建上下文必须是项目根目录，不能使用 `docker/` 作为上下文：`COPY` 的源路径相对于上下文解析。Compose 已配置 `context: ..` 和 `dockerfile: docker/Dockerfile`；手动构建请使用上面的 `-f` 命令。忽略规则使用 Docker 支持的 [Dockerfile 专用忽略文件](https://docs.docker.com/build/concepts/context/#filename-and-location)，排除密码、运行数据和离线镜像。
 
 多阶段构建编译 Vue 页面与静态 Go 程序，从官方 Nginx 1.30.4 源码校验 SHA-256 后编译代理核心，不使用本地 fnOS 二进制。构建上下文排除 Secret、运行数据、构建产物和实验二进制。
 

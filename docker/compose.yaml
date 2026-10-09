@@ -1,8 +1,11 @@
+name: nginx-web-fnos
+
 services:
   nginx-web:
     image: nginx-web:docker
     build:
-      context: .
+      context: ..
+      dockerfile: docker/Dockerfile
       args:
         GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
     init: false # The image already uses tini to reap Nginx child processes.

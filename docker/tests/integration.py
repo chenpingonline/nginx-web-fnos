@@ -21,7 +21,8 @@ import urllib.error
 import urllib.request
 import uuid
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+UPSTREAM = pathlib.Path(__file__).resolve().with_name("upstream.py")
 
 
 def docker(*args, check=True):
@@ -116,7 +117,7 @@ def main():
     success = False
     try:
         docker("run", "-d", "--name", upstream, "--network", network, "--network-alias", "upstream",
-               "--mount", f"type=bind,src={ROOT / 'tests/docker-upstream.py'},dst=/upstream.py,readonly",
+               "--mount", f"type=bind,src={UPSTREAM},dst=/upstream.py,readonly",
                "python:3.12-alpine", "python", "/upstream.py")
         run = ["run", "-d", "--name", fixture, "--network", network, "--read-only", "--cap-drop=ALL",
                "--security-opt=no-new-privileges:true", "--sysctl=net.ipv4.ip_unprivileged_port_start=0",

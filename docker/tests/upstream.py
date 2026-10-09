@@ -1,4 +1,4 @@
-"""Disposable HTTP and UDP upstream used only by docker-integration.py."""
+"""Disposable HTTP and UDP upstream used only by integration.py."""
 import http.server
 import socket
 import threading

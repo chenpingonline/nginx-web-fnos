@@ -1,7 +1,10 @@
 # Only source inputs are sent. Exclude secrets, runtime state, stashes, local
 # binaries and output from the experimental branch.
 **
-!Dockerfile
+!docker/
+!docker/Dockerfile
+!docker/Dockerfile.dockerignore
+!docker/build-nginx.sh
 !go.mod
 !go.sum
 !LICENSE
@@ -19,8 +22,6 @@ web/dist/
 !packaging/fnos/
 !packaging/fnos/manifest
 !packaging/fnos/version.go
-!packaging/docker/
-!packaging/docker/build-nginx.sh
 !third_party/
 !third_party/nginx/
 !third_party/nginx/mime.types
