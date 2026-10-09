@@ -1,4 +1,5 @@
 PERMISSION_MODE ?= standard
+DOCKER_IMAGE ?= nginx-web:docker
 
 .PHONY: frontend-install frontend-typecheck frontend-build test build-x86 build-arm64 build-all integration release clean
 
@@ -33,3 +34,10 @@ release:
 
 clean:
 	rm -rf .build .build-* .cache dist web/dist .fnproxy-dev
+
+.PHONY: docker-build docker-test
+docker-build:
+	docker build -t $(DOCKER_IMAGE) .
+
+docker-test:
+	python3 tests/docker-integration.py --image $(DOCKER_IMAGE)

@@ -30,3 +30,26 @@ func HealthCheck(socketPath string) error {
 	}
 	return nil
 }
+
+// Also check the management TCP listener in standalone mode. Nginx may be
+// stopped intentionally from the UI; its state is not management readiness.
+func HealthCheckHTTP(address string) error {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return err
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	client := http.Client{Transport: &http.Transport{}, Timeout: 2 * time.Second}
+	defer client.CloseIdleConnections()
+	response, err := client.Get("http://" + net.JoinHostPort(host, port) + "/healthz")
+	if err != nil {
+		return fmt.Errorf("管理 HTTP 服务尚未就绪: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("管理 HTTP 健康检查返回 HTTP %d", response.StatusCode)
+	}
+	return nil
+}

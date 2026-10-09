@@ -4,6 +4,7 @@ import AppSelect from "./AppSelect.vue";
 import { computed, reactive, ref, toRaw, watch } from "vue";
 import type { Settings } from "../types";
 const appVersion = __APP_VERSION__;
+const clientCAPlaceholder = __STANDALONE__ ? "/mnt/auth/client-ca.pem" : "/vol1/.../client-ca.pem";
 const props = defineProps<{
   settings: Settings;
   busy: boolean;
@@ -128,7 +129,7 @@ function addSplit() {
       <header class="card-header">
         <div>
           <h2>Worker 与文件资源</h2>
-          <p>自动适配 fnOS 当前文件句柄上限，避免 worker_connections 警告</p>
+          <p>自动适配当前运行环境的文件句柄上限，避免 worker_connections 警告</p>
         </div>
       </header>
       <div class="card-body form-grid">
@@ -309,7 +310,7 @@ function addSplit() {
         </div>
         <div class="field">
           <label>客户端证书校验</label><AppSelect v-model="form.tls.client_verify" class="select"><option value="off">关闭</option><option value="on">强制</option><option value="optional">可选并校验 CA</option><option value="optional_no_ca">可选且不校验 CA</option></AppSelect>
-          <template v-if="form.tls.client_verify !== 'off'"><label>客户端 CA 文件</label><input v-model.trim="form.tls.client_ca_file" class="input" placeholder="/vol1/.../client-ca.pem" required /><label>校验深度</label><input v-model.number="form.tls.client_verify_depth" class="input" type="number" min="1" max="10" /></template>
+          <template v-if="form.tls.client_verify !== 'off'"><label>客户端 CA 文件</label><input v-model.trim="form.tls.client_ca_file" class="input" :placeholder="clientCAPlaceholder" required /><label>校验深度</label><input v-model.number="form.tls.client_verify_depth" class="input" type="number" min="1" max="10" /></template>
         </div>
         <div class="field">
           <label>访问日志</label

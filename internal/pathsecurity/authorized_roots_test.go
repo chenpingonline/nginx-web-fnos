@@ -95,6 +95,27 @@ func TestLiveAuthorizationChanges(t *testing.T) {
 	}
 }
 
+func TestStandaloneUsesOnlyExplicitMountGrants(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	t.Setenv("FNPROXY_MODE", "standalone")
+	t.Setenv("FNPROXY_ALLOWED_PATHS", root)
+	t.Setenv("TRIM_API_TOKEN", "must-not-be-used")
+	t.Setenv("TRIM_DATA_ACCESSIBLE_PATHS", outside)
+	if err := ValidateDirectory(root, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDirectory(outside, false); err == nil {
+		t.Fatal("fnOS environment bypassed container grants")
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateDirectory(filepath.Join(root, "escape"), false); err == nil {
+		t.Fatal("mount grant accepted a symlink escape")
+	}
+}
+
 func TestAuthorizationFailuresDoNotExposeResponse(t *testing.T) {
 	for _, tc := range []struct {
 		name, body string

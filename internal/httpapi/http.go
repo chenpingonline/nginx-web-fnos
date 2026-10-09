@@ -15,6 +15,7 @@ import (
 	"time"
 
 	acmemanager "github.com/chenpingonline/nginx-web-fnos/internal/acme"
+	"github.com/chenpingonline/nginx-web-fnos/internal/adminauth"
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
 	"github.com/chenpingonline/nginx-web-fnos/internal/metrics"
 	appservice "github.com/chenpingonline/nginx-web-fnos/internal/service"
@@ -23,9 +24,10 @@ import (
 const gatewayPrefix = "/app/nginx-web"
 
 type API struct {
-	service *appservice.AppService
-	web     fs.FS
-	devMode bool
+	service    *appservice.AppService
+	web        fs.FS
+	devMode    bool
+	standalone bool
 }
 
 func New(service *appservice.AppService, web fs.FS) *API {
@@ -34,6 +36,10 @@ func New(service *appservice.AppService, web fs.FS) *API {
 		web:     web,
 		devMode: os.Getenv("FNPROXY_DEV_ALLOW") == "1",
 	}
+}
+
+func NewStandalone(service *appservice.AppService, web fs.FS) *API {
+	return &API{service: service, web: web, standalone: true}
 }
 
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +63,10 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "version": domain.AppVersion})
 		return
 	}
+	if !a.standalone && cleanPath == "/api/auth/session" && r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, map[string]any{"mode": "fnos", "authenticated": true})
+		return
+	}
 	if strings.HasPrefix(cleanPath, "/api/") || cleanPath == "/api" {
 		a.handleAPI(w, r, cleanPath)
 		return
@@ -77,6 +87,13 @@ func (a *API) setSecurityHeaders(w http.ResponseWriter) {
 }
 
 func (a *API) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	if a.standalone {
+		if adminauth.Authenticated(r.Context()) {
+			return true
+		}
+		writeAPIError(w, http.StatusUnauthorized, "请登录管理员账户")
+		return false
+	}
 	if a.devMode {
 		return true
 	}

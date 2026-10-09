@@ -37,6 +37,18 @@ func TestAPIRequiresAdministratorHeaders(t *testing.T) {
 	}
 }
 
+func TestStandaloneNeverTrustsGatewayHeaderOrDevBypass(t *testing.T) {
+	t.Setenv("FNPROXY_DEV_ALLOW", "1")
+	api := NewStandalone(nil, webassets.Assets)
+	for _, target := range []string{"/api/overview", "/app/nginx-web/api/overview"} {
+		r := httptest.NewRequest(http.MethodGet, target, nil)
+		r.Header.Set("X-Trim-Isadmin", "true")
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if w.Code != http.StatusUnauthorized { t.Fatalf("forged administrator accepted: %d", w.Code) }
+	}
+}
+
 func TestDashboardRequiresAdminAndBoundsHistoryRange(t *testing.T) {
 	t.Setenv("FNPROXY_DEV_ALLOW", "0")
 	api := New(nil, webassets.Assets)

@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
 	"github.com/chenpingonline/nginx-web-fnos/internal/acme"
 	"github.com/chenpingonline/nginx-web-fnos/internal/app"
 	"github.com/chenpingonline/nginx-web-fnos/internal/domain"
+	"github.com/chenpingonline/nginx-web-fnos/internal/fileutil"
 	"github.com/chenpingonline/nginx-web-fnos/internal/platform"
 	"github.com/chenpingonline/nginx-web-fnos/internal/service"
 	webassets "github.com/chenpingonline/nginx-web-fnos/web"
@@ -26,8 +28,16 @@ func main() {
 
 	paths, err := platform.LoadPaths()
 	fatalIf(err)
+	if command == "serve" && os.Getenv("FNPROXY_MODE") == "standalone" {
+		log.SetOutput(io.MultiWriter(os.Stderr, fileutil.AppendLog{Path: paths.BackendLog}))
+	}
 	if command == "healthcheck" {
 		fatalIf(app.HealthCheck(paths.SocketPath))
+		runtime, err := platform.LoadRuntime()
+		fatalIf(err)
+		if runtime.Standalone {
+			fatalIf(app.HealthCheckHTTP(runtime.Listen))
+		}
 		return
 	}
 	appService, err := service.New(paths)

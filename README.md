@@ -108,6 +108,19 @@ nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结�
 
 ## 安装
 
+### Docker 独立版
+
+Docker 分支提供独立管理员登录、持久化数据卷和 AMD64/ARM64 构建。运行方式、密码初始化、端口映射和升级说明见 [Docker 使用文档](docs/docker.md)。
+
+```bash
+mkdir -p secrets && chmod 700 secrets
+openssl rand -base64 24 > secrets/admin_password.txt
+chmod 444 secrets/admin_password.txt
+docker compose up -d --build
+```
+
+管理页面默认为 `http://NAS地址:8080`，账号 `admin`，密码在上述文件中。Docker 版不需要飞牛网关，也不包含 WAF 实验功能。
+
 ### 从 GitHub Releases 安装
 
 1. 打开项目的 [Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest)。
@@ -247,7 +260,7 @@ make build-all       # 同版本、两种权限、两个架构，共四个安装
 
 ### 需要 Docker 吗？
 
-安装和运行 FPK 不需要。只有从官方源码编译内置 Nginx 时，构建脚本使用 Docker 隔离编译依赖。
+安装和运行 FPK 不需要。Docker 独立版按 [Docker 使用文档](docs/docker.md) 构建和运行。编译 FPK 的内置 Nginx 时，构建脚本也使用 Docker 隔离编译依赖。
 
 ### 可以直接编辑 nginx.conf 吗？
 

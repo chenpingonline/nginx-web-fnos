@@ -845,6 +845,9 @@ func (s *AppService) RotateLogs(force bool) (bool, error) {
 	defer s.mu.Unlock()
 	settings := s.store.Snapshot().Settings.Logging
 	paths := []string{s.paths.NginxAccessLog, s.paths.NginxErrorLog, s.paths.NginxStreamLog, s.paths.MetricsLog(), s.paths.StreamMetricsLog()}
+	if os.Getenv("FNPROXY_MODE") == "standalone" {
+		paths = append(paths, s.paths.BackendLog)
+	}
 	rotated := false
 	for _, logPath := range paths {
 		info, err := os.Stat(logPath)

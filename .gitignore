@@ -16,6 +16,9 @@ web/node_modules/
 # Local runtime/test data
 .fnproxy-dev/
 coverage.out
+/secrets/
+/.env
+__pycache__/
 
 # Generated application binaries
 fnos/app/bin/*

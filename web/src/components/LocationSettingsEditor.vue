@@ -4,6 +4,8 @@ import { TrimApp } from "@trimjs/web-app";
 import AppSelect from "./AppSelect.vue";
 import HelpHint from "./HelpHint.vue";
 import type { LocationSettings, UpstreamPool } from "../types";
+const standalone = __STANDALONE__;
+const exampleRoot = standalone ? "/mnt/www" : "/vol1/data/www";
 
 const props = defineProps<{
   model: LocationSettings;
@@ -127,10 +129,11 @@ async function directoryAction(action: "select" | "authorize") {
       <div class="field full">
         <label>静态目录</label>
         <div class="static-directory-control">
-          <input v-model.trim="model.static_path" class="input" aria-label="静态目录" placeholder="/vol1/data/www" required />
-          <button type="button" class="button" :disabled="pickingDirectory || openingAuthorization" @click="selectDirectory">{{ pickingDirectory ? "选择中…" : "选择目录" }}</button>
+          <input v-model.trim="model.static_path" class="input" aria-label="静态目录" :placeholder="standalone ? '/mnt/www' : '/vol1/data/www'" required />
+          <button v-if="!standalone" type="button" class="button" :disabled="pickingDirectory || openingAuthorization" @click="selectDirectory">{{ pickingDirectory ? "选择中…" : "选择目录" }}</button>
         </div>
-        <span class="field-help">选择 NAS 上的目录；请在应用设置的“访问权限”中授权。<button type="button" class="directory-authorization-link" :disabled="pickingDirectory || openingAuthorization" @click="openAuthorization">{{ openingAuthorization ? "打开中…" : "前往授权" }}</button></span>
+        <span v-if="standalone" class="field-help">填写已挂载到容器内的目录，例如 /mnt/www。</span>
+        <span v-else class="field-help">选择 NAS 上的目录；请在应用设置的“访问权限”中授权。<button type="button" class="directory-authorization-link" :disabled="pickingDirectory || openingAuthorization" @click="openAuthorization">{{ openingAuthorization ? "打开中…" : "前往授权" }}</button></span>
         <span v-if="directoryError" class="field-error" role="alert">{{ directoryError }}</span>
       </div>
       <div class="checkbox-row field">
@@ -141,10 +144,10 @@ async function directoryAction(action: "select" | "authorize") {
             <div class="alias-help-content">
               <strong>配置示例（前缀匹配）</strong>
               <div>自定义路径：<code>/images/</code></div>
-              <div>静态目录：<code>/vol1/data/www/</code></div>
+              <div>静态目录：<code>{{ exampleRoot }}/</code></div>
               <p>访问 <code>/images/logo.png</code> 时读取：</p>
-              <div>不勾选（root）：<code>/vol1/data/www/images/logo.png</code></div>
-              <div>勾选（alias）：<code>/vol1/data/www/logo.png</code></div>
+              <div>不勾选（root）：<code>{{ exampleRoot }}/images/logo.png</code></div>
+              <div>勾选（alias）：<code>{{ exampleRoot }}/logo.png</code></div>
             </div>
           </HelpHint>
         </span>
@@ -203,7 +206,7 @@ async function directoryAction(action: "select" | "authorize") {
         </div>
         <div class="field full auth-request-field"><label>外部 Auth Request URI</label><input v-model.trim="model.auth_request" class="input" placeholder="/_auth" :disabled="ruleAuthEnabled" /><span class="field-help">仅在已有外部鉴权服务时使用；Nginx 会先请求该 URI，并根据返回状态决定是否放行。普通用户名密码认证请使用上方“访问认证”。</span></div>
         <div v-if="model.basic_auth" class="field"><label>认证提示</label><input v-model="model.basic_auth_realm" class="input" :disabled="ruleAuthEnabled" /></div>
-        <div v-if="model.basic_auth" class="field full"><label>htpasswd 绝对路径</label><input v-model.trim="model.basic_auth_file" class="input" placeholder="/vol1/.../.htpasswd" :disabled="ruleAuthEnabled" required /></div>
+        <div v-if="model.basic_auth" class="field full"><label>htpasswd 绝对路径</label><input v-model.trim="model.basic_auth_file" class="input" :placeholder="standalone ? '/mnt/auth/.htpasswd' : '/vol1/.../.htpasswd'" :disabled="ruleAuthEnabled" required /></div>
         <div v-if="model.secure_link.enabled" class="field"><label>签名参数</label><input v-model.trim="model.secure_link.argument" class="input" /></div>
         <div v-if="model.secure_link.enabled" class="field"><label>签名密钥</label><input v-model="model.secure_link.secret" class="input" type="password" required /></div>
         <label v-if="model.backend_type === 'static'" class="checkbox-row field"><input v-model="model.dav.enabled" type="checkbox" /> WebDAV 写入</label>

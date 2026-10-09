@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -27,6 +28,9 @@ var authorizationClient = &http.Client{
 // Query on each validation operation, never cache an administrator's grants.
 // Legacy hosts without the Open API retain their startup-environment behavior.
 func currentAuthorizedRoots() ([]string, error) {
+	if os.Getenv("FNPROXY_MODE") == "standalone" {
+		return filepath.SplitList(os.Getenv("FNPROXY_ALLOWED_PATHS")), nil
+	}
 	token := strings.TrimSpace(os.Getenv("TRIM_API_TOKEN"))
 	if token == "" {
 		if _, err := os.Stat(authorizationSocket); errors.Is(err, os.ErrNotExist) {

@@ -1,0 +1,44 @@
+services:
+  nginx-web:
+    image: nginx-web:docker
+    build:
+      context: .
+      args:
+        GOPROXY: ${GOPROXY:-https://proxy.golang.org,direct}
+    init: false # The image already uses tini to reap Nginx child processes.
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "8080:8080" # Management UI; use HTTPS at your external reverse proxy.
+      - "80:80"
+      - "443:443"
+      - "9080:9080" # Initial default HTTP listener.
+      # Add matching mappings for other HTTP/TCP/UDP ports created in the UI.
+      # - "5353:5353/udp"
+    environment:
+      FNPROXY_ADMIN_USER: admin
+      FNPROXY_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      # FNPROXY_COOKIE_SECURE: "1" # Enable when accessing management via HTTPS.
+      # FNPROXY_ALLOWED_PATHS: /mnt/www
+    secrets:
+      - admin_password
+    volumes:
+      - nginx-web-data:/data
+      # - ./www:/mnt/www:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=256m,mode=1777
+      - /run/nginx-web:rw,nosuid,nodev,size=16m,uid=10001,gid=10001,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"
+
+secrets:
+  admin_password:
+    file: ./secrets/admin_password.txt
+
+volumes:
+  nginx-web-data:

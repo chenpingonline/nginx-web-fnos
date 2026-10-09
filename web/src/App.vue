@@ -33,6 +33,8 @@ import {
 import { errorMessage, jsonBody, request } from "./api";
 import { highlightLog, searchLogLines } from "./logHighlight";
 const appVersion = __APP_VERSION__;
+defineProps<{ adminUsername?: string; loggingOut?: boolean }>();
+const emit = defineEmits<{ logout: [] }>();
 import RuleGroups from "./components/RuleGroups.vue";
 import type { RuleGroup } from "./types";
 import RuleForm from "./components/RuleForm.vue";
@@ -706,7 +708,7 @@ async function stopNginx() {
   if (
     await ask(
       "停止独立 Nginx",
-      "停止后所有由 nginx-web 提供的代理入口都会暂时不可访问，但不会影响飞牛系统服务。",
+      "停止后所有由 nginx-web 提供的代理入口都会暂时不可访问，管理页面仍可使用。",
     )
   )
     await runNginxAction("stop");
@@ -969,6 +971,7 @@ onBeforeUnmount(() => {
         </template>
       </nav>
       <div class="sidebar-bottom">
+        <button v-if="adminUsername" type="button" class="button ghost small admin-logout" :disabled="loggingOut" @click="emit('logout')" :title="adminUsername + ' · 退出登录'">{{ loggingOut ? '正在退出…' : '退出登录' }}<span>{{ adminUsername }}</span></button>
         <div class="sidebar-footer">
           <div class="sidebar-runtime-row">
             <div class="mini-status">
@@ -1670,6 +1673,8 @@ onBeforeUnmount(() => {
 .custom-config-form > label { font-weight: 650; }
 .custom-config-editor { min-height: min(52vh, 520px); resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height: 1.55; tab-size: 4; }
 .custom-config-form .modal-footer { padding: 8px 0 0; }
+.admin-logout { width: 100%; justify-content: space-between; margin-bottom: 8px; }
+.admin-logout span { max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
 .rate-limit-manager-backdrop { position: fixed; inset: 0; z-index: 105; display: grid; place-items: center; padding: 20px; background: rgba(18,25,31,.58); }
 .rate-limit-manager { width: min(720px, calc(100vw - 40px)); max-height: calc(100vh - 28px); overflow: hidden; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-solid); box-shadow: 0 24px 64px rgba(0,0,0,.22); }
 .rate-limit-manager-header { min-height: 56px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--line); }

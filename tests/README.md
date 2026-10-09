@@ -1,5 +1,7 @@
 # Tests
 
+- `python3 tests/docker-integration.py --image nginx-web:docker`: actual standalone image checks for authentication, CSRF, HTTP/HTTPS, TCP/UDP, static mounts, proxy Basic Auth, persistence, restart and clean shutdown. Uses an isolated network, volume and random loopback ports; `--keep` retains a browser QA fixture. See [Docker guide](../docs/docker.md).
+
 - `go test ./...`: validation and Nginx rendering unit tests.
 - `integration.sh`: starts the real bundled Nginx, calls the management API through a Unix Socket, and verifies HTTP and HTTPS reverse proxying.
 - `NGINX_TEST_BIN=/absolute/path/to/nginx go test ./internal/nginx ./internal/service`: additionally validates generated configuration with the required Nginx version, and runs `TestDashboardWithRealNginx` against real HTTP requests, combined/classified 4xx and 5xx rates, per-rule attribution, response rates, process uptime/worker counts, private status polling and log rotation. The binary must match the host OS/architecture.

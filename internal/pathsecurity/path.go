@@ -45,7 +45,7 @@ func (v *pathValidator) validateFile(path string) error {
 		return errors.New("路径必须指向普通文件")
 	}
 	if err := unix.Access(resolved, unix.R_OK); err != nil {
-		return errors.New("应用用户没有文件读取权限，请在飞牛应用设置中授权所在目录")
+		return fmt.Errorf("应用用户没有文件读取权限，%s", authorizationAdvice())
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func (v *pathValidator) validateDirectory(path string, writable bool) error {
 		if writable {
 			operation = "读写"
 		}
-		return fmt.Errorf("应用用户没有目录%s权限，请在飞牛应用设置中授权该目录", operation)
+		return fmt.Errorf("应用用户没有目录%s权限，%s", operation, authorizationAdvice())
 	}
 	return nil
 }
@@ -155,5 +155,12 @@ func (v *pathValidator) validateAuthorizedPath(path string) (string, error) {
 			return resolved, nil
 		}
 	}
-	return "", errors.New("路径不在飞牛已授权目录内，请先在应用设置中添加授权目录")
+	return "", fmt.Errorf("路径不在已授权目录内，%s", authorizationAdvice())
+}
+
+func authorizationAdvice() string {
+	if os.Getenv("FNPROXY_MODE") == "standalone" {
+		return "请检查容器挂载、目录权限和允许访问的目录设置"
+	}
+	return "请在飞牛应用设置中添加目录授权"
 }

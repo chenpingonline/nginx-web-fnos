@@ -91,6 +91,15 @@ export function followSystemTheme(): SystemThemeFollower {
   media.addEventListener('change', onMediaTheme);
   window.addEventListener('focus', refreshVisibleHostTheme);
   document.addEventListener('visibilitychange', refreshVisibleHostTheme);
+  if (__STANDALONE__) {
+    finishWithFallback();
+    return { ready, stop: () => {
+      disposed = true;
+      media.removeEventListener('change', onMediaTheme);
+      window.removeEventListener('focus', refreshVisibleHostTheme);
+      document.removeEventListener('visibilitychange', refreshVisibleHostTheme);
+    } };
+  }
   void (async () => {
     try {
       sdk = new TrimApp();

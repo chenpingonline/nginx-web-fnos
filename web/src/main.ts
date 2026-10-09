@@ -1,5 +1,5 @@
 import { createApp } from "vue";
-import App from "./App.vue";
+import Root from "./Root.vue";
 import { followScrollActivity } from "./scrollbars";
 import { followSystemTheme } from "./theme";
 import "../styles.css";
@@ -22,7 +22,7 @@ document.addEventListener(
 const systemTheme = followSystemTheme();
 const stopScrollActivity = followScrollActivity();
 void systemTheme.ready.then(() => {
-  createApp(App).mount("#app");
+  createApp(Root).mount("#app");
 });
 window.addEventListener("pagehide", (event: PageTransitionEvent) => {
   if (!event.persisted) {
