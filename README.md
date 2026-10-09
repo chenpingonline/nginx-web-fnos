@@ -14,7 +14,7 @@
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [公共项目 nginx-web](https://github.com/chenpingonline/nginx-web)
+[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [nginx-web](https://github.com/chenpingonline/nginx-web)
 
 </div>
 
