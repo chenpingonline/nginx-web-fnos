@@ -2,6 +2,7 @@
 # Linux root-only integration check; run in an isolated container, never against an installed app.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CORE="$(python3 "$ROOT/scripts/resolve-core.py")"
 SERVER="${1:?usage: low-ports.sh <native Linux server binary> <repair helper>}"
 REPAIR="${2:?native Linux repair-app-data binary}"
 [[ $(id -u) == 0 ]]
@@ -22,14 +23,15 @@ cp "$REPAIR" "$TEST/cmd/repair-app-data"
 mkdir -p "$TEST/app/bin" "$TEST/app/etc" "$TEST/etc" "$TEST/var" "$TEST/tmp" "$TEST/home"
 case $(uname -m) in aarch64) arch=arm64 ;; x86_64) arch=x86_64 ;; esac
 cp "$SERVER" "$TEST/app/bin/nginx-web-server"
-cp "$ROOT/third_party/nginx/$arch/nginx" "$TEST/app/bin/nginx"
-cp "$ROOT/third_party/nginx/mime.types" "$TEST/app/etc/mime.types"
+cp "$CORE/third_party/nginx/$arch/nginx" "$TEST/app/bin/nginx"
+cp "$CORE/third_party/nginx/mime.types" "$TEST/app/etc/mime.types"
 chmod 755 "$TEST" "$TEST/app/bin/"*
 # Prove low ports really require privilege in this environment.
 if runuser -u nginx-web -- python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",80))' 2>/dev/null; then
   echo 'Unprivileged bind unexpectedly succeeded' >&2; exit 1
 fi
-printf '%s' '{"schema_version":1,"settings":{"default_http_port":80,"default_https_port":443,"revision_limit":20},"rules":[],"certificates":[],"dirty":true}' > "$TEST/var/fnproxy.json"
+# This fixture represents an applied listener, rather than an un-applied draft.
+printf '%s' '{"schema_version":1,"settings":{"default_http_port":80,"default_https_port":443,"revision_limit":20},"rules":[],"certificates":[],"dirty":false,"last_applied_at":"2026-09-02T00:00:00Z"}' > "$TEST/var/fnproxy.json"
 chown nginx-web:nginx-web "$TEST/var/fnproxy.json"
 # Reject an unexpected root runtime user and a symlink in place of the binary.
 if TRIM_USERNAME=root "$TEST/cmd/install_callback" 2>/dev/null; then

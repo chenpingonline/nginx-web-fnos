@@ -1,321 +1,43 @@
-<div align="center">
-
-<img src="packaging/fnos/ICON_256.PNG" alt="nginx-web" width="128" />
-
 # nginx-web for fnOS
 
-**运行在飞牛 fnOS 上的原生 Nginx 反向代理管理器**
+本仓库负责 nginx-web 的飞牛 FPK 打包、桌面入口、访问权限及安装/升级/卸载集成。
 
-通过 fnOS 桌面管理 HTTP/HTTPS 代理、TCP/UDP 转发、SSL 证书、转发服务组与访问统计。
-
-[![Release](https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?display_name=tag)](https://github.com/chenpingonline/nginx-web-fnos/releases)
-[![Downloads](https://img.shields.io/github/downloads/chenpingonline/nginx-web-fnos/total?label=downloads)](https://github.com/chenpingonline/nginx-web-fnos/releases)
-![fnOS](https://img.shields.io/badge/fnOS-x86__64%20%7C%20ARM64-2ea44f)
-[![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
-[![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-
-[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/)
-
-</div>
-
-<p align="center">
-  <img src="docs/images/dashboard-light.png" alt="nginx-web 在飞牛 fnOS 中的 Nginx 运行状态、实时流量与代理规则管理界面" width="100%" />
-</p>
-
----
-
-## 项目简介
-
-nginx-web 是为 **飞牛 fnOS** 设计的反向代理管理应用，通过结构化表单配置访问入口，将 NAS 应用、容器服务和局域网设备接入统一的域名与端口。
-
-首次安装或配置前，请阅读 [nginx-web 使用手册](docs/user-guide.md)。
-
-- **原生应用**：从 fnOS 桌面打开，管理界面通过统一网关访问，自动跟随平台亮暗主题。
-- **独立运行**：FPK 内置 Nginx Open Source 1.30.4，使用自己的进程、配置和日志目录。
-- **可视化配置**：管理代理、证书、负载均衡和访问控制，应用前自动校验，失败时尝试回滚。
-
-> [!NOTE]
-> 安装和运行无需 Docker，也无需额外安装 Go 或 Node.js。应用不读取、修改或重启飞牛系统 Nginx。仓库名为 `nginx-web-fnos`，fnOS 内的应用名称与安装标识为 `nginx-web`。
-
----
-
-## 功能
-
-| 模块 | 功能 |
-| --- | --- |
-| 总览 | 查看 Nginx 运行状态、HTTP 请求趋势、连接数、错误率及规则生效状态 |
-| 代理 HTTP(S) | 管理域名与路径转发、WebSocket、SSE、HTTP/2、静态文件和跳转 |
-| 规则分组 | 共享监听类型、协议、监听端口、证书与 HTTP/2 默认值，支持逐项取消继承 |
-| TCP/UDP 代理 | 四层转发、TLS 终止、SNI 分流、PROXY Protocol 与访问控制 |
-| 转发服务组 | 管理多个节点、权重、备用节点及负载均衡策略，可供多个规则复用 |
-| 限流策略 | 管理请求速率、突发请求、并发连接与下载速度限制 |
-| SSL/TLS 证书 | 导入 PEM 证书，通过 ACME DNS-01 自动签发与续期，接入 39 个 DNS 服务商适配器 |
-| 请求详情 | 按时段与规则查看 HTTP 请求、4xx/5xx 错误趋势和统计覆盖情况 |
-| 运行日志 | 查看 HTTP、Stream、Nginx 错误及管理服务日志 |
-| 备份与恢复 | 导出 JSON 备份，恢复代理、分组、证书和设置为草稿 |
-| 配置历史 | 保存配置快照、查看历史并恢复为草稿 |
-| Nginx 配置 | 查看生成配置，管理独立自定义配置，执行校验并应用草稿 |
-| 全局设置 | 管理默认端口、Worker、TLS、Gzip、Real IP、日志轮转和缓存等参数 |
-
-首次配置与排查请看 [使用指南](docs/user-guide.md)，详细配置项见 [功能与使用说明](docs/features.md)，DNS 凭据配置见 [DNS 服务商说明](docs/dns-providers.md)。
-
----
-
-## Nginx 工作方式
-
-### 独立 Nginx
-
-安装包同时包含 Go 管理服务、编译后的管理页面和对应架构的 Nginx。管理服务通过 fnOS 统一网关提供界面与 API，Nginx 负责处理实际代理流量。
-
-```text
-管理入口：fnOS 桌面 → 统一网关 → Unix Socket → Go 管理服务
-代理流量：客户端 → 应用内置 Nginx → NAS / 容器 / 局域网服务
-```
-
-### 配置应用
-
-1. 通过表单创建或修改配置。
-2. 应用时生成候选配置，并执行 `nginx -t` 校验。
-3. 校验通过后替换正式配置；Nginx 运行时执行平滑重载。
-4. 启动或重载失败时，尝试恢复上一份有效配置。
-
-恢复备份或历史快照会生成草稿，检查后再应用。界面上的“保存并应用”会应用全部待生效修改。
-
-> [!IMPORTANT]
-> 同一版本提供两种权限模式：`standard` 标准版监听 **1024–65535**，生命周期和服务均以应用用户运行；`full-ports` 全端口版监听 **1–65535**，生命周期使用 root 为内置 Nginx 设置 `CAP_NET_BIND_SERVICE` 后降权。两版的管理服务和 Nginx 均以 `nginx-web` 用户运行，全端口版额外需要 `setcap`、`getcap`、`runuser` 和支持文件能力的安装文件系统。
-
----
-
-## 支持平台
-
-| fnOS 设备架构 | Release 文件 | 内置 Nginx |
-| --- | --- | --- |
-| Intel / AMD x86_64 | `nginx-web-<version>-x86_64.fpk` | Linux AMD64 静态二进制 |
-| ARM64 / aarch64 | `nginx-web-<version>-arm64.fpk` | Linux ARM64 静态二进制 |
-
-运行要求：
-
-- **fnOS 1.1.3100 或更新版本**。
-- 使用 fnOS 管理员账号安装和访问管理界面。
-- NAS 能够连接待代理的目标服务。
-
-文件名中的 `x86_64` 表示 Intel / AMD 64 位，`arm64` 表示 ARM 64 位。当前不提供 32 位或 `all` 通用安装包。
-
-> [!TIP]
-> 平台自动主题需要 fnOS 1.2.0401 / App 1.34.0 及以上；旧系统或独立浏览器会跟随浏览器主题。
-
----
+**功能源码统一在 [nginx-web 核心仓库](https://github.com/chenpingonline/nginx-web) 维护。** Linux、Docker、Go 后端和 Vue 页面都在核心仓库；这里通过 core.lock 固定源码提交，避免维护两套代码。
 
 ## 安装
 
-### Docker 独立版
+飞牛安装包仍使用 appname nginx-web，标准版与全端口版继续兼容已有应用数据。安装包见 [本仓库 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases)。仓库拆分不发布新 FPK，也不会自动升级设备。
 
-Docker 分支提供独立管理员登录、持久化数据卷和 AMD64/ARM64 构建。构建、部署和测试文件集中在 `docker/`，使用说明见 [Docker 使用文档](docker/README.md)。
+- 标准版监听 1024–65535。
+- 全端口版为 Nginx 提供绑定低端口的专用权限，管理服务仍以应用用户运行。
+- 管理页面继续使用飞牛网关身份，外部目录通过飞牛“访问权限”授权。
 
-```bash
-cd docker
-mkdir -p secrets && chmod 700 secrets
-openssl rand -base64 24 > secrets/admin_password.txt
-chmod 444 secrets/admin_password.txt
-docker compose up -d --build
-```
+[功能手册](https://github.com/chenpingonline/nginx-web/blob/main/docs/user-guide.md) · [Linux / Docker](https://github.com/chenpingonline/nginx-web)
 
-管理页面默认为 `http://NAS地址:8080`，账号 `admin`，密码在上述文件中。Docker 版不需要飞牛网关，也不包含 WAF 实验功能。
-
-### 从 GitHub Releases 安装
-
-1. 打开项目的 [Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest)。
-2. 根据 NAS CPU 架构下载对应的 `.fpk`。
-3. 进入 **fnOS → 应用中心 → 手动安装**。
-4. 选择下载好的 FPK 并完成安装。
-5. 从 fnOS 桌面打开 **nginx-web**。
-
-升级时可通过手动安装选择新版 FPK，建议先在“备份与恢复”中导出配置。各版本的更新内容和验证范围以 Release 说明为准。
-
-### SHA-256 校验
-
-Release 提供以下文件：
-
-```text
-nginx-web-<version>-x86_64.fpk
-nginx-web-<version>-arm64.fpk
-SHA256SUMS.txt
-```
-
-将校验文件与下载的 FPK 放在同一目录。下载两个安装包后，在 Linux 上执行：
+## 构建 FPK
 
 ```bash
-sha256sum -c SHA256SUMS.txt
+make core             # 取得 core.lock 固定的核心源码
+make build-all        # 标准 / 全端口，AMD64 / ARM64
 ```
 
-只下载一个架构时，可以先筛选对应记录，例如 x86：
+需要 Go 1.26、Node.js 22、npm、Python 3、Git、tar 和 file。脚本自动获取核心源码；Nginx 及许可证由核心仓库提供。
+
+输出 dist/nginx-web-<version>-<standard|full-ports>-<x86_64|arm64>.fpk。程序、前端和 manifest 的版本均取自核心 VERSION，packaging/fnos/manifest.template 只保存平台元数据。
+
+## 开发：代码只改核心一处
 
 ```bash
-grep 'x86_64\.fpk$' SHA256SUMS.txt | sha256sum -c -
+# 在核心仓库修改 Go / Vue 功能后，直接用本地源码打包
+NGINX_WEB_CORE=/path/to/nginx-web make build-arm64
+
+# 测试、提交并推送核心代码后，固定正式打包版本
+python3 scripts/pin-core.py /path/to/nginx-web
+make build-all
 ```
 
-macOS 可将上述命令中的 `sha256sum` 替换为 `shasum -a 256`。
+显式指定 NGINX_WEB_CORE 可使用未提交源码，FPK 的 CORE_SOURCE.json 会标记 dirty；正式 release 要求核心干净且与 core.lock 一致。默认缓存源码位于 .cache/core/<commit>，不应在那里修改功能。
 
----
+核心引用的变更只修改 core.lock；功能代码始终只改核心仓库。固定的提交必须已推送到核心仓库，其他机器及 CI 才能获取它。现有用户数据、应用标识和权限流程保持兼容。
 
-## 快速上手
-
-完整步骤见 [使用指南](docs/user-guide.md)，包含 IPv6、证书申请与重新签发、分组继承、TCP/UDP 转发及常见错误排查。
-
-以把 `nas.example.com:9080` 转发到局域网服务 `192.168.1.10:3000` 为例：
-
-1. 确保 NAS 能访问目标服务，并将域名解析到可访问的 NAS 地址。
-2. 打开 **代理 HTTP(S)**，添加规则：协议选 HTTP，域名填 `nas.example.com`，监听端口填 `9080`，监听类型按实际网络选择 IPv4、IPv6 或双栈。
-3. 后端协议选 HTTP，主机填 `192.168.1.10`，端口填 `3000`；按需开启 WebSocket 或流式传输。
-4. 保存并应用配置，在总览确认规则已生效、Nginx 正在运行，然后访问 `http://nas.example.com:9080`。
-
-需要 HTTPS 时，先在 **SSL/TLS 证书** 导入证书，或通过 ACME 申请，再为规则选择 HTTPS、证书及空闲监听端口（例如 `9443`）。通配符证书和 DNS 凭据填写方式见 [DNS 服务商说明](docs/dns-providers.md)。
-
-
----
-
-## 配置与数据
-
-升级前可在 **备份与恢复** 下载 JSON 备份，再通过 fnOS 安装新版本 FPK。备份包含证书私钥，应妥善保管；**不包含 ACME 账户、DNS 凭据或自动续期任务**，迁移到新设备时需重新配置续期，外部引用文件也需单独迁移。
-
-从旧版本升级后，如首页提示统计入口未启用，需要检查并应用一次当前草稿，才能开始采集新的统计数据。
-
----
-
-## 项目结构
-
-本项目采用 **单仓库、双架构构建**。前端、Go 服务与 fnOS 生命周期脚本共用，只在打包时选择目标架构的二进制。
-
-```text
-nginx-web-fnos/
-├── cmd/nginx-web/        # Go 管理服务入口
-├── internal/             # 配置模型、API、证书、统计和 Nginx 管理
-├── web/                  # Vue 3 + TypeScript 管理页面
-├── packaging/fnos/       # manifest、图标、权限与生命周期脚本
-├── third_party/nginx/    # 分架构 Nginx、源码来源与许可证资料
-├── scripts/              # 构建、版本读取与包校验
-├── tests/                # 集成与 FPK 生命周期测试
-├── docs/                 # 功能、DNS 服务商与构建说明
-└── dist/                 # 本地生成的 FPK 和校验文件，不提交
-```
-
----
-
-## 从源码构建
-
-### 构建环境
-
-- Go 1.26+。
-- Node.js 20.19+ 或 22.12+、npm。
-- Bash、Python 3、tar 和 `file` 等基础工具。
-- 对应架构的 Nginx 静态二进制；编译 Nginx 时使用 Docker 隔离依赖。
-
-### 获取源码与开发检查
-
-```bash
-git clone https://github.com/chenpingonline/nginx-web-fnos.git
-cd nginx-web-fnos
-make frontend-install
-make test
-```
-
-`make test` 会先执行前端类型检查与生产构建，再运行 Go 测试。前端产物嵌入管理程序，无需在 fnOS 上运行 Vite 开发服务器。
-
-### 准备 Nginx 与构建 FPK
-
-先按 [源码构建文档](docs/build.md) 编译官方 Nginx，并放入对应目录：
-
-```text
-third_party/nginx/x86_64/nginx
-third_party/nginx/arm64/nginx
-```
-
-然后执行：
-
-```bash
-make build-x86       # 标准版 x86_64
-make build-arm64     # 标准版 ARM64
-make build-x86 PERMISSION_MODE=full-ports  # 全端口版 x86_64
-make build-all       # 同版本、两种权限、两个架构，共四个安装包
-```
-
-安装包输出到 `dist/`，命名为 `nginx-web-<版本>-<standard|full-ports>-<x86_64|arm64>.fpk`。构建会检查管理程序及 Nginx 的架构、内置版本、包结构和校验和。
-
-标准版权限入口使用 `packaging/fnos/cmd/privilege.sh`；全端口版打包时替换为 `packaging/fnos/variants/full-ports/privilege.sh`。每个包只包含所选权限脚本，标准包不携带低端口授权或降权代码。
-
-两种模式只维护 `master`，不再在 `low-port-listen` 上单独开发。它们使用同一应用 ID，属于同一应用的替代安装包，不能并排安装。同版本切换是否允许由 fnOS 决定；不支持时应随下一共同版本升级切换。切回标准版前先将所有低位监听端口改为 1024 以上（包括分组和默认端口）。
-
-### 统一版本号
-
-应用版本只修改 [`packaging/fnos/manifest`](packaging/fnos/manifest) 的 `version` 字段。前端、Go 服务、FPK 文件名及发布脚本均读取此文件，修改后需重新构建。
-
-`make release` 在 Linux 上构建两种模式的两个架构，并执行本机架构两种模式的生命周期测试及标准版集成测试，生成安装包和 `SHA256SUMS.txt`；不会自动创建 GitHub Release。
-
----
-
-## 常见问题
-
-### 会影响飞牛自带的 Nginx 吗？
-
-应用只使用自己的安装、配置、数据和临时目录，不操作系统 Nginx。仍需选择未被其他服务占用的监听端口。
-
-### 需要 Docker 吗？
-
-安装和运行 FPK 不需要。Docker 独立版按 [Docker 使用文档](docker/README.md) 构建和运行。编译 FPK 的内置 Nginx 时，构建脚本也使用 Docker 隔离编译依赖。
-
-### 可以直接编辑 nginx.conf 吗？
-
-系统生成配置保持只读，常规修改通过结构化表单完成；高级用户可在 Nginx 配置页管理独立的 `custom-*.conf` / `custom-*.stream` 文件，并在应用前执行完整校验。
-
-### 为什么没有流量数据？
-
-统计从开始采集后积累；缺失历史保留为空。关闭访问日志会停止规则日志统计。WebSocket、SSE 和长下载在请求结束后才计入完成请求数。TCP/UDP 会话不计入 HTTP 指标。
-
-### 支持哪些证书验证方式？
-
-ACME 当前支持 DNS-01，尚不支持 HTTP-01、IP 地址签发或飞牛系统证书同步。已接入适配器不代表每个 DNS 服务商都经过真实账号验证。
-
-### 为什么首次打开代理端口返回 404？
-
-没有配置规则时，应用的默认 `9080` 端口返回 404。添加匹配域名与端口的代理规则并应用后，再使用该域名访问。
-
----
-
-## 当前限制
-
-内置 Nginx 未包含 HTTP/3/QUIC、Brotli、Lua/OpenResty、JWT、headers-more、GeoIP2、ModSecurity/WAF、第三方主动健康检查或 Prometheus 模块。Basic Auth 密码文件、客户端 CA、静态目录等外部路径需先在飞牛应用设置中授权；应用只接受授权目录内可由 `nginx-web` 用户读取或写入的路径。
-
-每个 Release 的测试范围以发布说明为准；构建与包校验不能替代实体 fnOS 设备的安装、升级及使用验证。
-
----
-
-## 开发与贡献
-
-欢迎通过 [Issue](https://github.com/chenpingonline/nginx-web-fnos/issues) 反馈问题，或提交 Pull Request。
-
-问题反馈请尽量包含：
-
-- 应用版本、fnOS 版本和 CPU 架构。
-- 可复现的操作步骤、预期结果与实际结果。
-- 脱敏后的日志或截图。
-
-请勿上传私钥、DNS Token 或完整配置备份。代码修改请附上相关测试结果，真实 Nginx 及生命周期测试方法见 [测试说明](tests/README.md)。
-
----
-
-## 致谢
-
-感谢以下开源项目：
-
-- [NGINX](https://nginx.org/)：HTTP 与 Stream 代理核心。
-- [lego](https://github.com/go-acme/lego)：ACME 证书签发与 DNS 服务商适配器。
-- [Vue](https://github.com/vuejs/core) 与 [Vite](https://github.com/vitejs/vite)：管理界面与前端构建。
-- [Phosphor Icons](https://github.com/phosphor-icons/vue)：界面图标。
-
----
-
-## License
-
-项目源码采用 [GNU GPL v3](LICENSE)。
-
-内置 Nginx 及相关组件遵循各自的许可证，来源和许可证说明见 [NGINX_LICENSE](NGINX_LICENSE)、[NOTICE](NOTICE) 与 [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
+详细说明见 [构建文档](docs/build.md)。

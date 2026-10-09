@@ -1,43 +1,26 @@
 PERMISSION_MODE ?= standard
-DOCKER_IMAGE ?= nginx-web:docker
 
-.PHONY: frontend-install frontend-typecheck frontend-build test build-x86 build-arm64 build-all integration release clean
-
+.PHONY: core frontend-install frontend-typecheck frontend-build test build-x86 build-arm64 build-all integration release clean
+core:
+	@python3 scripts/resolve-core.py
 frontend-install:
-	npm --prefix web ci
-
+	@CORE="$$(python3 scripts/resolve-core.py)"; $(MAKE) -C "$$CORE" frontend-install
 frontend-typecheck:
-	npm --prefix web run typecheck
-
+	@CORE="$$(python3 scripts/resolve-core.py)"; $(MAKE) -C "$$CORE" frontend-typecheck
 frontend-build:
-	@test -d web/node_modules || npm --prefix web ci
-	npm --prefix web run build
-
-test: frontend-build
-	go test ./...
-	go test -tags full_ports ./...
-
+	@CORE="$$(python3 scripts/resolve-core.py)"; $(MAKE) -C "$$CORE" FRONTEND_MODE=fnos PERMISSION_MODE=$(PERMISSION_MODE) frontend-build
+test:
+	@CORE="$$(python3 scripts/resolve-core.py)"; $(MAKE) -C "$$CORE" FRONTEND_MODE=fnos PERMISSION_MODE=$(PERMISSION_MODE) test
+	./tests/install-restore.sh
 build-x86:
 	./scripts/build.sh --mode $(PERMISSION_MODE) x86
-
 build-arm64:
 	./scripts/build.sh --mode $(PERMISSION_MODE) arm64
-
 build-all:
 	./scripts/build.sh --mode all x86 arm64
-
 integration:
 	./tests/integration.sh
-
 release:
 	./scripts/release.sh
-
 clean:
-	rm -rf .build .build-* .cache dist docker/dist web/dist .fnproxy-dev
-
-.PHONY: docker-build docker-test
-docker-build:
-	docker build -f docker/Dockerfile -t $(DOCKER_IMAGE) .
-
-docker-test:
-	python3 docker/tests/integration.py --image $(DOCKER_IMAGE)
+	rm -rf .build .build-* .cache dist

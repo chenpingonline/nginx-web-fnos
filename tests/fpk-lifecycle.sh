@@ -28,13 +28,16 @@ import socket
 s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1]); s.close()
 PY
 )"
+# Model an already applied empty configuration with a random listener. An
+# un-applied custom-port draft must never be activated by install_callback.
 cat > "$TEST/var/fnproxy.json" <<JSON
 {
   "schema_version": 1,
   "settings": {"default_http_port": $PORT, "default_https_port": 19443, "revision_limit": 20},
   "rules": [],
   "certificates": [],
-  "dirty": true,
+  "dirty": false,
+  "last_applied_at": "2026-09-02T00:00:00Z",
   "updated_at": "2026-09-02T00:00:00Z"
 }
 JSON
@@ -44,7 +47,7 @@ export TRIM_PKGETC="$TEST/etc"
 export TRIM_PKGVAR="$TEST/var"
 export TRIM_PKGHOME="$TEST/home"
 export TRIM_PKGTMP="$TEST/tmp"
-export TRIM_TEMP_LOGFILE="$TEST/fnos-error.log"
+export TRIM_TEMP_LOGFILE="$TEST/tmp/fnos-error.log"
 export TRIM_DATA_ACCESSIBLE_PATHS="$TEST/user-data"
 export TRIM_DATA_SHARE_PATHS="$TEST/share-data"
 export TRIM_USERNAME=nginx-web

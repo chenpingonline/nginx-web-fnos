@@ -20,9 +20,13 @@ for f in bin/nginx-web-server bin/nginx etc/mime.types ui/config ui/images/icon_
 file "$WORK/app/bin/nginx-web-server" | grep -Eq "$FILE_PATTERN" || { echo '管理程序架构错误' >&2; exit 1; }
 file "$WORK/app/bin/nginx" | grep -Eq "$FILE_PATTERN" || { echo 'Nginx 架构错误' >&2; exit 1; }
 VERSION="$(python3 "$ROOT/scripts/version.py" "$WORK/manifest")"
-# The Go executable embeds the source manifest; validate it against this package,
-# rather than the checkout version, so older artifacts remain verifiable.
-grep -aEq "^version[[:blank:]]*=[[:blank:]]*${VERSION//./\\.}[[:blank:]]*$" "$WORK/app/bin/nginx-web-server" || { echo '管理程序版本与安装包不一致' >&2; exit 1; }
+# New core packages embed a validated version marker. Older packages
+# embed the original fnOS manifest and remain verifiable by that marker.
+if [[ -f "$WORK/CORE_SOURCE.json" ]]; then
+  grep -aFq "nginx-web-version/$VERSION/" "$WORK/app/bin/nginx-web-server" || { echo '管理程序版本与安装包不一致' >&2; exit 1; }
+else
+  grep -aEq "^version[[:blank:]]*=[[:blank:]]*${VERSION//./\\.}[[:blank:]]*$" "$WORK/app/bin/nginx-web-server" || { echo '管理程序版本与安装包不一致' >&2; exit 1; }
+fi
 grep -aFq 'nginx version: nginx/1.30.4' "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
 EXPECTED_SHA="$(awk 'NR == 1 {print $1}' "$WORK/NGINX_BINARY_SHA256SUMS.txt")"
 if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
@@ -30,7 +34,7 @@ if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app
 file "$WORK/app/bin/nginx" | grep -Fq 'statically linked' || { echo 'Nginx 不是静态链接' >&2; exit 1; }
 grep -aEq 'nginx-auth-jwt|nginx-keyval|echo-nginx-module|headers-more-nginx-module|set-misc-nginx-module' "$WORK/app/bin/nginx" && { echo 'Nginx 含非官方第三方模块' >&2; exit 1; }
 python3 - "$WORK" <<'PY'
-import json, pathlib, sys
+import json, pathlib, re, sys
 root=pathlib.Path(sys.argv[1])
 privilege=json.loads((root/'config/privilege').read_text())
 json.loads((root/'config/resource').read_text())
@@ -71,6 +75,13 @@ manifest=(root/'manifest').read_text()
 for key in ('appname','version','display_name','platform','checksum'):
     if not any(line.split('=',1)[0].strip()==key for line in manifest.splitlines() if '=' in line): raise SystemExit(f'manifest 缺少 {key}')
 values={line.split('=',1)[0].strip():line.split('=',1)[1].strip() for line in manifest.splitlines() if '=' in line}
+source_file = root/'CORE_SOURCE.json'
+if source_file.exists():
+    source = json.loads(source_file.read_text())
+    if source.get('repository') != 'https://github.com/chenpingonline/nginx-web.git': raise SystemExit('核心仓库来源不正确')
+    if not re.fullmatch(r'[0-9a-f]{40}', str(source.get('commit', ''))): raise SystemExit('核心来源缺少完整提交 SHA')
+    if source.get('version') != values.get('version'): raise SystemExit('核心来源版本与 manifest 不一致')
+    if not isinstance(source.get('dirty'), bool): raise SystemExit('核心来源缺少源码修改状态')
 if values.get('appname') != 'nginx-web': raise SystemExit('manifest appname 不正确')
 if values.get('display_name') != 'nginx-web': raise SystemExit('manifest display_name 不正确')
 if values.get('disable_authorization_path') != 'false': raise SystemExit('应用使用外部文件，必须显示授权目录设置')
