@@ -26,7 +26,7 @@
 
 ## 项目简介
 
-nginx-web for fnOS 是公共项目 **nginx-web** 在 **飞牛 fnOS** 上的原生应用，通过结构化表单配置访问入口，将 NAS 应用、容器服务和局域网设备接入统一的域名与端口。
+nginx-web for fnOS 是 [nginx-web](https://github.com/chenpingonline/nginx-web) 在 **飞牛 fnOS** 上的原生应用，通过结构化表单配置访问入口，将 NAS 应用、容器服务和局域网设备接入统一的域名与端口。
 
 首次安装或配置前，请阅读 [nginx-web 使用手册](docs/user-guide.md)。
 
