@@ -14,7 +14,7 @@
 [![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [nginx-web](https://github.com/chenpingonline/nginx-web)
+[下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [nginx-web](https://github.com/chenpingonline/nginx-web) · [Docker Hub](https://hub.docker.com/r/chenpingonline/nginx-web) · [Docker 部署](https://github.com/chenpingonline/nginx-web/blob/master/docker/README.md)
 
 </div>
 
@@ -51,6 +51,12 @@ nginx-web for fnOS 是 [nginx-web](https://github.com/chenpingonline/nginx-web) 
 通用功能在公共项目中开发和维护，本仓库通过 [`core.lock`](core.lock) 固定公共项目的提交并组装 FPK，不另行维护核心后端、前端或 Docker 副本。应用版本统一来自公共项目的 `VERSION`。fnOS 内的应用名称、安装标识和已有用户数据保持兼容。
 
 飞牛用户请从本项目的 [Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) 下载 FPK；Linux 或 Docker 部署请查看 [公共项目 nginx-web](https://github.com/chenpingonline/nginx-web)。
+
+### Docker 双架构镜像
+
+Docker 镜像发布在 [Docker Hub：chenpingonline/nginx-web](https://hub.docker.com/r/chenpingonline/nginx-web)。`latest` 与版本标签均支持 **Linux AMD64 / ARM64**，Docker 自动选择宿主架构，无需使用架构后缀或指定 `platform`。
+
+可复制的 Compose 配置和快速部署步骤见 [Docker Hub Overview](https://hub.docker.com/r/chenpingonline/nginx-web)；密码初始化、端口映射、数据持久化、备份与升级说明见核心仓库的 [Docker 部署文档](https://github.com/chenpingonline/nginx-web/blob/master/docker/README.md)。Docker 版使用独立管理员账户，镜像与 Compose 配置统一在核心仓库维护。
 
 ---
 
