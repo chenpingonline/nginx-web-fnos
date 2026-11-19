@@ -1,10 +1,10 @@
 nginx-web bundles an independently running NGINX Open Source binary.
 
-NGINX version: 1.30.4 (stable)
+NGINX version: 1.30.7 (stable)
 
 ARM64 and AMD64 package provenance:
-- Source archive: https://nginx.org/download/nginx-1.30.4.tar.gz
-- Official source SHA-256: 4261dc90e9e47c1c4041276e9aaa3d48ebe2e664f728e14fa95ae6c67d57a08b
+- Source archive: https://nginx.org/download/nginx-1.30.7.tar.gz
+- Official source SHA-256: 2565b5c837050e958f70fb0f73c48e2bca4542ad349fd356f46fb0c72610bc6e
 - Binary build: compiled for Linux ARM64 or AMD64 in an Alpine container.
 - No third-party NGINX modules are added.
 

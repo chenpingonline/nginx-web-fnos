@@ -1,11 +1,11 @@
 # Third-party software notices
 
-nginx-web packages an independently running NGINX Open Source 1.30.4 executable.
+nginx-web packages an independently running NGINX Open Source 1.30.7 executable.
 The x86_64 build is dynamically linked against libraries supplied by the target
 system. The ARM64 binary is built by this project directly from the official
 NGINX source release and contains no third-party NGINX modules.
 
-## NGINX Open Source 1.30.4
+## NGINX Open Source 1.30.7
 
 Copyright (C) 2002-2021 Igor Sysoev
 Copyright (C) 2011-2026 Nginx, Inc.

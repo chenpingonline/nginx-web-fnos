@@ -27,7 +27,9 @@ if [[ -f "$WORK/CORE_SOURCE.json" ]]; then
 else
   grep -aEq "^version[[:blank:]]*=[[:blank:]]*${VERSION//./\\.}[[:blank:]]*$" "$WORK/app/bin/nginx-web-server" || { echo '管理程序版本与安装包不一致' >&2; exit 1; }
 fi
-grep -aFq 'nginx version: nginx/1.30.4' "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
+NGINX_VERSION="$(sed -nE 's/^NGINX version: ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' "$WORK/app/licenses/NOTICE")"
+[[ -n "$NGINX_VERSION" ]] || { echo '缺少 Nginx 版本声明' >&2; exit 1; }
+grep -aFq "nginx version: nginx/$NGINX_VERSION" "$WORK/app/bin/nginx" || { echo 'Nginx 版本不正确' >&2; exit 1; }
 EXPECTED_SHA="$(awk 'NR == 1 {print $1}' "$WORK/NGINX_BINARY_SHA256SUMS.txt")"
 if command -v sha256sum >/dev/null 2>&1; then ACTUAL_SHA="$(sha256sum "$WORK/app/bin/nginx" | awk '{print $1}')"; else ACTUAL_SHA="$(shasum -a 256 "$WORK/app/bin/nginx" | awk '{print $1}')"; fi
 [[ -n "$EXPECTED_SHA" && "$ACTUAL_SHA" == "$EXPECTED_SHA" ]] || { echo 'Nginx 摘要不匹配' >&2; exit 1; }

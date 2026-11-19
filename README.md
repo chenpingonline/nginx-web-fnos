@@ -11,7 +11,7 @@
 [![Release](https://img.shields.io/github/v/release/chenpingonline/nginx-web-fnos?display_name=tag)](https://github.com/chenpingonline/nginx-web-fnos/releases)
 [![Downloads](https://img.shields.io/github/downloads/chenpingonline/nginx-web-fnos/total?label=downloads)](https://github.com/chenpingonline/nginx-web-fnos/releases)
 ![fnOS](https://img.shields.io/badge/fnOS-x86__64%20%7C%20ARM64-2ea44f)
-[![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.4-009639)](https://nginx.org/)
+[![NGINX](https://img.shields.io/badge/Core-NGINX%201.30.7-009639)](https://nginx.org/)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
 [下载 Releases](https://github.com/chenpingonline/nginx-web-fnos/releases/latest) · [使用指南](docs/user-guide.md) · [问题反馈](https://github.com/chenpingonline/nginx-web-fnos/issues) · [NGINX](https://nginx.org/) · [nginx-web](https://github.com/chenpingonline/nginx-web) · [Docker Hub](https://hub.docker.com/r/chenpingonline/nginx-web) · [Docker 部署](https://github.com/chenpingonline/nginx-web/blob/master/docker/README.md)
@@ -31,7 +31,7 @@ nginx-web for fnOS 是 [nginx-web](https://github.com/chenpingonline/nginx-web) 
 首次安装或配置前，请阅读 [nginx-web 使用手册](docs/user-guide.md)。
 
 - **原生应用**：从 fnOS 桌面打开，管理界面通过统一网关访问，自动跟随平台亮暗主题。
-- **独立运行**：FPK 内置 Nginx Open Source 1.30.4，使用自己的进程、配置和日志目录。
+- **独立运行**：FPK 内置 Nginx Open Source 1.30.7，使用自己的进程、配置和日志目录。
 - **可视化配置**：管理代理、证书、负载均衡和访问控制，应用前自动校验，失败时尝试回滚。
 
 > [!NOTE]
