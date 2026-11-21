@@ -13,5 +13,5 @@ disable_authorization_path = false
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 修复生成配置时限流策略参数意外写回已应用快照、导致升级后误报草稿的问题，自动纠正此类同步状态并保留真实草稿；优化配置预览布局，压缩统计栏、规则卡片与上下间距。
+changelog                  = 调小飞牛网关“已接入”和“待接入”分组标题及数量字号。
 micro_app                  = true
