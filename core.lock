@@ -1,5 +1,5 @@
 {
   "repository": "https://github.com/chenpingonline/nginx-web.git",
-  "commit": "adc5950bc02dfc1a6d3f893cbe907ad36adbfab2",
-  "version": "0.3.62"
+  "commit": "7dcd54c96fee5bc4da47abd2e573ec3d6249ef53",
+  "version": "0.4.0"
 }
