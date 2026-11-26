@@ -13,5 +13,5 @@ disable_authorization_path = false
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 总览和请求分析支持自定义代理配置，已有站点无需转换为表单。
+changelog                  = 新建自定义配置可在保存草稿时转换为表单，保留普通注释和同文件上游引用。无法完整转换时提示行号，并按原文保存。
 micro_app                  = true
