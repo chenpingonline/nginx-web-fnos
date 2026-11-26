@@ -13,5 +13,5 @@ disable_authorization_path = false
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 调小飞牛网关“已接入”和“待接入”分组标题及数量字号。
+changelog                  = 总览和请求分析支持自定义代理配置，已有站点无需转换为表单。
 micro_app                  = true
