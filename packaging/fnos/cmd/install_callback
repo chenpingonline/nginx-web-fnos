@@ -92,7 +92,7 @@ restore_preserved_data() {
     install_log '没有保留数据，无需恢复。'
     return 0
   fi
-  if [ ! -d "$PRESERVED_ROOT" ] || [ ! -r "$PRESERVED_ROOT" ] || [ ! -x "$PRESERVED_ROOT" ]; then
+  if [ -L "$PRESERVED_ROOT" ] || [ ! -d "$PRESERVED_ROOT" ] || [ ! -r "$PRESERVED_ROOT" ] || [ ! -x "$PRESERVED_ROOT" ]; then
     RESTORE_ERROR="保留目录不是可读取、可进入的目录：$PRESERVED_ROOT
 $(ls -ldn -- "$PRESERVED_ROOT" 2>&1)"
     return 1
@@ -113,18 +113,26 @@ if [ ! -x "$BIN" ]; then
   exit 1
 fi
 
-if output=$("$BIN" init 2>&1); then
+if output=$("$BIN" init --recover-config 2>&1); then
   printf '%s\n' "$output" >> "$LOG"
 else
   report_failure "nginx-web 初始化失败；保留目录未删除。" "$output"
   exit 1
 fi
 
+# The package manager can still fail after this hook. Keep the consumed
+# snapshot for manual recovery, without re-importing it on a later install.
 if [ "$PRESERVED" = true ]; then
-  if ! output=$(rm -rf -- "$PRESERVED_ROOT" 2>&1); then
-    report_failure "初始化已完成，但清理保留目录失败：$PRESERVED_ROOT" "$output"
-    exit 1
+  archive=$(mktemp -d "${TRIM_PKGVAR}/.uninstall-preserved.retained.XXXXXX") || archive=""
+  if [ -n "$archive" ] && mv -- "$PRESERVED_ROOT" "$archive/snapshot"; then
+    install_log "原卸载备份已保留：$archive/snapshot"
+  else
+    [ -z "$archive" ] || rmdir -- "$archive" 2>/dev/null || true
+    install_log "无法归档原卸载备份，已保留在原路径：$PRESERVED_ROOT"
   fi
+fi
+if printf '%s\n' "$output" | grep -Eq '^[[:space:]]*"action":[[:space:]]*"recovery"'; then
+  install_log '配置已保留；管理页可打开，Nginx 等待修复后手动应用。'
 fi
 install_log '安装回调完成。'
 exit 0

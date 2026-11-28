@@ -35,6 +35,16 @@ preserve_app_data() {
       return 1
     fi
   fi
+  # A prior backup may be the only intact copy after a failed restore.
+  # Retrying uninstall must not overwrite it with partial or empty roots.
+  if [ -e "$preserved_root" ] || [ -L "$preserved_root" ]; then
+    if [ -L "$preserved_root" ] || [ ! -d "$preserved_root" ] || [ ! -r "$preserved_root" ] || [ ! -x "$preserved_root" ]; then
+      log_error "已有保留备份无法安全访问，未尝试覆盖：$preserved_root"
+      return 1
+    fi
+    printf '%s\n' "已保留上次未恢复的备份：$preserved_root" >&2
+    return 0
+  fi
   staging=$(mktemp -d "${TRIM_PKGVAR}/.uninstall-preserved.new.XXXXXX") || {
     log_error "无法创建保留数据临时目录，旧备份未修改。"; return 1
   }
@@ -48,16 +58,8 @@ preserve_app_data() {
     rm -rf -- "$staging"
     return 1
   fi
-  if [ -e "$preserved_root" ] || [ -L "$preserved_root" ]; then
-    mv -- "$preserved_root" "$previous" || { log_error "无法暂存旧备份，新备份位于 $staging"; return 1; }
-  fi
   if ! mv -- "$staging" "$preserved_root"; then
-    [ ! -e "$previous" ] || mv -- "$previous" "$preserved_root"
-    log_error "无法替换保留备份，新备份位于 $staging"
-    return 1
-  fi
-  if [ -e "$previous" ] && ! rm -rf -- "$previous"; then
-    log_error "新备份已完成，但旧备份清理失败：$previous"
+    log_error "无法保存保留备份，新备份位于 $staging"
     return 1
   fi
 }

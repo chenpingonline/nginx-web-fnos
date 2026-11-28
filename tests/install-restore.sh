@@ -53,23 +53,33 @@ run_install
 [[ ! -e "$TRIM_PKGVAR/.uninstall-preserved" ]]
 grep -q '备用安装日志' "$WORK/output"
 grep -q retained "$TRIM_PKGETC/config"
-# Failed backup creation must not destroy the previous good copy.
+# Repeated keep-data uninstall after a modeled rollback must not replace
+# the only complete snapshot with now-empty live directories.
 rm "$TRIM_PKGVAR/logs"
 mkdir -p "$TRIM_PKGVAR/.uninstall-preserved/etc"
 printf previous > "$TRIM_PKGVAR/.uninstall-preserved/etc/config"
-chmod 000 "$TRIM_PKGETC/config"
-if bash "$ROOT/packaging/fnos/cmd/uninstall_init" > "$WORK/output" 2>&1; then
-  echo 'Unreadable configuration accepted' >&2; exit 1
-fi
-grep -q previous "$TRIM_PKGVAR/.uninstall-preserved/etc/config"
-chmod 600 "$TRIM_PKGETC/config"
+rm "$TRIM_PKGETC/config"
 bash "$ROOT/packaging/fnos/cmd/uninstall_init"
-grep -q retained "$TRIM_PKGVAR/.uninstall-preserved/etc/config"
-[[ ! -e "$TRIM_PKGVAR/.uninstall-preserved.previous" ]]
-# Installation recovers a backup replacement interrupted between renames.
+grep -q previous "$TRIM_PKGVAR/.uninstall-preserved/etc/config"
+
+# Interrupted legacy backup rename and recoverable init exit successfully,
+# archive the original, and retain data beyond the install hook.
 mv "$TRIM_PKGVAR/.uninstall-preserved" "$TRIM_PKGVAR/.uninstall-preserved.previous"
+cat > "$TRIM_APPDEST/bin/nginx-web-server" <<'EOF'
+#!/bin/bash
+[[ "$*" == "init --recover-config" ]] || exit 87
+printf '{\n  "action": "recovery"\n}\n'
+EOF
+chmod +x "$TRIM_APPDEST/bin/nginx-web-server"
 run_install
-grep -q retained "$TRIM_PKGETC/config"
+grep -q previous "$TRIM_PKGETC/config"
 [[ ! -e "$TRIM_PKGVAR/.uninstall-preserved.previous" ]]
 [[ ! -e "$TRIM_PKGVAR/.uninstall-preserved" ]]
+grep -q '管理页可打开' "$TRIM_PKGVAR/logs/install.log"
+grep -q previous "$TRIM_PKGVAR"/.uninstall-preserved.retained.*/snapshot/etc/config
+# After the snapshot has been archived, a new keep creates a fresh copy.
+printf fresh > "$TRIM_PKGETC/config"
+bash "$ROOT/packaging/fnos/cmd/uninstall_init"
+grep -q fresh "$TRIM_PKGVAR/.uninstall-preserved/etc/config"
+grep -q previous "$TRIM_PKGVAR"/.uninstall-preserved.retained.*/snapshot/etc/config
 echo 'Install restore diagnostics passed'

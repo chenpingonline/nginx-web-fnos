@@ -1,7 +1,7 @@
 appname                    = nginx-web
 version                   = @CORE_VERSION@
 display_name               = nginx-web
-desc                       = 专为 fnOS 打造的 Nginx 可视化管理工具，支持 HTTP(S) 反向代理、TCP/UDP 转发、SSL 证书、负载均衡、限流与运行分析。内置独立 Nginx，不修改飞牛系统 Nginx。<a href="https://github.com/chenpingonline/nginx-web-fnos/blob/master/docs/user-guide.md" target="_blank" rel="noopener noreferrer">查看使用手册</a>
+desc                       = nginx-web 是一款 Nginx 可视化管理工具，可集中配置反向代理、管理证书并监控服务运行状态。<br>• <strong>HTTP/HTTPS 反向代理</strong>：按域名或路径将请求转发到后端服务。<br>• <strong>TCP/UDP 转发</strong>：为 SSH、数据库或游戏服务配置端口转发。<br>• <strong>SSL/TLS 证书</strong>：导入已有证书，或通过 ACME 自动申请和续期。<br>• <strong>负载均衡与限流</strong>：按权重分配流量，限制请求速率或并发连接数。<br>• <strong>配置管理</strong>：通过表单或自定义配置编辑规则，校验后平滑重载。<br>• <strong>运行分析</strong>：查看活动连接数和访问日志，按规则跟踪请求速率与错误率。
 maintainer                 = chenping
 maintainer_url             = https://github.com/chenpingonline/nginx-web-fnos
 distributor                = chenping
@@ -13,5 +13,5 @@ disable_authorization_path = false
 os_min_version             = 1.1.3100
 desktop_uidir              = ui
 desktop_applaunchname      = nginx-web.main
-changelog                  = 新建自定义配置可在保存草稿时转换为表单，保留普通注释和同文件上游引用。无法完整转换时提示行号，并按原文保存。
+changelog                  = 1. <strong>卸载与重装</strong>：修复选择「保留数据」后再次卸载可能覆盖原备份的问题。重装时若原配置未通过校验，可进入管理页修复后手动应用。<br>2. <strong>HTTP(S) 代理规则</strong>：自定义监听地址默认收起，已指定 IP 的规则会自动展开。列表只显示根路径 / 的转发地址或静态目录。<br>3. <strong>按钮文字</strong>：调整亮色和暗色主题下可点击操作按钮的文字颜色，让可用和禁用状态更容易区分。
 micro_app                  = true
